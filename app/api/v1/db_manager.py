@@ -17,10 +17,12 @@ type_map = {
     "datetime": DateTime
 }
 
+
 @db_router.get("/list-tables")
 def get_tables(db: Session = Depends(get_db)):
     # Logic to fetch all table names in the current DB
-    query = text("SELECT tablename FROM pg_catalog.pg_tables WHERE schemaname='public'")
+    query = text("SELECT tablename FROM pg_catalog.pg_tables"
+                 " WHERE schemaname='public'")
     result = db.execute(query)
     return {"tables": [row[0] for row in result]}
 
@@ -49,14 +51,15 @@ def create_custom_table(table_name: str, columns: dict[str, str]):
         )
 
         for col_name, col_type in columns.items():
-            sa_type = type_map.get(col_type.lower(), String) # Default to String
+            sa_type = type_map.get(col_type.lower(), String)
             new_table.append_column(Column(col_name, sa_type))
 
         # 3. Execute the DDL using the Engine
         with engine.begin() as conn:
             conn.execute(CreateTable(new_table))
 
-        return {"message": f"Table '{table_name}' created successfully", "columns": list(columns.keys())}
+        return {"message": f"Table '{table_name}' created successfully",
+                "columns": list(columns.keys())}
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -84,5 +87,7 @@ def get_table_data(table_name: str):
             result = conn.execute(table.select())
             # mappings().all() is the cleanest way to return a list of dicts
             return {"data": result.mappings().all()}
-    except Exception as e:
-        raise HTTPException(status_code=404, detail=f"Table '{table_name}' not found.")
+    except Exception:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Table '{table_name}' not found.")
