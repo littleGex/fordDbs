@@ -17,6 +17,8 @@ services:
       retries: 5
   api:
     build: .
+    env_file:
+      - .env
     container_name: database_manager_api
     ports:
       - "8005:80"
@@ -30,6 +32,14 @@ services:
     depends_on:
       db:
         condition: service_healthy
+  frontend:
+    build:
+      context: ./frontend
+    container_name: pocket_money_ui
+    ports:
+      - "8082:80"
+    depends_on:
+      - api
 
 volumes:
   postgres_data:

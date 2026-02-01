@@ -15,9 +15,9 @@ def create_app():
 
     # --- CORS CONFIGURATION ---
     origins = [
-        "http://localhost:8080",
-        "http://192.168.2.51:8080",
-        "http://ford-home-pi.local:8080",
+        "http://localhost:8082",
+        "http://192.168.2.51:8082",
+        "http://ford-home-pi.local:8082",
         "http://pocket.local",
     ]
 

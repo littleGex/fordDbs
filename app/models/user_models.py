@@ -10,7 +10,13 @@ class Child(Base):
     name = Column(String, unique=True)
     balance = Column(Float, default=0.0)
     transactions = relationship(
-        "Transaction", back_populates="child")
+        "Transaction",
+        back_populates="child")
+    wishes = relationship(
+        "Wish",
+        back_populates="child",
+        cascade="all, delete-orphan"
+    )
 
 
 class Transaction(Base):
@@ -23,3 +29,14 @@ class Transaction(Base):
     timestamp = Column(DateTime, default=datetime.utcnow)
     child = relationship(
         "Child", back_populates="transactions")
+
+
+class Wish(Base):
+    __tablename__ = "wishes"
+
+    id = Column(Integer, primary_key=True, index=True)
+    child_id = Column(Integer, ForeignKey("children.id"))
+    item_name = Column(String)
+    cost = Column(Float)
+
+    child = relationship("Child", back_populates="wishes")

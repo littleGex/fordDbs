@@ -16,11 +16,11 @@ target_metadata = Base.metadata
 
 # Helper function to build the URL dynamically
 def get_url():
-    user = os.getenv("DB_USER", "postgres")
-    password = os.getenv("DB_PASSWORD", "")
+    user = os.getenv("POSTGRES_USER", "postgres")
+    password = os.getenv("POSTGRES_PASSWORD", "")
     server = os.getenv("DB_HOST", "localhost")
     port = os.getenv("DB_PORT", "5432")
-    db = os.getenv("DB_NAME", "postgres")
+    db = os.getenv("POSTGRES_DB", "postgres_db")
     return f"postgresql+psycopg2://{user}:{password}@{server}:{port}/{db}"
 
 

@@ -9,11 +9,14 @@ load_dotenv()
 
 
 def get_db_url():
-    user = os.getenv("DB_USER")
-    password = os.getenv("DB_PASSWORD")
+    user = os.getenv("POSTGRES_USER")
+    password = os.getenv("POSTGRES_PASSWORD")
     host = os.getenv("DB_HOST", "localhost")
     port = os.getenv("DB_PORT", "5432")
-    db_name = os.getenv("DB_NAME")
+    db_name = os.getenv("POSTGRES_DB", "postgres_db")
+
+    DATABASE_URL = f"postgresql://{user}:{password}@{host}:{port}/{db_name}"
+    print(f"DEBUG: Connecting to {DATABASE_URL}")
 
     return f"postgresql://{user}:{password}@{host}:{port}/{db_name}"
 
