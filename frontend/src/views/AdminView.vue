@@ -208,7 +208,7 @@ onMounted(() => {
             <div v-else class="display-group">
               {{ c.name }}
               <small v-if="c.birth_date" style="color: #747d8c;">🎂 {{ c.birth_date }}</small>
-              <button class="btn-edit-inline" @click="editingId = c.id; newNameValue = c.name">✏️</button>
+              <button class="btn-edit-inline" @click="editingId = c.id; newNameValue = c.name; newBirthDateValue = c.birth_date">✏️</button>
             </div>
           </td>
           <td class="balance-cell">€{{ c.balance.toFixed(2) }}</td>
