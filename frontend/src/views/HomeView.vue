@@ -1,5 +1,5 @@
 <script setup>
-import { ref, watch, onMounted } from 'vue'
+import {ref, watch, onMounted} from 'vue'
 import axios from 'axios'
 
 const children = ref([])
@@ -9,7 +9,7 @@ const wishes = ref([])
 const withdrawAmount = ref(0)
 const API_BASE = import.meta.env.VITE_API_BASE;
 const showWishForm = ref(false)
-const newWish = ref({ name: '', cost: 0 })
+const newWish = ref({name: '', cost: 0})
 const childStats = ref({})
 
 // Fetches the count of "Goal Met" transactions
@@ -77,13 +77,47 @@ const confirmWithdraw = async () => {
 const submitWish = async () => {
   if (!newWish.value.name || newWish.value.cost <= 0) return
   await axios.post(`${API_BASE}/wish/${selectedChild.value.id}`, null, {
-    params: { item_name: newWish.value.name, cost: newWish.value.cost }
+    params: {item_name: newWish.value.name, cost: newWish.value.cost}
   })
-  newWish.value = { name: '', cost: 0 }
+  newWish.value = {name: '', cost: 0}
   showWishForm.value = false
   const wishRes = await axios.get(`${API_BASE}/wishes/${selectedChild.value.id}`)
   wishes.value = wishRes.data
 }
+
+const calculateAge = (birthdayStr) => {
+  if (!birthdayStr) return 0;
+  const birthDate = new Date(birthdayStr);
+  const today = new Date();
+  let age = today.getFullYear() - birthDate.getFullYear();
+  const m = today.getMonth() - birthDate.getMonth();
+  if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+    age--;
+  }
+  return age;
+};
+
+// Calculate % of the year completed until next birthday
+const getBirthdayProgress = (birthdayStr) => {
+  if (!birthdayStr) return 0;
+  const today = new Date();
+  const birthDate = new Date(birthdayStr);
+
+  // Set next birthday date
+  let nextBirthday = new Date(today.getFullYear(), birthDate.getMonth(), birthDate.getDate());
+
+  // If birthday already passed this year, set it to next year
+  if (today > nextBirthday) {
+    nextBirthday.setFullYear(today.getFullYear() + 1);
+  }
+
+  const lastBirthday = new Date(nextBirthday.getFullYear() - 1, birthDate.getMonth(), birthDate.getDate());
+
+  const totalMs = nextBirthday - lastBirthday;
+  const elapsedMs = today - lastBirthday;
+
+  return Math.min(100, Math.max(0, (elapsedMs / totalMs) * 100));
+};
 
 onMounted(fetchChildren)
 </script>
@@ -92,10 +126,10 @@ onMounted(fetchChildren)
   <div class="dashboard-container">
     <nav class="child-nav" v-if="children.length">
       <button
-        v-for="c in children"
-        :key="c.id"
-        :class="{ active: selectedChild?.id === c.id }"
-        @click="selectedChild = c"
+          v-for="c in children"
+          :key="c.id"
+          :class="{ active: selectedChild?.id === c.id }"
+          @click="selectedChild = c"
       >
         <span class="name-text">{{ c.name }}</span>
         <span class="nav-trophy">
@@ -125,6 +159,46 @@ onMounted(fetchChildren)
               Withdraw
             </button>
           </div>
+        </div>
+      </div>
+
+      <div class="id-card-tile" v-if="selectedChild && selectedChild.birth_date">
+        <div class="card-header">
+          <span class="chip">Level {{ calculateAge(selectedChild.birth_date) }} Member</span>
+          <span class="emoji">🎁</span>
+        </div>
+
+        <div class="card-body">
+          <div class="id-row">
+            <span class="id-label">NAME</span>
+            <span class="id-value">{{ selectedChild.name }}</span>
+          </div>
+
+          <div class="id-stats">
+            <div class="id-row">
+              <span class="id-label">CURRENT AGE</span>
+              <span class="id-value">{{ calculateAge(selectedChild.birth_date) }}</span>
+            </div>
+            <div class="id-row">
+              <span class="id-label">WEEKLY PAY</span>
+              <span class="id-value">€{{ (calculateAge(selectedChild.birth_date) * 0.5).toFixed(2) }}</span>
+            </div>
+          </div>
+
+          <div class="progress-section">
+            <div class="progress-header">
+              <span class="id-label">PROGRESS TO AGE {{ calculateAge(selectedChild.birth_date) + 1 }}</span>
+              <span class="progress-pct">{{ Math.round(getBirthdayProgress(selectedChild.birth_date)) }}%</span>
+            </div>
+            <div class="progress-bar-bg">
+              <div class="progress-bar-fill"
+                   :style="{ width: getBirthdayProgress(selectedChild.birth_date) + '%' }"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card-footer">
+          <p>🗓️ Next Payout: Friday @ 07:30</p>
         </div>
       </div>
 
@@ -180,8 +254,19 @@ onMounted(fetchChildren)
 </template>
 
 <style scoped>
-.dashboard-container { max-width: 1000px; margin: 0 auto; padding: 20px; }
-.child-nav { display: flex; justify-content: center; gap: 12px; margin-bottom: 30px; }
+.dashboard-container {
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+.child-nav {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  margin-bottom: 30px;
+}
+
 .child-nav button {
   display: inline-flex;
   align-items: center;
@@ -197,7 +282,12 @@ onMounted(fetchChildren)
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
   transition: all 0.2s;
 }
-.child-nav button.active { background: #4a90e2; color: white; transform: translateY(-2px); }
+
+.child-nav button.active {
+  background: #4a90e2;
+  color: white;
+  transform: translateY(-2px);
+}
 
 .nav-trophy {
   background: #fff9db;
@@ -205,41 +295,330 @@ onMounted(fetchChildren)
   padding: 2px 8px;
   border-radius: 12px;
   font-size: 0.8rem;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
-.active .nav-trophy { background: rgba(255, 255, 255, 0.2); color: white; }
 
-.dashboard-grid { display: grid; grid-template-columns: 1fr 1.2fr; gap: 25px; }
-.tile { background: white; padding: 25px; border-radius: 20px; box-shadow: 0 8px 16px rgba(0, 0, 0, 0.04); margin-bottom: 20px; }
-.big-money { font-size: 3.5rem; color: #2d3436; font-weight: 800; margin-bottom: 20px; }
+.active .nav-trophy {
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+}
 
-.withdraw-section { border-top: 1px solid #f1f2f6; padding-top: 20px; }
-.quick-amounts { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 15px; }
-.quick-amounts button { padding: 8px; border: 1px solid #e0e0e0; border-radius: 8px; font-weight: bold; cursor: pointer; background: white; }
-.unified-withdraw-group { display: flex; height: 48px; margin-top: 15px; }
-.input-wrapper { flex: 1; position: relative; }
-.currency-prefix { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); font-weight: bold; color: #747d8c; }
-.input-wrapper input { width: 100%; height: 100%; padding: 0 12px 0 35px; border: 2px solid #f1f2f6; border-radius: 12px 0 0 12px; font-size: 1.1rem; box-sizing: border-box; outline: none; }
-.btn-withdraw-main { padding: 0 25px; background: #2ed573; color: white; border: none; border-radius: 0 12px 12px 0; font-weight: bold; cursor: pointer; }
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: 1fr 1.2fr;
+  gap: 25px;
+}
 
-.wish-item { margin-bottom: 25px; border-bottom: 1px solid #f9f9f9; padding-bottom: 15px; }
-.wish-info { display: flex; justify-content: space-between; margin-bottom: 8px; font-weight: 600; }
-.progress-container { height: 24px; background: #f1f2f6; border-radius: 12px; position: relative; overflow: hidden; box-shadow: inset 0 1px 3px rgba(0,0,0,0.1); }
-.progress-bar { height: 100%; background: linear-gradient(90deg, #4a90e2, #2ed573); transition: width 0.8s ease; border-radius: 12px; }
-.progress-text { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); font-size: 0.75rem; font-weight: 800; }
-.goal-met-text { color: #2ed573; font-size: 0.85rem; font-weight: bold; margin-top: 5px; }
+.tile {
+  background: white;
+  padding: 25px;
+  border-radius: 20px;
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.04);
+  margin-bottom: 20px;
+}
 
-.transaction-list { list-style: none; padding: 0; }
-.transaction-list li { display: flex; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid #f9f9f9; }
-.tx-info { display: flex; flex-direction: column; }
-.tx-cat { font-size: 0.7rem; color: #a0a0a0; text-transform: uppercase; letter-spacing: 0.5px; }
-.minus { color: #ff4757; }
-.plus { color: #2ed573; }
+.big-money {
+  font-size: 3.5rem;
+  color: #2d3436;
+  font-weight: 800;
+  margin-bottom: 20px;
+}
 
-.tile-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
-.btn-add-inline { background: #f1f2f6; border: none; width: 32px; height: 32px; border-radius: 50%; cursor: pointer; font-weight: bold; font-size: 1.2rem; }
-.empty-state { text-align: center; color: #b2bec3; padding: 20px; font-style: italic; }
-.btn-save-wish { width: 100%; margin-top: 10px; padding: 12px; background: #4a90e2; color: white; border: none; border-radius: 10px; font-weight: bold; cursor: pointer; }
-.wish-form-overlay { background: #f8f9fa; padding: 15px; border-radius: 12px; margin-bottom: 20px; border: 1px solid #eee; }
-.wish-form-overlay input { width: 100%; padding: 10px; margin-bottom: 8px; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; }
+.withdraw-section {
+  border-top: 1px solid #f1f2f6;
+  padding-top: 20px;
+}
+
+.quick-amounts {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  margin-bottom: 15px;
+}
+
+.quick-amounts button {
+  padding: 8px;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  font-weight: bold;
+  cursor: pointer;
+  background: white;
+}
+
+.unified-withdraw-group {
+  display: flex;
+  height: 48px;
+  margin-top: 15px;
+}
+
+.input-wrapper {
+  flex: 1;
+  position: relative;
+}
+
+.currency-prefix {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-weight: bold;
+  color: #747d8c;
+}
+
+.input-wrapper input {
+  width: 100%;
+  height: 100%;
+  padding: 0 12px 0 35px;
+  border: 2px solid #f1f2f6;
+  border-radius: 12px 0 0 12px;
+  font-size: 1.1rem;
+  box-sizing: border-box;
+  outline: none;
+}
+
+.btn-withdraw-main {
+  padding: 0 25px;
+  background: #2ed573;
+  color: white;
+  border: none;
+  border-radius: 0 12px 12px 0;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+.wish-item {
+  margin-bottom: 25px;
+  border-bottom: 1px solid #f9f9f9;
+  padding-bottom: 15px;
+}
+
+.wish-info {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  font-weight: 600;
+}
+
+.progress-container {
+  height: 24px;
+  background: #f1f2f6;
+  border-radius: 12px;
+  position: relative;
+  overflow: hidden;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.progress-bar {
+  height: 100%;
+  background: linear-gradient(90deg, #4a90e2, #2ed573);
+  transition: width 0.8s ease;
+  border-radius: 12px;
+}
+
+.progress-text {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+
+.goal-met-text {
+  color: #2ed573;
+  font-size: 0.85rem;
+  font-weight: bold;
+  margin-top: 5px;
+}
+
+.transaction-list {
+  list-style: none;
+  padding: 0;
+}
+
+.transaction-list li {
+  display: flex;
+  justify-content: space-between;
+  padding: 12px 0;
+  border-bottom: 1px solid #f9f9f9;
+}
+
+.tx-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.tx-cat {
+  font-size: 0.7rem;
+  color: #a0a0a0;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.minus {
+  color: #ff4757;
+}
+
+.plus {
+  color: #2ed573;
+}
+
+.tile-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.btn-add-inline {
+  background: #f1f2f6;
+  border: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  cursor: pointer;
+  font-weight: bold;
+  font-size: 1.2rem;
+}
+
+.empty-state {
+  text-align: center;
+  color: #b2bec3;
+  padding: 20px;
+  font-style: italic;
+}
+
+.btn-save-wish {
+  width: 100%;
+  margin-top: 10px;
+  padding: 12px;
+  background: #4a90e2;
+  color: white;
+  border: none;
+  border-radius: 10px;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+.wish-form-overlay {
+  background: #f8f9fa;
+  padding: 15px;
+  border-radius: 12px;
+  margin-bottom: 20px;
+  border: 1px solid #eee;
+}
+
+.wish-form-overlay input {
+  width: 100%;
+  padding: 10px;
+  margin-bottom: 8px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  box-sizing: border-box;
+}
+
+.id-card-tile {
+  background: linear-gradient(135deg, #6c5ce7 0%, #a29bfe 100%);
+  color: white;
+  border-radius: 20px;
+  padding: 20px;
+  box-shadow: 0 10px 20px rgba(108, 92, 231, 0.2);
+  max-width: 350px;
+  position: relative;
+  overflow: hidden;
+  margin: 20px auto;
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.chip {
+  background: rgba(255, 255, 255, 0.2);
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  font-weight: bold;
+}
+
+.id-label {
+  display: block;
+  font-size: 0.65rem;
+  font-weight: 800;
+  color: rgba(255, 255, 255, 0.7);
+  letter-spacing: 1px;
+  margin-bottom: 2px;
+}
+
+.id-value {
+  font-size: 1.2rem;
+  font-weight: 700;
+  display: block;
+  margin-bottom: 15px;
+}
+
+.id-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 15px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  padding-top: 15px;
+}
+
+.id-value small {
+  font-size: 0.8rem;
+  font-weight: normal;
+  margin-left: 2px;
+}
+
+.card-footer {
+  margin-top: 10px;
+  font-size: 0.75rem;
+  background: rgba(0, 0, 0, 0.1);
+  margin: 15px -20px -20px -20px;
+  padding: 10px 20px;
+  text-align: center;
+}
+
+.progress-section {
+  margin-top: 15px;
+}
+
+.progress-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 5px;
+}
+
+.progress-pct {
+  font-size: 0.7rem;
+  font-weight: bold;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.progress-bar-bg {
+  height: 8px;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 4px;
+  width: 100%;
+  overflow: hidden;
+}
+
+.progress-bar-fill {
+  height: 100%;
+  background: #00cec9; /* A bright teal that pops against the purple */
+  box-shadow: 0 0 10px rgba(0, 206, 201, 0.5);
+  transition: width 0.5s ease-in-out;
+}
+
+.id-value small {
+  font-size: 0.8rem;
+  opacity: 0.8;
+}
 </style>
