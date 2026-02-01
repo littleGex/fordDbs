@@ -283,6 +283,26 @@ def delete_wish(wish_id: int,
     return {"detail": "Wish deleted successfully"}
 
 
+@pocket_money_router.patch("/wish/{wish_id}")
+def update_wish(wish_id: int,
+                item_name: str = None,
+                cost: float = None,
+                db: Session = Depends(get_db)):
+    wish = db.query(Wish).filter(Wish.id == wish_id).first()
+
+    if not wish:
+        raise HTTPException(status_code=404, detail="Wish not found")
+
+    if item_name is not None:
+        wish.item_name = item_name
+    if cost is not None:
+        wish.cost = cost
+
+    db.commit()
+    db.refresh(wish)
+    return wish
+
+
 @pocket_money_router.post("/verify-admin")
 def verify_admin(password: str = Query(...)):
     if password == os.getenv("ADMIN_PASSWORD"):
