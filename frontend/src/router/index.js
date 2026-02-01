@@ -3,7 +3,7 @@ import HomeView from '../views/HomeView.vue'
 import AdminView from '../views/AdminView.vue'
 import axios from 'axios'
 
-const API_BASE = "http://localhost:8005/v1/pocket-money"
+const API_BASE = import.meta.env.VITE_API_BASE;
 
 const router = createRouter({
     history: createWebHistory(),

@@ -2,7 +2,7 @@
 import { ref, onMounted, computed, watch } from 'vue'
 import axios from 'axios'
 
-const API_BASE = "http://localhost:8005/v1/pocket-money"
+const API_BASE = import.meta.env.VITE_API_BASE;
 const token = localStorage.getItem('admin_token')
 
 const children = ref([])
