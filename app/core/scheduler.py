@@ -1,8 +1,13 @@
 # app/core/scheduler.py
+import logging
+from apscheduler.schedulers.background import BackgroundScheduler
 from datetime import date
 from sqlalchemy.orm import Session
 from app.database.database import SessionLocal
 from app.models.user_models import Child, Transaction
+
+
+logger = logging.getLogger(__name__)
 
 
 def calculate_age(birth_date: date,
@@ -47,3 +52,16 @@ def run_weekly_payout():
         db.commit()
     finally:
         db.close()
+
+
+def start_scheduler():
+    """Initializes and starts the background scheduler."""
+    scheduler = BackgroundScheduler()
+    # Runs every Friday at 07:30
+    scheduler.add_job(run_weekly_payout,
+                      'cron',
+                      day_of_week='fri',
+                      hour=7,
+                      minute=30)
+    scheduler.start()
+    logger.info("Pocket Money Scheduler started - Next run: Friday at 07:30")
