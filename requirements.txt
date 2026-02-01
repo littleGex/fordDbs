@@ -5,3 +5,6 @@ psycopg2-binary
 dotenv
 python-dotenv
 alembic
+apscheduler
+pytest
+pytest-cov

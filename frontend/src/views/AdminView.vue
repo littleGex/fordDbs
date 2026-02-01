@@ -25,6 +25,8 @@ const adjustCategory = ref('Reward')
 const editingWishId = ref(null)
 const editWishName = ref('')
 const editWishCost = ref(0)
+const newChildBirthDate = ref('')
+const newBirthDateValue = ref('')
 
 // Live Preview Logic
 const currentChild = computed(() => children.value.find(c => c.id === activeAdjustId.value))
@@ -102,13 +104,25 @@ const handleUpdateWish = async (id) => {
 
 const addChild = async () => {
   if (!newChildName.value) return
-  await axios.post(`${API_BASE}/add-child/${newChildName.value}`, null, {params: {password: token}})
+  await axios.post(`${API_BASE}/add-child/${newChildName.value}`, null, {
+    params: {
+      password: token,
+      birth_date: newChildBirthDate.value
+    }
+  })
   newChildName.value = '';
+  newChildBirthDate.value = ''; // Reset the date field
   fetchChildren()
 }
 
 const handleRename = async (id) => {
-  await axios.patch(`${API_BASE}/child/${id}`, null, {params: {name: newNameValue.value, password: token}})
+  await axios.patch(`${API_BASE}/child/${id}`, null, {
+    params: {
+      name: newNameValue.value,
+      birth_date: newBirthDateValue.value, // Send the date to the backend
+      password: token
+    }
+  })
   editingId.value = null;
   fetchChildren()
 }
@@ -165,6 +179,7 @@ onMounted(() => {
       <h3>➕ Add New Child</h3>
       <div class="input-group">
         <input v-model="newChildName" placeholder="Name..." @keyup.enter="addChild">
+        <input type="date" v-model="newChildBirthDate">
         <button @click="addChild" class="btn-success">Add Child</button>
       </div>
     </div>
@@ -187,10 +202,12 @@ onMounted(() => {
           <td>
             <div v-if="editingId === c.id" class="edit-group">
               <input v-model="newNameValue" class="small-input" @keyup.enter="handleRename(c.id)">
+              <input type="date" v-model="newBirthDateValue" class="small-input">
               <button @click="handleRename(c.id)" class="btn-mini-save">OK</button>
             </div>
             <div v-else class="display-group">
               {{ c.name }}
+              <small v-if="c.birth_date" style="color: #747d8c;">🎂 {{ c.birth_date }}</small>
               <button class="btn-edit-inline" @click="editingId = c.id; newNameValue = c.name">✏️</button>
             </div>
           </td>

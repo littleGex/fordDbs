@@ -1,4 +1,5 @@
-from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey
+from sqlalchemy import (Column, Integer, String, Float,
+                        DateTime, ForeignKey, Date)
 from sqlalchemy.orm import relationship
 from datetime import datetime
 from app.database.database import Base
@@ -9,6 +10,7 @@ class Child(Base):
     id = Column(Integer, primary_key=True)
     name = Column(String, unique=True)
     balance = Column(Float, default=0.0)
+    birth_date = Column(Date, nullable=True)
     transactions = relationship(
         "Transaction",
         back_populates="child")

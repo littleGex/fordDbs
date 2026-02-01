@@ -1,4 +1,5 @@
 import os
+from datetime import datetime
 from dotenv import load_dotenv
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func
@@ -46,10 +47,16 @@ def adjust_balance(child_id: int,
 @pocket_money_router.post("/add-child/{name}")
 def add_child(name: str,
               password: str,
+              birth_date: str = None,
               db: Session = Depends(get_db)):
     if password != SECRET_PASSWORD:
         raise HTTPException(status_code=403, detail="Forbidden")
-    new_child = Child(name=name, balance=0.0)
+
+    parsed_date = None
+    if birth_date:
+        parsed_date = datetime.strptime(birth_date,
+                                        "%Y-%m-%d").date()
+    new_child = Child(name=name, balance=0.0, birth_date=parsed_date)
     db.add(new_child)
     db.commit()
     db.refresh(new_child)
@@ -74,6 +81,7 @@ def get_child_id_by_name(name: str, db: Session = Depends(get_db)):
 def update_child(child_id: int,
                  name: str,
                  password: str,
+                 birth_date: str = None,
                  db: Session = Depends(get_db)):
     if password != SECRET_PASSWORD:
         raise HTTPException(status_code=403,
@@ -85,6 +93,9 @@ def update_child(child_id: int,
                             detail="Child not found")
 
     child.name = name
+    if birth_date:
+        child.birth_date = birth_date
+
     db.commit()
 
     return child

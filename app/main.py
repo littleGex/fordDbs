@@ -1,8 +1,10 @@
 from dotenv import load_dotenv
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.api.v1.db_manager import db_router
 from app.api.v1.pocket_money import pocket_money_router
+from app.core.scheduler import start_scheduler
 from app.database.database import engine, Base
 from app.models.user_models import Child, Transaction  # noqa
 
@@ -10,8 +12,15 @@ from app.models.user_models import Child, Transaction  # noqa
 load_dotenv()
 
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # --- Startup Logic ---
+    start_scheduler()
+    yield
+
+
 def create_app():
-    app = FastAPI()
+    app = FastAPI(lifespan=lifespan)
 
     # --- CORS CONFIGURATION ---
     origins = [
