@@ -119,7 +119,7 @@ const handleRename = async (id) => {
   await axios.patch(`${API_BASE}/child/${id}`, null, {
     params: {
       name: newNameValue.value,
-      birth_date: newBirthDateValue.value, // Send the date to the backend
+      birth_date: newBirthDateValue.value || null, // Fix: send null if empty
       password: token
     }
   })
@@ -179,7 +179,9 @@ onMounted(() => {
       <h3>➕ Add New Child</h3>
       <div class="input-group">
         <input v-model="newChildName" placeholder="Name..." @keyup.enter="addChild">
-        <input type="date" v-model="newChildBirthDate">
+        <div class="date-input-wrapper">
+          <input type="date" v-model="newChildBirthDate">
+        </div>
         <button @click="addChild" class="btn-success">Add Child</button>
       </div>
     </div>
@@ -208,7 +210,9 @@ onMounted(() => {
             <div v-else class="display-group">
               {{ c.name }}
               <small v-if="c.birth_date" style="color: #747d8c;">🎂 {{ c.birth_date }}</small>
-              <button class="btn-edit-inline" @click="editingId = c.id; newNameValue = c.name; newBirthDateValue = c.birth_date">✏️</button>
+              <button class="btn-edit-inline"
+                      @click="editingId = c.id; newNameValue = c.name; newBirthDateValue = c.birth_date">✏️
+              </button>
             </div>
           </td>
           <td class="balance-cell">€{{ c.balance.toFixed(2) }}</td>
@@ -551,4 +555,48 @@ button:active {
 .fade-enter-from, .fade-leave-to {
   opacity: 0;
 }
+
+/* Mobile Fixes for Admin Table */
+@media (max-width: 768px) {
+  .edit-group {
+    flex-direction: column; /* Stack name and date on mobile */
+    gap: 8px;
+  }
+
+  .small-input {
+    width: 100%; /* Fill the cell width */
+  }
+
+  .display-group {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
+
+  th:nth-child(2), td.balance-cell {
+    display: none; /* Hide balance on tiny screens to save space if needed */
+  }
+}
+
+/* Ensure the Add New Child section stacks on mobile */
+@media (max-width: 600px) {
+  .input-group {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .input-group button {
+    width: 100%;
+  }
+}
+
+.date-input-wrapper {
+  position: relative;
+  flex: 1;
+}
+
+.date-input-wrapper input {
+  width: 100%;
+}
+
 </style>

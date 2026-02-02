@@ -225,7 +225,7 @@ def withdraw_money(child_id: int,
     # Create negative transaction record
     new_transaction = Transaction(
         child_id=child.id,
-        amount=abs(amount),
+        amount=-abs(amount),
         description=description,
         category=category
     )

@@ -289,6 +289,16 @@ onMounted(fetchChildren)
   transform: translateY(-2px);
 }
 
+@media (max-width: 480px) {
+  .child-nav {
+    flex-wrap: wrap; /* Allows buttons to drop to a second row if needed */
+  }
+  .child-nav button {
+    flex: 1; /* Makes buttons grow to fill the width */
+    min-width: 120px;
+  }
+}
+
 .nav-trophy {
   background: #fff9db;
   color: #fab005;
@@ -307,6 +317,23 @@ onMounted(fetchChildren)
   display: grid;
   grid-template-columns: 1fr 1.2fr;
   gap: 25px;
+  align-items: start;
+}
+
+@media (max-width: 768px) {
+  .dashboard-grid {
+    grid-template-columns: 1fr; /* Stack everything in one column */
+    gap: 15px; /* Slightly tighter spacing for mobile */
+  }
+
+  .id-card-tile {
+    max-width: 100%; /* Allow ID card to fill the screen width */
+    margin: 10px 0;
+  }
+
+  .big-money {
+    font-size: 2.8rem; /* Slightly smaller text so it doesn't wrap */
+  }
 }
 
 .tile {
@@ -441,6 +468,18 @@ onMounted(fetchChildren)
   justify-content: space-between;
   padding: 12px 0;
   border-bottom: 1px solid #f9f9f9;
+}
+
+@media (max-width: 480px) {
+  .transaction-list li {
+    font-size: 0.9rem;
+  }
+  .tx-desc {
+    max-width: 150px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis; /* Adds "..." if the name is too long */
+  }
 }
 
 .tx-info {
