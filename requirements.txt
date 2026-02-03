@@ -8,3 +8,4 @@ alembic
 apscheduler
 pytest
 pytest-cov
+minio
