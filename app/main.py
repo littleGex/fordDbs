@@ -1,3 +1,4 @@
+import os
 from dotenv import load_dotenv
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
@@ -23,12 +24,8 @@ def create_app():
     app = FastAPI(lifespan=lifespan)
 
     # --- CORS CONFIGURATION ---
-    origins = [
-        "http://localhost:8082",
-        "http://192.168.2.51:8082",
-        "http://ford-home-pi.local:8082",
-        "http://ford-home-pi.local",
-    ]
+    origins = os.getenv("ALLOWED_ORIGINS",
+                        "").split(",")
 
     app.add_middleware(
         CORSMiddleware,
