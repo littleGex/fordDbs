@@ -193,19 +193,6 @@ def get_transaction_history(
     return transactions
 
 
-@pocket_money_router.get("/stats/{child_id}")
-def get_spending_stats(child_id: int, db: Session = Depends(get_db)):
-    # Sum up amounts grouped by category
-    stats = db.query(
-        Transaction.category,
-        func.sum(Transaction.amount).label("total")
-    ).filter(Transaction.child_id == child_id)\
-     .group_by(Transaction.category).all()
-
-    # Convert to a dictionary: {"Chore": 50.0, "Spend": -10.0}
-    return {category: total for category, total in stats}
-
-
 @pocket_money_router.post("/withdraw/{child_id}")
 def withdraw_money(child_id: int,
                    amount: float,
@@ -263,14 +250,29 @@ def add_wish(child_id: int,
 
 
 @pocket_money_router.get("/stats/{child_id}")
-def get_child_stats(child_id: int,
-                    db: Session = Depends(get_db)):
-    bought_count = db.query(Transaction).filter(
+def get_combined_stats(child_id: int, db: Session = Depends(get_db)):
+    # 1. Fetch Spending Totals (Category breakdown)
+    category_query = db.query(
+        Transaction.category,
+        func.sum(Transaction.amount).label("total")
+    ).filter(Transaction.child_id == child_id)\
+     .group_by(Transaction.category).all()
+
+    spending_by_category = {category: total for category, total in category_query}
+
+    # 2. Fetch Trophy Count (Specifically "Goal Met" transactions)
+    # We count how many times the child has achieved a wish list goal
+    wishes_bought = db.query(Transaction).filter(
         Transaction.child_id == child_id,
         Transaction.category == "Goal Met"
     ).count()
 
-    return {"wishes_bought": bought_count}
+    # 3. Return everything in one response
+    return {
+        "wishes_bought": wishes_bought,
+        "spending_summary": spending_by_category,
+        "total_spent": sum(spending_by_category.values())
+    }
 
 
 @pocket_money_router.delete("/wish/{wish_id}")
