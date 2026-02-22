@@ -50,12 +50,19 @@ services:
     container_name: pocket_money_ui
     restart: always
     ports:
-      - "8082:80"
+      - "8006:80"
     depends_on:
       - api
     networks:
       - default
       - proxy_network
+  family-photos-ui:
+    build:
+      context: ./family-photos-frontend
+    container_name: family_photos_ui
+    ports:
+      - "8083:80"
+    restart: always
   minio:
     image: minio/minio
     container_name: family_photos_storage

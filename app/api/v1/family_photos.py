@@ -1,3 +1,4 @@
+from datetime import datetime
 from fastapi import APIRouter, UploadFile, File, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.database.database import get_db
@@ -23,23 +24,28 @@ async def upload_photo(
 ):
     # 1. Generate unique filename for MinIO
     file_ext = file.filename.split(".")[-1]
-    unique_name = f"{uuid.uuid4()}.{file_ext}"
+    minio_key = f"{uuid.uuid4()}.{file_ext}"
 
-    # 2. Upload to MinIO via our storage helper
-    file_content = await file.read()
-    upload_image_to_storage(unique_name,
-                            file_content,
-                            len(file_content),
-                            file.content_type)
+    # 2. Stream the file to MinIO
+    minio_client.put_object(
+        "family-photos",
+        minio_key,
+        file.file,
+        length=-1,
+        part_size=10 * 1024 * 1024
+    )
 
-    # 3. Save Record to Postgres
-    new_photo = Photo(minio_key=unique_name,
-                      caption=caption,
-                      uploader_id=uploader_id)
+    # 3. Save to Postgres
+    new_photo = Photo(
+        minio_key=minio_key,
+        caption=caption,
+        uploader_id=uploader_id,
+        timestamp=datetime.now()
+    )
     db.add(new_photo)
     db.commit()
-    db.refresh(new_photo)
-    return new_photo
+
+    return {"message": "Photo posted to feed!"}
 
 
 @family_photos_router.get("/feed")
@@ -252,3 +258,21 @@ async def update_profile(
         "profile_photo_url": get_image_url(
             user.profile_photo_key) if user.profile_photo_key else None
     }
+
+
+@family_photos_router.get("/users")
+def get_all_users(db: Session = Depends(get_db)):
+    users = db.query(User).all()
+    user_list = []
+
+    for user in users:
+        user_list.append({
+            "id": user.id,
+            "username": user.username,
+            "display_name": user.display_name or user.username,
+            "role": user.role,
+            "profile_photo_url": get_image_url(user.profile_photo_key) if user.profile_photo_key else None,
+            "bio": user.bio
+        })
+
+    return user_list
