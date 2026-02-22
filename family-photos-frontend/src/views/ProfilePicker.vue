@@ -38,7 +38,9 @@ const selectUser = (user) => {
 };
 
 function getProfileImage(user) {
-  // Uses the signed MinIO URL from the backend
-  return user.profile_photo_url || '/avatars/default.png';
+  const path = user.profile_photo_key || 'avatars/default.png';
+
+  // Returning '/avatars/bear.png' tells the browser to look at your frontend server (8083)
+  return `/${path}`;
 }
 </script>
