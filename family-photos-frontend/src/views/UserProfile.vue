@@ -1,73 +1,77 @@
 <template>
   <div class="user-profile-container">
-    <div class="profile-card-edit">
-      <h2>Edit Profile: {{ auth.currentUser.display_name }}</h2>
+    <div v-if="auth.currentUser" class="profile-card-edit">
+      <h2>Edit Profile</h2>
 
-      <div class="current-avatar-section">
-        <img :src="auth.currentUser.profile_photo_url" class="avatar-large" />
-        <p>Current Profile Photo</p>
+      <div class="profile-header">
+        <img :src="getCleanImageUrl(auth.currentUser)" class="avatar-large" />
+        <div class="header-text">
+           <p class="display-name">{{ auth.currentUser.display_name }}</p>
+           <p class="role-tag">{{ auth.currentUser.role }}</p>
+        </div>
       </div>
 
       <div class="form-group">
-        <label>Update Bio</label>
+        <label>Bio</label>
         <textarea
           v-model="bio"
-          placeholder="Tell us something about yourself..."
-          rows="4"
+          placeholder="Write something about yourself..."
+          class="bio-input"
         ></textarea>
       </div>
 
       <div class="form-group">
-        <label>Change Profile Photo</label>
-        <input type="file" @change="onFileSelected" accept="image/*" class="file-input" />
+        <label>Update Photo</label>
+        <input type="file" @change="onFileSelected" accept="image/*" />
       </div>
 
-      <div class="actions">
-        <button @click="saveProfile" :disabled="loading" class="save-btn">
-          {{ loading ? 'Saving...' : 'Save Changes' }}
-        </button>
-      </div>
+      <button @click="handleUpdate" :disabled="isSaving" class="save-btn">
+        {{ isSaving ? 'Saving...' : 'Save Changes' }}
+      </button>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue';
+import { ref } from 'vue';
 import api from '../api/axios';
 import { useAuthStore } from '../stores/auth';
 
 const auth = useAuthStore();
+const bio = ref(auth.currentUser?.bio || '');
 const selectedFile = ref(null);
-const bio = ref(auth.currentUser.bio || ''); // Initialize with current bio
-const loading = ref(false);
+const isSaving = ref(false);
 
-const onFileSelected = (event) => {
-  selectedFile.value = event.target.files[0];
+const onFileSelected = (e) => {
+  selectedFile.value = e.target.files[0];
 };
 
-const saveProfile = async () => {
-  loading.value = true;
+const handleUpdate = async () => {
+  isSaving.value = true;
   const formData = new FormData();
   formData.append('user_id', auth.currentUser.id);
-  formData.append('bio', bio.value); // Send the bio text
+  formData.append('bio', bio.value);
 
   if (selectedFile.value) {
     formData.append('file', selectedFile.value);
   }
 
   try {
-    const response = await api.post('/profile/update', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' }
-    });
-
-    // Update the local auth store so the UI reflects changes immediately
-    auth.login(response.data);
-    alert("Profile updated successfully!");
-  } catch (error) {
-    console.error("Update failed", error);
-    alert("Error updating profile.");
+    const response = await api.post('/profile/update', formData);
+    auth.login(response.data); // Refresh local data
+    alert("Profile saved!");
+  } catch (err) {
+    console.error(err);
+    alert("Failed to update profile. Check if the backend is running.");
   } finally {
-    loading.value = false;
+    isSaving.value = false;
   }
 };
+
+// Same helper function to keep URLs clean
+function getCleanImageUrl(user) {
+  if (!user.profile_photo_url) return '/avatars/default.png';
+  const match = user.profile_photo_url.match(/\/([^/?#]+)[^/]*$/);
+  return `http://ford-home-pi.local:9000/family-photos/avatars/${match ? match[1] : 'default.png'}`;
+}
 </script>

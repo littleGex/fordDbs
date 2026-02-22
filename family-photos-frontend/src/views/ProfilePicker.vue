@@ -1,20 +1,19 @@
 <template>
   <div class="profile-picker">
     <h1>Who's watching?</h1>
-    <div class="user-grid">
+
+    <div v-if="users.length === 0" class="loading">Loading profiles...</div>
+
+    <div v-else class="user-grid">
       <div
         v-for="user in users"
         :key="user.id"
         class="profile-card"
         @click="selectUser(user)"
       >
-        <img
-          v-if="user"
-          :src="getCleanImageUrl(user)"
-          :alt="user.display_name"
-          class="avatar"
-        />
+        <img :src="getCleanImageUrl(user)" class="avatar" />
         <h3>{{ user.display_name }}</h3>
+        <p v-if="user.bio" class="bio-preview">{{ user.bio }}</p>
       </div>
     </div>
   </div>
@@ -42,15 +41,10 @@ const selectUser = (user) => {
 };
 
 function getCleanImageUrl(user) {
-  // 1. If we have no URL at all, use a fallback
   if (!user.profile_photo_url) return '/avatars/default.png';
-
-  // 2. Extract the base filename (e.g., bear.png) from the long signed URL
-  // This regex grabs everything between the last '/' and the '?'
+  // Use the logic that worked earlier to strip signatures
   const match = user.profile_photo_url.match(/\/([^/?#]+)[^/]*$/);
   const fileName = match ? match[1] : 'default.png';
-
-  // 3. Return the direct, unsigned path to your now-public MinIO folder
   return `http://ford-home-pi.local:9000/family-photos/avatars/${fileName}`;
 }
 </script>
