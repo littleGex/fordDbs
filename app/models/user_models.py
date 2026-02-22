@@ -1,7 +1,7 @@
 from sqlalchemy import (Column, Integer, String, Float,
                         DateTime, ForeignKey, Date)
 from sqlalchemy.orm import relationship
-from datetime import datetime
+from datetime import datetime, timezone
 from app.database.database import Base
 
 
@@ -50,8 +50,17 @@ class User(Base):
     id = Column(Integer, primary_key=True)
     username = Column(String, unique=True, nullable=False)
     role = Column(String, default="parent")
-    created_at = Column(DateTime, default=datetime.utcnow)
+    # --- New Profile Fields ---
+    profile_photo_key = Column(String, nullable=True)
+    bio = Column(String(160), nullable=True)
+    display_name = Column(String, nullable=True)
+
+    created_at = Column(DateTime,
+                        default=lambda: datetime.now(timezone.utc))
 
     # Relationships
-    child_profile = relationship("Child", back_populates="user", uselist=False)
-    photos = relationship("Photo", back_populates="uploader")
+    child_profile = relationship("Child",
+                                 back_populates="user",
+                                 uselist=False)
+    photos = relationship("Photo",
+                          back_populates="uploader")
