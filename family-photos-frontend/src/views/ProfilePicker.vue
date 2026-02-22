@@ -18,13 +18,14 @@
 <script setup>
 import { ref, onMounted } from 'vue';
 import api from '../api/axios';
-import { useAuthStore } from '../stores/auth';
+import { useAuthStore } from '../stores/auth'; //
 
 const auth = useAuthStore();
 const users = ref([]);
 
 onMounted(async () => {
   try {
+    // Calling http://ford-home-pi.local:8005/v1/family-photos/users
     const response = await api.get('/users');
     users.value = response.data;
   } catch (error) {
@@ -33,10 +34,11 @@ onMounted(async () => {
 });
 
 const selectUser = (user) => {
-  auth.login(user);
+  auth.login(user); // Sets localStorage and currentUser
 };
 
 function getProfileImage(user) {
+  // Uses the signed MinIO URL from the backend
   return user.profile_photo_url || '/avatars/default.png';
 }
 </script>
