@@ -10,7 +10,7 @@ import uuid
 import logging
 
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("app.api.users")
 family_photos_router = APIRouter()
 
 
@@ -186,50 +186,69 @@ async def update_profile(
         display_name: str = None,
         bio: str = None,
         file: UploadFile = File(None),
-        db: Session = Depends(get_db)):
+        db: Session = Depends(get_db)
+):
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
-        raise HTTPException(status_code=404,
-                            detail="User not found")
+        raise HTTPException(status_code=404, detail="User not found")
 
-    # Update Text Metadata
+    # 1. Store the old key for later cleanup
+    old_photo_key = user.profile_photo_key
+    new_photo_key = None
+
+    # 2. Handle metadata updates
     if display_name:
         user.display_name = display_name
     if bio:
         user.bio = bio
 
-    # Update Profile Photo if provided
+    # 3. Process new photo if provided
     if file:
         file_ext = file.filename.split(".")[-1]
-        unique_name = f"profile_{user_id}_{uuid.uuid4().hex[:8]}.{file_ext}"
+        new_photo_key = f"profiles/{user_id}_{uuid.uuid4().hex[:6]}.{file_ext}"
 
-        file_content = await file.read()
-        upload_image_to_storage(unique_name,
-                                file_content,
-                                len(file_content),
-                                file.content_type)
+        try:
+            file_content = await file.read()
+            upload_image_to_storage(
+                new_photo_key,
+                file_content,
+                len(file_content),
+                file.content_type
+            )
+            user.profile_photo_key = new_photo_key
+        except Exception as e:
+            logger.error("Failed to upload new profile photo for user "
+                         f"{user_id}: {e}")
+            raise HTTPException(status_code=500,
+                                detail="Storage upload failed")
 
-        # Clean up old photo from MinIO if it exists
-        if user.profile_photo_key:
-            try:
-                minio_client.remove_object(BUCKET_NAME,
-                                           user.profile_photo_key)
-            except S3Error as e:
-                if e.code == "NoSuchKey":
-                    logger.warning(
-                        "Attempted to delete non-existent photo: "
-                        f"{user.profile_photo_key}")
-                else:
-                    logger.error(
-                        f"MinIO storage error during profile update: {e}")
-            except Exception as e:
+    try:
+        # 4. Commit DB changes first (The point of no return)
+        db.commit()
+        db.refresh(user)
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Database commit failed for user {user_id}: {e}")
+        raise HTTPException(status_code=500, detail="Database update failed")
+
+    # 5. Cleanup OLD photo only AFTER successful DB commit
+    if file and old_photo_key:
+        try:
+            minio_client.remove_object(BUCKET_NAME, old_photo_key)
+        except S3Error as e:
+            # We don't raise an exception here because the user's
+            # new profile is already active and saved.
+            if e.code == "NoSuchKey":
+                logger.warning(f"Old photo {old_photo_key}"
+                               f" already gone from MinIO.")
+            else:
                 logger.error(
-                    f"Unexpected error deleting old profile photo: {e}")
+                    f"Non-critical cleanup failure for {old_photo_key}: {e}")
+        except Exception as e:
+            logger.error(f"Unexpected error during old photo cleanup: {e}")
 
-        user.profile_photo_key = unique_name
-
-    db.commit()
     return {
         "status": "Profile updated",
         "profile_photo_url": get_image_url(
-            user.profile_photo_key) if user.profile_photo_key else None}
+            user.profile_photo_key) if user.profile_photo_key else None
+    }

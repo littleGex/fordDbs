@@ -11,6 +11,13 @@ class Child(Base):
     name = Column(String, unique=True)
     balance = Column(Float, default=0.0)
     birth_date = Column(Date, nullable=True)
+
+    # --- ADD THESE TWO LINES ---
+    # This matches the database column we added manually
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    user = relationship("User", back_populates="child_profile")
+    # ---------------------------
+
     transactions = relationship(
         "Transaction",
         back_populates="child")
@@ -50,7 +57,7 @@ class User(Base):
     id = Column(Integer, primary_key=True)
     username = Column(String, unique=True, nullable=False)
     role = Column(String, default="parent")
-    # --- New Profile Fields ---
+
     profile_photo_key = Column(String, nullable=True)
     bio = Column(String(160), nullable=True)
     display_name = Column(String, nullable=True)
@@ -62,5 +69,7 @@ class User(Base):
     child_profile = relationship("Child",
                                  back_populates="user",
                                  uselist=False)
+
+    # Note: Ensure "Photo" is imported or defined in your photo_model
     photos = relationship("Photo",
                           back_populates="uploader")
