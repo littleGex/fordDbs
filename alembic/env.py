@@ -5,7 +5,7 @@ from sqlalchemy import engine_from_config, pool
 from alembic import context
 from app.database.database import Base
 from app.models.user_models import User, Child, Transaction, Wish # noqa
-from app.models.photo_models import Photo, Like, Comment, View    # noqa
+from app.models.photo_model import Photo, Like, Comment, View    # noqa
 
 
 load_dotenv()  # Load your variables from .env

@@ -43,6 +43,7 @@ services:
         condition: service_started
     networks:
       - default
+      - proxy_network
   frontend:
     build:
       context: ./frontend
