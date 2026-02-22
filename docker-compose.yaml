@@ -58,6 +58,8 @@ services:
   family-photos-ui:
     build:
       context: ./family-photos-frontend
+      args:
+        - VITE_API_BASE=http://ford-home-pi.local:8005/v1/family-photos
     container_name: family_photos_ui
     ports:
       - "8083:80"
