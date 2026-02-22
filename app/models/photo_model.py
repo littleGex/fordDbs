@@ -9,11 +9,12 @@ class Photo(Base):
     id = Column(Integer, primary_key=True, index=True)
     minio_key = Column(String, nullable=False)
     caption = Column(String)
-    timestamp = Column(DateTime, default=datetime.now(timezone.utc))
+    # Changed: removed () so it calls the function on insert
+    timestamp = Column(DateTime,
+                       default=lambda: datetime.now(timezone.utc))
     uploader_id = Column(Integer, ForeignKey("users.id"))
 
-    uploader = relationship("User",
-                            back_populates="photos")
+    uploader = relationship("User", back_populates="photos")
     likes = relationship("Like",
                          back_populates="photo",
                          cascade="all, delete-orphan")
@@ -30,10 +31,10 @@ class Like(Base):
     id = Column(Integer, primary_key=True)
     photo_id = Column(Integer, ForeignKey("photos.id"))
     user_id = Column(Integer, ForeignKey("users.id"))
-    timestamp = Column(DateTime, default=datetime.now(timezone.utc))
+    timestamp = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
-    photo = relationship("Photo",
-                         back_populates="likes")
+    photo = relationship("Photo", back_populates="likes")
+    user = relationship("User")
 
 
 class Comment(Base):
@@ -42,10 +43,10 @@ class Comment(Base):
     photo_id = Column(Integer, ForeignKey("photos.id"))
     user_id = Column(Integer, ForeignKey("users.id"))
     text = Column(Text, nullable=False)
-    timestamp = Column(DateTime, default=datetime.utcnow)
+    timestamp = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
-    photo = relationship("Photo",
-                         back_populates="comments")
+    photo = relationship("Photo", back_populates="comments")
+    user = relationship("User")
 
 
 class View(Base):
@@ -53,7 +54,7 @@ class View(Base):
     id = Column(Integer, primary_key=True)
     photo_id = Column(Integer, ForeignKey("photos.id"))
     user_id = Column(Integer, ForeignKey("users.id"))
-    timestamp = Column(DateTime, default=datetime.utcnow)
+    timestamp = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     photo = relationship("Photo", back_populates="views")
     user = relationship("User")
