@@ -1,7 +1,125 @@
+/* --- Global Variables & Reset --- */
+:root {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+
+  color-scheme: dark;
+  color: #ffffff;
+  background-color: #141414; /* Netflix Background */
+
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+  display: block;
+}
+
+#app {
+  width: 100%;
+}
+
+/* --- Navigation Bar --- */
+nav {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 4%;
+  background: linear-gradient(to bottom, rgba(0,0,0,0.8) 0%, transparent 100%);
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+}
+
+.nav-user-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #e5e5e5;
+  font-size: 0.9rem;
+}
+
+/* --- Profile Picker (Who's Watching) --- */
+.profile-picker {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+  animation: fadeIn 0.6s ease-out;
+}
+
+.profile-picker h1 {
+  font-size: 3.5rem;
+  margin-bottom: 2.5rem;
+  font-weight: 500;
+  color: #fff;
+}
+
+.user-grid {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 2.5rem;
+  max-width: 1200px;
+}
+
+.profile-card {
+  width: 150px;
+  text-align: center;
+  cursor: pointer;
+  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.profile-card:hover {
+  transform: scale(1.1);
+}
+
+.avatar {
+  width: 150px;
+  height: 150px;
+  border-radius: 4px;
+  object-fit: cover;
+  border: 3px solid transparent;
+  background-color: #333;
+  transition: border-color 0.2s;
+}
+
+.profile-card:hover .avatar {
+  border-color: #fff;
+}
+
+.profile-card h3 {
+  margin-top: 15px;
+  color: #808080;
+  font-size: 1.2rem;
+  font-weight: 400;
+  transition: color 0.2s;
+}
+
+.profile-card:hover h3 {
+  color: #fff;
+}
+
+.bio-preview {
+  color: #666;
+  font-size: 0.75rem;
+  margin-top: 4px;
+  max-width: 150px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* --- User Profile Editor --- */
 .user-profile-container {
   display: flex;
   justify-content: center;
-  padding-top: 50px;
+  padding: 60px 20px;
 }
 
 .profile-card-edit {
@@ -10,49 +128,121 @@
   border-radius: 8px;
   width: 100%;
   max-width: 500px;
-  text-align: left;
+  box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+}
+
+.profile-header {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  margin-bottom: 30px;
+  border-bottom: 1px solid #333;
+  padding-bottom: 20px;
 }
 
 .avatar-large {
-  width: 120px;
-  height: 120px;
+  width: 100px;
+  height: 100px;
   border-radius: 4px;
-  margin-bottom: 10px;
   object-fit: cover;
 }
 
+.header-text h2 {
+  margin: 0;
+  font-size: 1.8rem;
+}
+
+.role-tag {
+  display: inline-block;
+  background: #333;
+  color: #aaa;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  margin-top: 5px;
+}
+
 .form-group {
-  margin-bottom: 20px;
+  margin-bottom: 25px;
 }
 
 .form-group label {
   display: block;
-  color: #808080;
+  color: #a3a3a3;
   margin-bottom: 8px;
   font-size: 0.9rem;
 }
 
-textarea {
+textarea, input[type="text"] {
   width: 100%;
-  background: #333;
-  border: none;
+  background: #2b2b2b;
+  border: 1px solid #444;
   color: white;
   padding: 12px;
   border-radius: 4px;
-  resize: vertical;
+  font-family: inherit;
+  font-size: 1rem;
+  box-sizing: border-box;
+}
+
+textarea:focus {
+  outline: none;
+  border-color: #e50914;
+}
+
+input[type="file"] {
+  color: #808080;
+  font-size: 0.8rem;
+}
+
+/* --- Buttons --- */
+button {
+  border-radius: 4px;
+  border: 1px solid #808080;
+  padding: 0.6em 1.2em;
+  font-size: 1rem;
+  font-weight: 500;
+  background-color: transparent;
+  color: #fff;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+button:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+  border-color: #fff;
 }
 
 .save-btn {
   background-color: #e50914; /* Netflix Red */
-  color: white;
   border: none;
-  padding: 12px 24px;
-  font-weight: bold;
   width: 100%;
-  margin-top: 10px;
+  padding: 14px;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+
+.save-btn:hover {
+  background-color: #f40612;
 }
 
 .save-btn:disabled {
   background-color: #555;
   cursor: not-allowed;
+  border: none;
+}
+
+/* --- Animations --- */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* --- Responsive Layout --- */
+@media (max-width: 600px) {
+  .profile-picker h1 { font-size: 2.2rem; }
+  .avatar { width: 100px; height: 100px; }
+  .profile-card { width: 100px; }
+  .profile-card h3 { font-size: 0.9rem; }
 }
