@@ -1,4 +1,6 @@
 FROM node:lts-alpine as build-stage
+ARG VITE_API_BASE
+ENV VITE_API_BASE=$VITE_API_BASE
 WORKDIR /app
 COPY package*.json ./
 RUN npm install
