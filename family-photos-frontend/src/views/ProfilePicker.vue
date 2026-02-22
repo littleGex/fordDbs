@@ -9,8 +9,7 @@
         @click="selectUser(user)"
       >
         <img
-          v-if="user.profile_photo_key"
-          :src="'/' + user.profile_photo_key"
+          :src="user.profile_photo_url"
           :alt="user.display_name"
           class="avatar"
         />
@@ -31,8 +30,6 @@ const users = ref([]);
 onMounted(async () => {
   try {
     const response = await api.get('/users');
-    // Log this to your console to see the exact property names
-    console.log("Backend Users:", response.data);
     users.value = response.data;
   } catch (error) {
     console.error("Failed to fetch users", error);
