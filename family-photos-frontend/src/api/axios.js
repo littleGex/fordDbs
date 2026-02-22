@@ -1,8 +1,8 @@
 import axios from 'axios';
 
 const api = axios.create({
-  // Point this to your backend API port from docker-compose
-  baseURL: import.meta.env.VITE_API_URL || 'https://api-pocket-money.ford-home-apps.com/v1',
+  // Vite uses import.meta.env to access .env variables
+  baseURL: import.meta.env.VITE_API_BASE,
   headers: {
     'Content-Type': 'application/json',
   }
