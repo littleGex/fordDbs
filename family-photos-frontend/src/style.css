@@ -1,136 +1,58 @@
-:root {
-  font-family: 'Inter', system-ui, Avenir, Helvetica, Arial, sans-serif;
-  line-height: 1.5;
-  font-weight: 400;
-
-  color-scheme: dark;
-  color: #ffffff;
-  background-color: #141414; /* Classic Netflix dark background */
-
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
-
-body {
-  margin: 0;
-  display: block; /* Changed from flex to allow standard document flow */
-  min-width: 320px;
-  min-height: 100vh;
-}
-
-#app {
-  width: 100%;
-  margin: 0;
-  padding: 0;
-  text-align: center;
-}
-
-/* --- Profile Picker Styles --- */
-.profile-picker {
+.user-profile-container {
   display: flex;
-  flex-direction: column;
   justify-content: center;
-  align-items: center;
-  height: 100vh;
-  animation: fadeIn 0.5s ease-in;
+  padding-top: 50px;
 }
 
-.profile-picker h1 {
-  font-size: 3.5rem;
-  margin-bottom: 2rem;
-  font-weight: 500;
-  letter-spacing: 1px;
-}
-
-.user-grid {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 2rem;
-  max-width: 1200px;
-  padding: 20px;
-}
-
-.profile-card {
-  width: 150px;
-  cursor: pointer;
-  transition: transform 0.2s ease-in-out;
-}
-
-.profile-card:hover {
-  transform: scale(1.1);
-}
-
-.profile-card:hover .avatar {
-  border: 3px solid #ffffff;
-}
-
-.avatar {
-  width: 150px;
-  height: 150px;
-  border-radius: 4px;
-  object-fit: cover;
-  border: 3px solid transparent;
-  background-color: #333;
-}
-
-.profile-card h3 {
-  margin-top: 15px;
-  color: #808080;
-  font-size: 1.2rem;
-  font-weight: 400;
-  transition: color 0.2s;
-}
-
-.profile-card:hover h3 {
-  color: #ffffff;
-}
-
-/* --- Navigation & Profile Styles --- */
-nav {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 1rem 4%;
-  background: linear-gradient(to bottom, rgba(0,0,0,0.7) 10%, transparent);
-  position: sticky;
-  top: 0;
-  z-index: 100;
-}
-
-button {
-  background-color: transparent;
-  color: #ffffff;
-  border: 1px solid #808080;
-  padding: 0.5rem 1rem;
-  font-size: 0.9rem;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-button:hover {
-  background-color: rgba(255, 255, 255, 0.1);
-  border-color: #ffffff;
-}
-
-.upload-container {
-  margin-top: 50px;
+.profile-card-edit {
+  background: #181818;
   padding: 40px;
-  background-color: #181818;
   border-radius: 8px;
-  display: inline-block;
+  width: 100%;
+  max-width: 500px;
+  text-align: left;
 }
 
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(20px); }
-  to { opacity: 1; transform: translateY(0); }
+.avatar-large {
+  width: 120px;
+  height: 120px;
+  border-radius: 4px;
+  margin-bottom: 10px;
+  object-fit: cover;
 }
 
-/* Responsive adjustments */
-@media (max-width: 600px) {
-  .profile-picker h1 { font-size: 2rem; }
-  .avatar { width: 100px; height: 100px; }
-  .profile-card { width: 100px; }
+.form-group {
+  margin-bottom: 20px;
+}
+
+.form-group label {
+  display: block;
+  color: #808080;
+  margin-bottom: 8px;
+  font-size: 0.9rem;
+}
+
+textarea {
+  width: 100%;
+  background: #333;
+  border: none;
+  color: white;
+  padding: 12px;
+  border-radius: 4px;
+  resize: vertical;
+}
+
+.save-btn {
+  background-color: #e50914; /* Netflix Red */
+  color: white;
+  border: none;
+  padding: 12px 24px;
+  font-weight: bold;
+  width: 100%;
+  margin-top: 10px;
+}
+
+.save-btn:disabled {
+  background-color: #555;
+  cursor: not-allowed;
 }
