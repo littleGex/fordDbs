@@ -42,3 +42,16 @@ class Wish(Base):
     cost = Column(Float)
 
     child = relationship("Child", back_populates="wishes")
+
+
+class User(Base):
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True)
+    username = Column(String, unique=True, nullable=False)
+    role = Column(String, default="parent")
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relationships
+    child_profile = relationship("Child", back_populates="user", uselist=False)
+    photos = relationship("Photo", back_populates="uploader")

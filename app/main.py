@@ -5,9 +5,12 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.api.v1.db_manager import db_router
 from app.api.v1.pocket_money import pocket_money_router
+from app.api.v1.family_photos import family_photos_router
 from app.core.scheduler import start_scheduler
 from app.database.database import engine, Base
 from app.models.user_models import Child, Transaction  # noqa
+from app.models.photo_model import Photo  # noqa
+from app.core.storage import init_storage
 
 
 load_dotenv()
@@ -16,8 +19,12 @@ load_dotenv()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # --- Startup Logic ---
+    print("🚀 Starting up...")
+    init_storage()
     start_scheduler()
     yield
+    # --- Shutdown Logic (Optional) ---
+    print("🛑 Shutting down...")
 
 
 def create_app():
@@ -53,6 +60,12 @@ def create_app():
     app.include_router(pocket_money_router,
                        prefix="/v1/pocket-money",
                        tags=["Pocket Money"])
+
+    app.include_router(
+        family_photos_router,
+        prefix="/v1/family-photos",
+        tags=["Family Photos"]
+    )
 
     return app
 

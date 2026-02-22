@@ -9,3 +9,4 @@ apscheduler
 pytest
 pytest-cov
 minio
+python-multipart

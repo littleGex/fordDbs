@@ -258,7 +258,8 @@ def get_combined_stats(child_id: int, db: Session = Depends(get_db)):
     ).filter(Transaction.child_id == child_id)\
      .group_by(Transaction.category).all()
 
-    spending_by_category = {category: total for category, total in category_query}
+    spending_by_category = {category: total for category, total in
+                            category_query}
 
     # 2. Fetch Trophy Count (Specifically "Goal Met" transactions)
     # We count how many times the child has achieved a wish list goal
