@@ -1,3 +1,13 @@
+<template>
+  <div class="user-profile">
+    <h2>Edit Profile</h2>
+    <div class="upload-container">
+      <input type="file" @change="onFileSelected" accept="image/*" />
+      <button @click="saveProfile">Save New Profile Photo</button>
+    </div>
+  </div>
+</template>
+
 <script setup>
 import { ref } from 'vue';
 import api from '../api/axios';
