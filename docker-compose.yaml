@@ -60,9 +60,10 @@ services:
     build: .
     container_name: family-photos-api
     ports:
-      - "8083:8000"
+      - "8083:80"
     env_file:
       - .env
+    command: uvicorn app.family_photos_main:app --host 0.0.0.0 --port 80
     environment:
       - DB_USER=${POSTGRES_USER}
       - DB_PASSWORD=${POSTGRES_PASSWORD}
