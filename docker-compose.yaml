@@ -57,7 +57,10 @@ services:
       - default
       - proxy_network
   family-photos-ui:
-    build: ./family-photos-frontend
+    build:
+      context: ./family-photos-frontend
+      args:
+        - VITE_API_BASE=${VITE_API_BASE}
     container_name: family-photos-api
     ports:
       - "8083:80"
