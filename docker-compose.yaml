@@ -62,6 +62,11 @@ services:
     ports:
       - "8083:8000"
     environment:
+      - DB_USER=${POSTGRES_USER}
+      - DB_PASSWORD=${POSTGRES_PASSWORD}
+      - DB_NAME=${POSTGRES_DB}
+      - DB_HOST=db      # Use 'db' service name, NOT 'localhost'
+      - DB_PORT=5432
       # INTERNAL: How the backend finds MinIO inside Docker
       - MINIO_ENDPOINT=family_photos_storage:9000
       - MINIO_ACCESS_KEY=admin
