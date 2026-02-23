@@ -70,7 +70,7 @@ services:
       # INTERNAL: How the backend finds MinIO inside Docker
       - MINIO_ENDPOINT=family_photos_storage:9000
       - MINIO_ACCESS_KEY=admin
-      - MINIO_SECRET_KEY=password
+      - MINIO_SECRET_KEY=instaFord
       # EXTERNAL: How the phone/browser finds MinIO on your Wi-Fi
       - EXTERNAL_URL_HOST=ford-home-pi.local:9000
     depends_on:
