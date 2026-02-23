@@ -60,6 +60,8 @@ services:
     container_name: family-photos-api
     ports:
       - "8083:8000"
+    env_file:
+      - .env
     environment:
       - DB_USER=${POSTGRES_USER}
       - DB_PASSWORD=${POSTGRES_PASSWORD}
