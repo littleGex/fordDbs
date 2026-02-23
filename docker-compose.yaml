@@ -56,13 +56,20 @@ services:
       - default
       - proxy_network
   family-photos-ui:
-    build:
-      context: ./family-photos-frontend
-      args:
-        - VITE_API_BASE=http://ford-home-pi.local:8005/v1/family-photos
-    container_name: family_photos_ui
+    build: .
+    container_name: family-photos-api
     ports:
-      - "8083:80"
+      - "8083:8000"
+    environment:
+      # INTERNAL: How the backend finds MinIO inside Docker
+      - MINIO_ENDPOINT=family_photos_storage:9000
+      - MINIO_ACCESS_KEY=admin
+      - MINIO_SECRET_KEY=password
+      # EXTERNAL: How the phone/browser finds MinIO on your Wi-Fi
+      - EXTERNAL_URL_HOST=ford-home-pi.local:9000
+    depends_on:
+      - minio
+      - db
     restart: always
   minio:
     image: minio/minio
@@ -76,7 +83,7 @@ services:
       - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}
     volumes:
       - minio_data:/data
-    command: server --console-address ":9001" /data
+    command: server /data --console-address ":9001"
     networks:
       - default
       - proxy_network
