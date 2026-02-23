@@ -1,5 +1,6 @@
 from datetime import datetime
-from fastapi import APIRouter, UploadFile, File, Depends, HTTPException
+from fastapi import (APIRouter, UploadFile, File, Depends,
+                     HTTPException, Form)
 from sqlalchemy.orm import Session
 from app.database.database import get_db
 from app.core.storage import (upload_image_to_storage, get_image_url,
@@ -17,8 +18,8 @@ family_photos_router = APIRouter()
 
 @family_photos_router.post("/upload")
 async def upload_photo(
-        caption: str,
-        uploader_id: int,
+        caption: str = Form(...),
+        uploader_id: int = Form(...),
         file: UploadFile = File(...),
         db: Session = Depends(get_db)
 ):
@@ -188,9 +189,9 @@ def get_photo_stats(photo_id: int, db: Session = Depends(get_db)):
 
 @family_photos_router.post("/profile/update")
 async def update_profile(
-        user_id: int,
-        display_name: str = None,
-        bio: str = None,
+        user_id: int = Form(...),
+        display_name: str = Form(None),
+        bio: str = Form(None),
         file: UploadFile = File(None),
         db: Session = Depends(get_db)
 ):
@@ -254,9 +255,13 @@ async def update_profile(
             logger.error(f"Unexpected error during old photo cleanup: {e}")
 
     return {
-        "status": "Profile updated",
-        "profile_photo_url": get_image_url(
-            user.profile_photo_key) if user.profile_photo_key else None
+        "id": user.id,
+        "username": user.username,
+        "display_name": user.display_name,
+        "role": user.role,
+        "bio": user.bio,
+        "profile_photo_url": get_image_url(user.profile_photo_key)
+                             if user.profile_photo_key else None
     }
 
 

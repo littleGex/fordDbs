@@ -10,9 +10,10 @@ MINIO_ACCESS_KEY = os.getenv("MINIO_ACCESS_KEY", "admin")
 MINIO_SECRET_KEY = os.getenv("MINIO_SECRET_KEY", "password")
 
 # 2. EXTERNAL address (What family phones will use)
-EXTERNAL_URL_HOST = "ford-home-pi.local:9000"
-
+EXTERNAL_URL_HOST = os.getenv("EXTERNAL_URL_HOST",
+                              "ford-home-pi.local:9000")
 BUCKET_NAME = "family-photos"
+
 
 # Initialize using the INTERNAL Docker network
 minio_client = Minio(
@@ -56,7 +57,14 @@ def upload_image_to_storage(file_name: str,
         raise err
 
 
-def get_image_url(file_name: str,
+def get_image_url(key: str):
+    if not key:
+        return None
+    # Return a direct public link instead of a signed one
+    return f"http://{EXTERNAL_URL_HOST}/{BUCKET_NAME}/{key}"
+
+
+def get_image_url_old(file_name: str,
                   expires_in_hours: int = 2):
     """Generates a secure link for the frontend."""
     try:
