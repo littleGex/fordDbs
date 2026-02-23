@@ -57,7 +57,7 @@ services:
       - default
       - proxy_network
   family-photos-ui:
-    build: .
+    build: ./family-photos-frontend
     container_name: family-photos-api
     ports:
       - "8083:80"
