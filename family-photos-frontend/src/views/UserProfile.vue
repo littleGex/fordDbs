@@ -206,22 +206,37 @@ const recordView = async (photoId) => {
 
 // UserProfile.vue -> <script setup>
 
+// UserProfile.vue -> <script setup>
+
 const saveProfile = async () => {
   uploading.value = true;
+
+  // 1. Prepare FormData
   const formData = new FormData();
+
+  // Ensure these keys match the Form(...) parameters in family_photos.py exactly
   formData.append('user_id', auth.currentUser.id);
   formData.append('display_name', tempDisplayName.value);
   formData.append('bio', tempBio.value);
-  if (selectedProfileFile.value) formData.append('file', selectedProfileFile.value);
+
+  if (selectedProfileFile.value) {
+    formData.append('file', selectedProfileFile.value);
+  }
 
   try {
-    const res = await api.post('/profile/update', formData);
+    // 2. Explicitly set headers for this specific request
+    const res = await api.post('/profile/update', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      }
+    });
 
-    // ✅ Use the action instead of direct mutation
+    // 3. Update the local Auth Store state
     auth.updateUser(res.data);
-
     currentMode.value = 'profile';
+
   } catch (err) {
+    // If you see 422 here, check the browser console for the exact field error
     console.error("Profile update failed", err);
   } finally {
     uploading.value = false;
