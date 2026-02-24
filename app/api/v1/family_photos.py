@@ -260,8 +260,8 @@ async def update_profile(
         "display_name": user.display_name,
         "role": user.role,
         "bio": user.bio,
-        "profile_photo_url": get_image_url(user.profile_photo_key)
-                             if user.profile_photo_key else None
+        "profile_photo_url": get_image_url(
+            user.profile_photo_key) if user.profile_photo_key else None
     }
 
 
@@ -276,8 +276,21 @@ def get_all_users(db: Session = Depends(get_db)):
             "username": user.username,
             "display_name": user.display_name or user.username,
             "role": user.role,
-            "profile_photo_url": get_image_url(user.profile_photo_key) if user.profile_photo_key else None,
+            "profile_photo_url": get_image_url(
+                user.profile_photo_key) if user.profile_photo_key else None,
             "bio": user.bio
         })
 
     return user_list
+
+
+@family_photos_router.post("/users")
+def create_user(data: dict, db: Session = Depends(get_db)):
+    new_user = User(
+        username=data['username'],
+        display_name=data['display_name'],
+        role="child"  # Default role
+    )
+    db.add(new_user)
+    db.commit()
+    return {"status": "success"}

@@ -65,7 +65,7 @@ def get_image_url(key: str):
 
 
 def get_image_url_old(file_name: str,
-                  expires_in_hours: int = 2):
+                      expires_in_hours: int = 2):
     """Generates a secure link for the frontend."""
     try:
         # MinIO generates a link using its own internal endpoint
