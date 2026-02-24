@@ -60,12 +60,13 @@ services:
     build:
       context: ./family-photos-frontend
       args:
-        - VITE_API_BASE=${VITE_API_BASE}
-    container_name: family-photos-api
+        - VITE_API_BASE=http://ford-home-pi.local:8005/v1/family-photos
+    image: family-photos-frontend:latest
+    container_name: family-photos-frontend-ui
     ports:
       - "8083:80"
     env_file:
-      - .env
+      - ./family-photos-frontend/.env
     environment:
       - DB_USER=${POSTGRES_USER}
       - DB_PASSWORD=${POSTGRES_PASSWORD}
