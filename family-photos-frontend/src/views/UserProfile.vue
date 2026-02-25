@@ -1,7 +1,14 @@
 <template>
   <div class="user-container">
     <div v-if="currentMode === 'feed'" class="feed-view">
-      <h2 class="section-title">Family Moments</h2>
+      <div class="feed-header">
+        <h2 class="section-title">Family Moments</h2>
+        <div class="filter-tabs">
+          <button @click="toggleFilter(false)" :class="{ active: !showOnlyMyPhotos }" class="tab-btn">Everyone</button>
+          <button @click="toggleFilter(true)" :class="{ active: showOnlyMyPhotos }" class="tab-btn">My Photos</button>
+        </div>
+      </div>
+
       <div class="photo-grid">
         <div v-for="photo in photos" :key="photo.id" class="photo-card">
           <img :src="photo.url" loading="lazy" @load="recordView(photo.id)"/>
@@ -15,7 +22,14 @@
               <button @click="handleLike(photo.id)" class="like-btn">
                 ❤️ {{ photo.stats.likes }}
               </button>
-              <span class="view-count">👁️ {{ photo.stats.views }}</span>
+
+              <span class="view-stat" title="Views">
+                <svg class="icon-svg" viewBox="0 0 24 24">
+                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                  <circle cx="12" cy="12" r="3"></circle>
+                </svg>
+                {{ photo.stats.views }}
+              </span>
             </div>
 
             <div class="comments-preview">
@@ -38,17 +52,24 @@
     </div>
 
     <div v-else-if="currentMode === 'profile'" class="bio-view">
-      <div class="bio-card">
-        <img :src="auth.currentUser.profile_photo_url" class="large-avatar"/>
-        <h1>{{ auth.currentUser.display_name }}</h1>
-        <p class="role-badge">{{ auth.currentUser.role }}</p>
-        <p class="bio-text">{{ auth.currentUser.bio || 'Sharing memories with the family.' }}</p>
-        <button @click="currentMode = 'edit'" class="secondary-btn">Edit Profile</button>
+      <div class="profile-hero-card">
+        <div class="profile-header">
+          <img :src="auth.currentUser.profile_photo_url || '/avatars/default.png'" class="large-avatar-img"/>
+          <div class="profile-info">
+            <h1>{{ auth.currentUser.display_name }}</h1>
+            <span class="role-pill">{{ auth.currentUser.role }}</span>
+            <p class="bio-text">{{ auth.currentUser.bio || 'Sharing memories with the family.' }}</p>
+          </div>
+        </div>
+        <div class="profile-actions">
+          <button @click="currentMode = 'edit'" class="secondary-btn">Edit Profile</button>
+          <button @click="auth.logout()" class="btn-switch">Switch Profile</button>
+        </div>
       </div>
     </div>
 
     <div v-else-if="currentMode === 'edit'" class="edit-view">
-      <div class="edit-card">
+      <div class="edit-mode-card">
         <h3>Update Profile</h3>
         <div class="form-group">
           <label>Display Name</label>
@@ -75,7 +96,7 @@
       <div class="modal-content">
         <h3>Post to Family Feed</h3>
         <input type="file" @change="onFeedFileSelected" accept="image/*"/>
-        <textarea v-model="newCaption" placeholder="Write a caption..."></textarea>
+        <textarea v-model="newCaption" placeholder="Write a caption (optional)..."></textarea>
 
         <div class="modal-actions">
           <button @click="handleUpload" :disabled="uploading" class="save-btn">
@@ -96,13 +117,14 @@
 </template>
 
 <script setup>
-import {ref, onMounted} from 'vue';
-import {useAuthStore} from '../stores/auth';
+import { ref, onMounted } from 'vue';
+import { useAuthStore } from '../stores/auth';
 import api from '../api/axios';
 
 const auth = useAuthStore();
 const currentMode = ref('feed');
 const photos = ref([]);
+const showOnlyMyPhotos = ref(false);
 
 // UI State
 const showUploadModal = ref(false);
@@ -118,22 +140,24 @@ const tempBio = ref(auth.currentUser.bio || '');
 const tempDisplayName = ref(auth.currentUser.display_name || '');
 const selectedProfileFile = ref(null);
 
-const onFeedFileSelected = (e) => {
-  selectedFeedFile.value = e.target.files[0];
-};
-const onProfileFileSelected = (e) => {
-  selectedProfileFile.value = e.target.files[0];
-};
+const onFeedFileSelected = (e) => { selectedFeedFile.value = e.target.files[0]; };
+const onProfileFileSelected = (e) => { selectedProfileFile.value = e.target.files[0]; };
 
 const toggleView = () => {
   currentMode.value = currentMode.value === 'feed' ? 'profile' : 'feed';
+};
+
+const toggleFilter = (onlyMe) => {
+  showOnlyMyPhotos.value = onlyMe;
+  fetchPhotos();
 };
 
 // --- API ACTIONS ---
 
 const fetchPhotos = async () => {
   try {
-    const res = await api.get('/feed');
+    const params = showOnlyMyPhotos.value ? { user_id: auth.currentUser.id } : {};
+    const res = await api.get('/feed', { params });
     photos.value = res.data;
   } catch (err) {
     console.error("Feed error:", err);
@@ -146,14 +170,11 @@ const handleUpload = async () => {
 
   const formData = new FormData();
   formData.append('file', selectedFeedFile.value);
-  // Add these directly to the FormData instead of sending as params
-  formData.append('caption', newCaption.value);
+  formData.append('caption', newCaption.value || ""); // Handle optional caption
   formData.append('uploader_id', auth.currentUser.id);
 
   try {
-    // Send only the URL and the formData
     await api.post('/upload', formData);
-
     showUploadModal.value = false;
     newCaption.value = '';
     selectedFeedFile.value = null;
@@ -167,9 +188,8 @@ const handleUpload = async () => {
 
 const handleLike = async (photoId) => {
   try {
-    // Matches @family_photos_router.post("/{photo_id}/like")
     await api.post(`/${photoId}/like`, null, {
-      params: {user_id: auth.currentUser.id}
+      params: { user_id: auth.currentUser.id }
     });
     fetchPhotos();
   } catch (err) {
@@ -181,9 +201,8 @@ const handleComment = async (photoId) => {
   const text = commentTexts.value[photoId];
   if (!text) return;
   try {
-    // Matches @family_photos_router.post("/{photo_id}/comment")
     await api.post(`/${photoId}/comment`, null, {
-      params: {user_id: auth.currentUser.id, text: text}
+      params: { user_id: auth.currentUser.id, text: text }
     });
     commentTexts.value[photoId] = '';
     fetchPhotos();
@@ -194,24 +213,15 @@ const handleComment = async (photoId) => {
 
 const recordView = async (photoId) => {
   try {
-    // Matches @family_photos_router.post("/{photo_id}/view")
     await api.post(`/${photoId}/view`, null, {
-      params: {user_id: auth.currentUser.id}
+      params: { user_id: auth.currentUser.id }
     });
-  } catch (err) {
-    // Silently fail view recording
-  }
+  } catch (err) { }
 };
-
-// UserProfile.vue -> <script setup>
 
 const saveProfile = async () => {
   uploading.value = true;
-
-  // 1. Prepare FormData
   const formData = new FormData();
-
-  // Ensure these keys match the Form(...) parameters in family_photos.py exactly
   formData.append('user_id', auth.currentUser.id);
   formData.append('display_name', tempDisplayName.value);
   formData.append('bio', tempBio.value);
@@ -221,19 +231,12 @@ const saveProfile = async () => {
   }
 
   try {
-    // 2. Explicitly set headers for this specific request
     const res = await api.post('/profile/update', formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data'
-      },
-      transformRequest: (data) => data
+      headers: { 'Content-Type': 'multipart/form-data' }
     });
-
-    // 3. Update the local Auth Store state
     auth.updateUser(res.data);
     currentMode.value = 'profile';
   } catch (err) {
-    // If you see 422 here, check the browser console for the exact field error
     console.error("Profile update failed", err);
   } finally {
     uploading.value = false;

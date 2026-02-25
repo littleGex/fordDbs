@@ -60,17 +60,20 @@ const selectUser = (user) => auth.login(user);
 const createUser = async () => {
   if (!newUserName.value) return;
   try {
-    // Assuming your backend has a POST /users or similar endpoint
-    // Adjust the URL/payload based on your actual database_manager_api
+    // Generate a simple username by stripping spaces and lowercasing
+    const generatedUsername = newUserName.value.toLowerCase().replace(/\s/g, '');
+
     await api.post('/users', {
-      username: newUserName.value.toLowerCase().replace(/\s/g, ''),
+      username: generatedUsername, // satisfy backend requirement
       display_name: newUserName.value
     });
+
     newUserName.value = '';
     showModal.value = false;
-    fetchUsers(); // Refresh the list
+    fetchUsers();
   } catch (error) {
-    alert("Failed to create profile");
+    console.error("Creation error:", error.response?.data || error);
+    alert("Failed to create profile. Check console for details.");
   }
 };
 </script>
