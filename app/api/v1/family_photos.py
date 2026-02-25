@@ -215,11 +215,10 @@ async def update_profile(
         new_photo_key = f"profiles/{user_id}_{uuid.uuid4().hex[:6]}.{file_ext}"
 
         try:
-            file_content = await file.read()
             upload_image_to_storage(
                 new_photo_key,
-                file_content,
-                len(file_content),
+                file.file,
+                -1,
                 file.content_type
             )
             user.profile_photo_key = new_photo_key

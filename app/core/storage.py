@@ -40,21 +40,17 @@ def init_storage():
 
 def upload_image_to_storage(file_name: str,
                             file_stream,
-                            file_size: int,
+                            file_size: int = -1,
                             content_type: str = "image/jpeg"):
-    """Uploads file over the fast, internal Docker network."""
-    try:
-        minio_client.put_object(
-            bucket_name=BUCKET_NAME,
-            object_name=file_name,
-            data=file_stream,
-            length=file_size,
-            content_type=content_type
-        )
-        return file_name
-    except S3Error as err:
-        print(f"❌ MinIO Error uploading {file_name}: {err}")
-        raise err
+
+    minio_client.put_object(
+        bucket_name=BUCKET_NAME,
+        object_name=file_name,
+        data=file_stream,
+        length=file_size,
+        part_size=10 * 1024 * 1024,
+        content_type=content_type
+    )
 
 
 def get_image_url(key: str):
