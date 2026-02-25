@@ -146,21 +146,20 @@ const handleUpload = async () => {
 
   const formData = new FormData();
   formData.append('file', selectedFeedFile.value);
+  // Add these directly to the FormData instead of sending as params
+  formData.append('caption', newCaption.value);
+  formData.append('uploader_id', auth.currentUser.id);
 
   try {
-    // Note: Backend takes uploader_id and caption as query params based on family_photos.py
-    await api.post('/upload', formData, {
-      params: {
-        caption: newCaption.value,
-        uploader_id: auth.currentUser.id
-      }
-    });
+    // Send only the URL and the formData
+    await api.post('/upload', formData);
+
     showUploadModal.value = false;
     newCaption.value = '';
     selectedFeedFile.value = null;
     fetchPhotos();
   } catch (err) {
-    console.error(err);
+    console.error("Upload failed", err);
   } finally {
     uploading.value = false;
   }
@@ -225,16 +224,11 @@ const saveProfile = async () => {
 
   try {
     // 2. Explicitly set headers for this specific request
-    const res = await api.post('/profile/update', formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data'
-      }
-    });
+    const res = await api.post('/profile/update', formData);
 
     // 3. Update the local Auth Store state
     auth.updateUser(res.data);
     currentMode.value = 'profile';
-
   } catch (err) {
     // If you see 422 here, check the browser console for the exact field error
     console.error("Profile update failed", err);
