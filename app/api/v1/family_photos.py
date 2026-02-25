@@ -18,7 +18,7 @@ family_photos_router = APIRouter()
 
 @family_photos_router.post("/upload")
 async def upload_photo(
-        caption: str = Form(...),
+        caption: str = Form(""),
         uploader_id: int = Form(...),
         file: UploadFile = File(...),
         db: Session = Depends(get_db)
