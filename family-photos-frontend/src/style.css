@@ -2,11 +2,9 @@
 :root {
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
   line-height: 1.5;
-  font-weight: 400;
   color-scheme: dark;
   color: #ffffff;
   background-color: #141414; /* Netflix Background */
-  text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -14,7 +12,6 @@ body {
   margin: 0;
   padding: 0;
   min-height: 100vh;
-  display: block;
 }
 
 #app {
@@ -27,7 +24,7 @@ nav {
   justify-content: space-between;
   align-items: center;
   padding: 1rem 4%;
-  background: linear-gradient(to bottom, rgba(0,0,0,0.8) 0%, transparent 100%);
+  background: linear-gradient(to bottom, rgba(0,0,0,0.9) 0%, transparent 100%);
   position: sticky;
   top: 0;
   z-index: 1000;
@@ -36,16 +33,14 @@ nav {
 .nav-logo {
   color: #e50914;
   cursor: pointer;
-  transition: transform 0.1s;
   font-weight: bold;
+  font-size: 1.5rem;
 }
 
 .nav-user-info {
   display: flex;
   align-items: center;
   gap: 10px;
-  color: #e5e5e5;
-  font-size: 0.9rem;
   cursor: pointer;
 }
 
@@ -62,14 +57,8 @@ nav {
   flex-direction: column;
   justify-content: center;
   align-items: center;
-  height: 100vh;
+  height: 80vh;
   animation: fadeIn 0.6s ease-out;
-}
-
-.profile-picker h1 {
-  font-size: 3.5rem;
-  margin-bottom: 2.5rem;
-  font-weight: 500;
 }
 
 .user-grid {
@@ -84,7 +73,7 @@ nav {
   width: 150px;
   text-align: center;
   cursor: pointer;
-  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: transform 0.2s;
 }
 
 .profile-card:hover { transform: scale(1.1); }
@@ -94,54 +83,49 @@ nav {
   height: 150px;
   border-radius: 4px;
   object-fit: cover;
-  background-color: #333;
   border: 3px solid transparent;
 }
 
 .profile-card:hover .avatar { border-color: #fff; }
 
-/* --- Feed & Photo Grid --- */
-.feed-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 20px 4%;
-}
-
+/* --- Feed & Photo Grid (THE FIX) --- */
 .photo-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+  /* Reduced max column width to prevent stretching */
+  grid-template-columns: repeat(auto-fill, minmax(320px, 400px));
   gap: 30px;
-  padding: 0 4% 100px 4%; /* Space for FAB */
+  padding: 20px 4%;
+  justify-content: center; /* Centers cards if there are only one or two */
 }
 
 .photo-card {
   background: #1a1a1a;
-  border-radius: 8px;
+  border-radius: 12px;
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  height: fit-content; /* Prevents vertical stretching */
-  box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+  height: fit-content; /* Prevents card from stretching vertically */
+  box-shadow: 0 10px 20px rgba(0,0,0,0.3);
 }
 
 .photo-card img {
   width: 100%;
-  aspect-ratio: 4 / 5; /* More portrait-friendly, common for social feeds */
+  /* Removed 1/1 aspect ratio to let photos be their natural height or fit better */
+  max-height: 500px;
   object-fit: cover;
   display: block;
 }
 
 .photo-content {
-  padding: 15px;
+  padding: 20px;
 }
 
-/* --- Interaction Bar & Comments --- */
+/* --- Interaction & Comments --- */
 .interaction-bar {
   display: flex;
-  gap: 20px;
+  gap: 15px;
   align-items: center;
-  margin: 12px 0;
+  margin-bottom: 15px;
 }
 
 .like-btn {
@@ -151,98 +135,79 @@ nav {
   border-radius: 20px;
   color: white;
   cursor: pointer;
-  font-size: 0.9rem;
 }
 
 .view-count {
   color: #808080;
   font-size: 0.9rem;
-  display: flex;
-  align-items: center;
-  gap: 5px;
 }
 
-.comments-preview {
-  margin-top: 10px;
-  font-size: 0.9rem;
-  border-top: 1px solid #333;
-  padding-top: 10px;
-}
-
-.comment { margin-bottom: 5px; }
-
-/* Unified Comment Input */
 .comment-input-area {
   display: flex;
-  margin-top: 15px;
+  background: #2b2b2b;
   border-radius: 4px;
-  overflow: hidden;
+  margin-top: 15px;
   border: 1px solid #444;
+  overflow: hidden;
 }
 
 .comment-input-area input {
   flex: 1;
-  background: #2b2b2b;
+  background: transparent;
   border: none;
+  padding: 12px;
   color: white;
-  padding: 10px;
   outline: none;
 }
 
 .comment-input-area button {
-  background: #333;
+  background: #e50914;
   border: none;
-  border-left: 1px solid #444;
-  color: #fff;
-  padding: 0 15px;
+  color: white;
+  padding: 0 20px;
   font-weight: bold;
   cursor: pointer;
 }
 
-/* --- Filter Tabs --- */
-.filter-tabs {
-  display: flex;
-  gap: 15px;
-}
-
-.tab-btn {
-  background: none;
-  border: none;
-  color: #808080;
-  padding: 8px 0;
-  cursor: pointer;
-  border-bottom: 2px solid transparent;
-}
-
-.tab-btn.active {
-  color: #fff;
-  border-bottom: 2px solid #e50914;
-}
-
 /* --- Profile Dashboard --- */
-.profile-dashboard {
-  max-width: 800px;
-  margin: 40px auto;
-  padding: 20px;
+.bio-view {
+  display: flex;
+  justify-content: center;
+  padding: 40px 20px;
 }
 
-.profile-hero-card {
+.bio-card {
   background: #1f1f1f;
-  border-radius: 12px;
-  padding: 30px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
+  padding: 40px;
+  border-radius: 15px;
+  text-align: center;
+  max-width: 500px;
+  width: 100%;
 }
 
 .large-avatar {
-  width: 120px;
-  height: 120px;
+  width: 150px;
+  height: 150px;
   border-radius: 4px;
+  margin-bottom: 20px;
   object-fit: cover;
 }
 
-/* --- Forms & Modals --- */
+/* --- Floating Action Button --- */
+.fab-container {
+  position: fixed;
+  bottom: 30px;
+  right: 30px;
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  z-index: 1000;
+}
+
+.fab-main { background: #e50914; width: 60px; height: 60px; border-radius: 50%; border: none; font-size: 1.5rem; cursor: pointer; }
+.fab-sub { background: #333; width: 50px; height: 50px; border-radius: 50%; border: none; font-size: 1.2rem; cursor: pointer; align-self: center; }
+
+/* --- Modals --- */
 .modal-overlay {
   position: fixed;
   top: 0; left: 0; width: 100%; height: 100%;
@@ -257,23 +222,9 @@ nav {
   background: #181818;
   padding: 30px;
   border-radius: 8px;
-  width: 400px;
-  text-align: center;
+  width: 90%;
+  max-width: 400px;
 }
-
-/* --- FAB --- */
-.fab-container {
-  position: fixed;
-  bottom: 30px;
-  right: 30px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  z-index: 1000;
-}
-
-.fab-main { background: #e50914; width: 60px; height: 60px; border-radius: 50%; border: none; font-size: 1.5rem; cursor: pointer; }
-.fab-sub { background: #333; width: 50px; height: 50px; border-radius: 50%; border: none; font-size: 1.2rem; cursor: pointer; align-self: center; }
 
 /* --- Animations --- */
 @keyframes fadeIn {
@@ -283,5 +234,4 @@ nav {
 
 @media (max-width: 600px) {
   .photo-grid { grid-template-columns: 1fr; }
-  .profile-hero-card { flex-direction: column; text-align: center; gap: 20px; }
 }
