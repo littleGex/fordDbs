@@ -3,11 +3,9 @@
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
   line-height: 1.5;
   font-weight: 400;
-
   color-scheme: dark;
   color: #ffffff;
   background-color: #141414; /* Netflix Background */
-
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
 }
@@ -39,6 +37,7 @@ nav {
   color: #e50914;
   cursor: pointer;
   transition: transform 0.1s;
+  font-weight: bold;
 }
 
 .nav-user-info {
@@ -47,6 +46,14 @@ nav {
   gap: 10px;
   color: #e5e5e5;
   font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.nav-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 4px;
+  object-fit: cover;
 }
 
 /* --- Profile Picker (Who's Watching) --- */
@@ -63,7 +70,6 @@ nav {
   font-size: 3.5rem;
   margin-bottom: 2.5rem;
   font-weight: 500;
-  color: #fff;
 }
 
 .user-grid {
@@ -81,102 +87,32 @@ nav {
   transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.profile-card:hover {
-  transform: scale(1.1);
-}
+.profile-card:hover { transform: scale(1.1); }
 
 .avatar {
   width: 150px;
   height: 150px;
   border-radius: 4px;
   object-fit: cover;
-  border: 3px solid transparent;
   background-color: #333;
-  transition: border-color 0.2s;
+  border: 3px solid transparent;
 }
 
-.profile-card:hover .avatar {
-  border-color: #fff;
-}
-
-.profile-card h3 {
-  margin-top: 15px;
-  color: #808080;
-  font-size: 1.2rem;
-  font-weight: 400;
-  transition: color 0.2s;
-}
-
-.profile-card:hover h3 {
-  color: #fff;
-}
-
-/* --- User Profile Editor & Forms --- */
-.form-group {
-  margin-bottom: 25px;
-}
-
-.form-group label {
-  display: block;
-  color: #a3a3a3;
-  margin-bottom: 8px;
-  font-size: 0.9rem;
-}
-
-textarea, input[type="text"] {
-  width: 100%;
-  background: #2b2b2b;
-  border: 1px solid #444;
-  color: white;
-  padding: 12px;
-  border-radius: 4px;
-  font-family: inherit;
-  font-size: 1rem;
-  box-sizing: border-box;
-}
-
-textarea:focus {
-  outline: none;
-  border-color: #e50914;
-}
-
-/* --- Buttons --- */
-button {
-  border-radius: 4px;
-  border: 1px solid #808080;
-  padding: 0.6em 1.2em;
-  font-size: 1rem;
-  font-weight: 500;
-  background-color: transparent;
-  color: #fff;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-button:hover {
-  background-color: rgba(255, 255, 255, 0.1);
-  border-color: #fff;
-}
-
-.save-btn {
-  background-color: #e50914; /* Netflix Red */
-  border: none;
-  width: 100%;
-  padding: 14px;
-  font-weight: 700;
-}
-
-.save-btn:disabled {
-  background-color: #555;
-  cursor: not-allowed;
-}
+.profile-card:hover .avatar { border-color: #fff; }
 
 /* --- Feed & Photo Grid --- */
+.feed-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 4%;
+}
+
 .photo-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 20px;
-  padding: 20px 4%;
+  grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+  gap: 30px;
+  padding: 0 4% 100px 4%; /* Space for FAB */
 }
 
 .photo-card {
@@ -185,61 +121,85 @@ button:hover {
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  height: fit-content; /* Prevents vertical stretching */
+  box-shadow: 0 4px 12px rgba(0,0,0,0.5);
 }
 
 .photo-card img {
   width: 100%;
-  aspect-ratio: 1/1;
+  aspect-ratio: 4 / 5; /* More portrait-friendly, common for social feeds */
   object-fit: cover;
+  display: block;
 }
 
 .photo-content {
   padding: 15px;
 }
 
-/* --- Interactions (Likes/Views) --- */
+/* --- Interaction Bar & Comments --- */
 .interaction-bar {
   display: flex;
-  gap: 15px;
+  gap: 20px;
   align-items: center;
-  margin: 10px 0;
+  margin: 12px 0;
 }
 
 .like-btn {
-  background: none;
+  background: #2b2b2b;
   border: 1px solid #444;
-  padding: 5px 12px;
+  padding: 6px 15px;
   border-radius: 20px;
   color: white;
   cursor: pointer;
-}
-
-.view-stat {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  color: #808080;
   font-size: 0.9rem;
 }
 
-.icon-svg {
-  width: 18px;
-  height: 18px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 2;
-  stroke-linecap: round;
-  stroke-linejoin: round;
+.view-count {
+  color: #808080;
+  font-size: 0.9rem;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.comments-preview {
+  margin-top: 10px;
+  font-size: 0.9rem;
+  border-top: 1px solid #333;
+  padding-top: 10px;
+}
+
+.comment { margin-bottom: 5px; }
+
+/* Unified Comment Input */
+.comment-input-area {
+  display: flex;
+  margin-top: 15px;
+  border-radius: 4px;
+  overflow: hidden;
+  border: 1px solid #444;
+}
+
+.comment-input-area input {
+  flex: 1;
+  background: #2b2b2b;
+  border: none;
+  color: white;
+  padding: 10px;
+  outline: none;
+}
+
+.comment-input-area button {
+  background: #333;
+  border: none;
+  border-left: 1px solid #444;
+  color: #fff;
+  padding: 0 15px;
+  font-weight: bold;
+  cursor: pointer;
 }
 
 /* --- Filter Tabs --- */
-.feed-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 20px 4%;
-}
-
 .filter-tabs {
   display: flex;
   gap: 15px;
@@ -252,95 +212,41 @@ button:hover {
   padding: 8px 0;
   cursor: pointer;
   border-bottom: 2px solid transparent;
-  transition: all 0.2s;
 }
 
 .tab-btn.active {
   color: #fff;
-  border-bottom-color: #e50914;
+  border-bottom: 2px solid #e50914;
 }
 
 /* --- Profile Dashboard --- */
 .profile-dashboard {
-  max-width: 900px;
+  max-width: 800px;
   margin: 40px auto;
   padding: 20px;
 }
 
 .profile-hero-card {
   background: #1f1f1f;
-  border-radius: 15px;
-  padding: 40px;
+  border-radius: 12px;
+  padding: 30px;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  box-shadow: 0 4px 20px rgba(0,0,0,0.5);
 }
 
-.profile-header {
-  display: flex;
-  align-items: center;
-  gap: 30px;
-}
-
-.large-avatar-img {
-  width: 150px;
-  height: 150px;
-  border-radius: 50%;
+.large-avatar {
+  width: 120px;
+  height: 120px;
+  border-radius: 4px;
   object-fit: cover;
-  border: 4px solid #e50914;
 }
 
-.role-pill {
-  background: #333;
-  padding: 4px 12px;
-  border-radius: 20px;
-  font-size: 0.75rem;
-  text-transform: uppercase;
-  color: #e50914;
-  font-weight: bold;
-}
-
-.bio-text {
-  color: #b3b3b3;
-  margin-top: 10px;
-  max-width: 400px;
-}
-
-/* --- FAB (Floating Action Button) --- */
-.fab-container {
-  position: fixed;
-  bottom: 30px;
-  right: 30px;
-  display: flex;
-  flex-direction: column;
-  gap: 15px;
-  z-index: 1000;
-}
-
-.fab-main, .fab-sub {
-  width: 60px;
-  height: 60px;
-  border-radius: 50%;
-  border: none;
-  color: white;
-  font-size: 1.5rem;
-  cursor: pointer;
-  box-shadow: 0 4px 10px rgba(0,0,0,0.3);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  transition: transform 0.2s;
-}
-
-.fab-main { background: #e50914; }
-.fab-sub { background: #333; width: 50px; height: 50px; align-self: center; }
-
-/* --- Modals --- */
+/* --- Forms & Modals --- */
 .modal-overlay {
   position: fixed;
   top: 0; left: 0; width: 100%; height: 100%;
-  background: rgba(0, 0, 0, 0.9);
+  background: rgba(0,0,0,0.85);
   display: flex;
   justify-content: center;
   align-items: center;
@@ -350,11 +256,24 @@ button:hover {
 .modal-content {
   background: #181818;
   padding: 30px;
-  border-radius: 12px;
-  width: 90%;
-  max-width: 450px;
-  border: 1px solid #333;
+  border-radius: 8px;
+  width: 400px;
+  text-align: center;
 }
+
+/* --- FAB --- */
+.fab-container {
+  position: fixed;
+  bottom: 30px;
+  right: 30px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  z-index: 1000;
+}
+
+.fab-main { background: #e50914; width: 60px; height: 60px; border-radius: 50%; border: none; font-size: 1.5rem; cursor: pointer; }
+.fab-sub { background: #333; width: 50px; height: 50px; border-radius: 50%; border: none; font-size: 1.2rem; cursor: pointer; align-self: center; }
 
 /* --- Animations --- */
 @keyframes fadeIn {
@@ -362,17 +281,7 @@ button:hover {
   to { opacity: 1; transform: translateY(0); }
 }
 
-/* --- Responsive --- */
 @media (max-width: 600px) {
-  .profile-hero-card {
-    flex-direction: column;
-    text-align: center;
-    gap: 20px;
-  }
-  .profile-header {
-    flex-direction: column;
-  }
-  .photo-grid {
-    grid-template-columns: 1fr;
-  }
+  .photo-grid { grid-template-columns: 1fr; }
+  .profile-hero-card { flex-direction: column; text-align: center; gap: 20px; }
 }
