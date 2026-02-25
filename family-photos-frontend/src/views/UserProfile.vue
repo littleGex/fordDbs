@@ -222,7 +222,12 @@ const saveProfile = async () => {
 
   try {
     // 2. Explicitly set headers for this specific request
-    const res = await api.post('/profile/update', formData);
+    const res = await api.post('/profile/update', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      },
+      transformRequest: (data) => data
+    });
 
     // 3. Update the local Auth Store state
     auth.updateUser(res.data);
