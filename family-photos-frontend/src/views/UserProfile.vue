@@ -204,38 +204,32 @@ const recordView = async (photoId) => {
 };
 
 // UserProfile.vue -> <script setup>
+
 const saveProfile = async () => {
   uploading.value = true;
+
+  // 1. Prepare FormData
   const formData = new FormData();
 
-  // 1. user_id is required by the backend
+  // Ensure these keys match the Form(...) parameters in family_photos.py exactly
   formData.append('user_id', auth.currentUser.id);
-
-  // 2. Only append optional fields if they have a truthy value
-  if (tempDisplayName.value) {
-    formData.append('display_name', tempDisplayName.value);
-  }
-
-  if (tempBio.value) {
-    formData.append('bio', tempBio.value);
-  }
+  formData.append('display_name', tempDisplayName.value);
+  formData.append('bio', tempBio.value);
 
   if (selectedProfileFile.value) {
     formData.append('file', selectedProfileFile.value);
   }
 
   try {
-    // 3. Do NOT pass a headers configuration here. Let Axios handle the form boundary.
+    // 2. Explicitly set headers for this specific request
     const res = await api.post('/profile/update', formData);
 
+    // 3. Update the local Auth Store state
     auth.updateUser(res.data);
     currentMode.value = 'profile';
-
   } catch (err) {
-    // 4. FastAPI exposes the exact validation failure in err.response.data.detail
-    const backendError = err.response?.data?.detail || err.message;
-    console.error("Profile update rejected by backend:", backendError);
-    alert("Update failed. Check the browser console for details.");
+    // If you see 422 here, check the browser console for the exact field error
+    console.error("Profile update failed", err);
   } finally {
     uploading.value = false;
   }
