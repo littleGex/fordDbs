@@ -14,122 +14,116 @@ body {
   min-height: 100vh;
 }
 
-#app {
-  width: 100%;
-}
-
-/* --- Navigation Bar --- */
+/* --- Navigation & Header (The Scroll Fix) --- */
 nav {
   display: flex;
   justify-content: space-between;
   align-items: center;
   padding: 1rem 4%;
-  background: linear-gradient(to bottom, rgba(0,0,0,0.9) 0%, transparent 100%);
+  background-color: #141414; /* Solid background hides content behind it */
   position: sticky;
   top: 0;
+  z-index: 1100;
+  border-bottom: 1px solid #222;
+}
+
+.feed-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 4%;
+  background-color: #141414; /* Solid background hides content behind it */
+  position: sticky;
+  top: 65px; /* Adjust based on your NavBar height */
   z-index: 1000;
+  margin-bottom: 10px;
 }
 
-.nav-logo {
-  color: #e50914;
-  cursor: pointer;
-  font-weight: bold;
-  font-size: 1.5rem;
-}
-
-.nav-user-info {
+/* --- Underline Tabs (The Screenshot Style) --- */
+.filter-tabs {
   display: flex;
-  align-items: center;
-  gap: 10px;
+  gap: 25px;
+}
+
+.tab-btn {
+  background: none;
+  border: none;
+  color: #808080;
+  padding: 8px 0;
+  font-size: 1rem;
+  font-weight: 500;
   cursor: pointer;
+  position: relative;
+  transition: color 0.2s;
 }
 
-.nav-avatar {
-  width: 32px;
-  height: 32px;
-  border-radius: 4px;
-  object-fit: cover;
+.tab-btn.active {
+  color: #fff;
 }
 
-/* --- Profile Picker (Who's Watching) --- */
-.profile-picker {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  height: 80vh;
-  animation: fadeIn 0.6s ease-out;
+/* Red underline for active tab */
+.tab-btn.active::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 3px;
+  background-color: #e50914;
+  border-radius: 2px;
 }
 
-.profile-picker h1 {
-  font-size: 2.5rem;
-  margin-bottom: 2rem;
-}
-
-.user-grid {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 2.5rem;
-  max-width: 1200px;
-}
-
-.profile-card {
-  width: 150px;
-  text-align: center;
-  cursor: pointer;
-  transition: transform 0.2s;
-}
-
-.profile-card:hover { transform: scale(1.1); }
-
-.avatar {
-  width: 150px;
-  height: 150px;
-  border-radius: 4px;
-  object-fit: cover;
-  border: 3px solid transparent;
-}
-
-.profile-card:hover .avatar { border-color: #fff; }
-
-/* --- Feed & Photo Grid (FIX FOR STRETCHING) --- */
+/* --- Uniform Photo Grid --- */
 .photo-grid {
   display: grid;
-  /* Fixed width range (max 400px) prevents single photos from stretching full-screen */
-  grid-template-columns: repeat(auto-fill, minmax(320px, 400px));
+  /* Enforces uniform width for all cards */
+  grid-template-columns: repeat(auto-fill, 380px);
   gap: 30px;
-  padding: 20px 4%;
-  justify-content: center; /* Centers the grid if only 1 or 2 items exist */
+  padding: 0 4% 100px;
+  justify-content: center;
 }
 
 .photo-card {
   background: #1a1a1a;
-  border-radius: 12px;
+  border-radius: 8px;
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  height: fit-content; /* Stops card from expanding vertically */
-  box-shadow: 0 10px 20px rgba(0,0,0,0.3);
+  /* Enforces uniform height for all cards */
+  height: 650px;
+  box-shadow: 0 10px 20px rgba(0,0,0,0.4);
 }
 
 .photo-card img {
   width: 100%;
-  max-height: 500px; /* Limits vertical height for tall photos */
+  /* Fixed height for image area to keep cards uniform */
+  height: 400px;
   object-fit: cover;
   display: block;
 }
 
 .photo-content {
   padding: 20px;
-  background: #1a1a1a;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
 }
 
 .caption {
-  margin-bottom: 12px;
+  flex-shrink: 0;
+  margin-bottom: 15px;
 }
 
-/* --- Interaction & Comments --- */
+.comments-preview {
+  flex: 1;
+  overflow-y: auto; /* Allows long comment lists to scroll inside the fixed card */
+  margin-bottom: 15px;
+  font-size: 0.9rem;
+  border-top: 1px solid #333;
+  padding-top: 10px;
+}
+
+/* --- Interaction & Comments UI --- */
 .interaction-bar {
   display: flex;
   gap: 15px;
@@ -146,27 +140,10 @@ nav {
   cursor: pointer;
 }
 
-.view-count {
-  color: #808080;
-  font-size: 0.9rem;
-}
-
-.comments-preview {
-  margin: 10px 0;
-  border-top: 1px solid #333;
-  padding-top: 10px;
-}
-
-.comment {
-  font-size: 0.9rem;
-  margin-bottom: 4px;
-}
-
 .comment-input-area {
   display: flex;
   background: #2b2b2b;
   border-radius: 4px;
-  margin-top: 15px;
   border: 1px solid #444;
   overflow: hidden;
 }
@@ -175,56 +152,68 @@ nav {
   flex: 1;
   background: transparent;
   border: none;
-  padding: 12px;
+  padding: 10px;
   color: white;
   outline: none;
 }
 
 .comment-input-area button {
-  background: #e50914;
+  background: #333;
   border: none;
+  border-left: 1px solid #444;
   color: white;
-  padding: 0 20px;
-  font-weight: bold;
+  padding: 0 15px;
   cursor: pointer;
 }
 
-/* --- Profile Dashboard --- */
-.bio-view {
+/* --- Profile Picker --- */
+.profile-picker {
   display: flex;
+  flex-direction: column;
   justify-content: center;
-  padding: 40px 20px;
+  align-items: center;
+  height: 80vh;
 }
 
-.bio-card {
-  background: #1f1f1f;
-  padding: 40px;
-  border-radius: 15px;
-  text-align: center;
-  max-width: 500px;
-  width: 100%;
+.user-grid {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 2.5rem;
 }
 
-.large-avatar {
+.avatar {
   width: 150px;
   height: 150px;
   border-radius: 4px;
-  margin-bottom: 20px;
   object-fit: cover;
+  border: 3px solid transparent;
 }
 
-/* --- Floating Action Button & Modals --- */
+.profile-card:hover .avatar { border-color: #fff; }
+
+/* --- FAB & Modals --- */
 .fab-container {
   position: fixed;
   bottom: 30px;
   right: 30px;
+  z-index: 1200;
   display: flex;
   flex-direction: column;
   gap: 15px;
-  z-index: 1000;
 }
 
-.fab-main { background: #e50914; width: 60px; height: 60px; border-radius: 50%; border: none; font-size: 1.5rem; cursor: pointer; color: white; }
+.fab-main {
+  background: #e50914;
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  border: none;
+  color: white;
+  font-size: 1.5rem;
+  cursor: pointer;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+}
 
 .modal-overlay {
   position: fixed;
@@ -242,15 +231,10 @@ nav {
   border-radius: 8px;
   width: 90%;
   max-width: 400px;
-  text-align: center;
-}
-
-/* --- Animations --- */
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
 }
 
 @media (max-width: 600px) {
   .photo-grid { grid-template-columns: 1fr; }
+  .photo-card { height: auto; }
+  .photo-card img { height: auto; }
 }
