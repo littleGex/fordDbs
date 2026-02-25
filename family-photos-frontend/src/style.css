@@ -61,6 +61,11 @@ nav {
   animation: fadeIn 0.6s ease-out;
 }
 
+.profile-picker h1 {
+  font-size: 2.5rem;
+  margin-bottom: 2rem;
+}
+
 .user-grid {
   display: flex;
   flex-wrap: wrap;
@@ -88,14 +93,14 @@ nav {
 
 .profile-card:hover .avatar { border-color: #fff; }
 
-/* --- Feed & Photo Grid (THE FIX) --- */
+/* --- Feed & Photo Grid (FIX FOR STRETCHING) --- */
 .photo-grid {
   display: grid;
-  /* Reduced max column width to prevent stretching */
+  /* Fixed width range (max 400px) prevents single photos from stretching full-screen */
   grid-template-columns: repeat(auto-fill, minmax(320px, 400px));
   gap: 30px;
   padding: 20px 4%;
-  justify-content: center; /* Centers cards if there are only one or two */
+  justify-content: center; /* Centers the grid if only 1 or 2 items exist */
 }
 
 .photo-card {
@@ -104,20 +109,24 @@ nav {
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  height: fit-content; /* Prevents card from stretching vertically */
+  height: fit-content; /* Stops card from expanding vertically */
   box-shadow: 0 10px 20px rgba(0,0,0,0.3);
 }
 
 .photo-card img {
   width: 100%;
-  /* Removed 1/1 aspect ratio to let photos be their natural height or fit better */
-  max-height: 500px;
+  max-height: 500px; /* Limits vertical height for tall photos */
   object-fit: cover;
   display: block;
 }
 
 .photo-content {
   padding: 20px;
+  background: #1a1a1a;
+}
+
+.caption {
+  margin-bottom: 12px;
 }
 
 /* --- Interaction & Comments --- */
@@ -140,6 +149,17 @@ nav {
 .view-count {
   color: #808080;
   font-size: 0.9rem;
+}
+
+.comments-preview {
+  margin: 10px 0;
+  border-top: 1px solid #333;
+  padding-top: 10px;
+}
+
+.comment {
+  font-size: 0.9rem;
+  margin-bottom: 4px;
 }
 
 .comment-input-area {
@@ -193,7 +213,7 @@ nav {
   object-fit: cover;
 }
 
-/* --- Floating Action Button --- */
+/* --- Floating Action Button & Modals --- */
 .fab-container {
   position: fixed;
   bottom: 30px;
@@ -204,10 +224,8 @@ nav {
   z-index: 1000;
 }
 
-.fab-main { background: #e50914; width: 60px; height: 60px; border-radius: 50%; border: none; font-size: 1.5rem; cursor: pointer; }
-.fab-sub { background: #333; width: 50px; height: 50px; border-radius: 50%; border: none; font-size: 1.2rem; cursor: pointer; align-self: center; }
+.fab-main { background: #e50914; width: 60px; height: 60px; border-radius: 50%; border: none; font-size: 1.5rem; cursor: pointer; color: white; }
 
-/* --- Modals --- */
 .modal-overlay {
   position: fixed;
   top: 0; left: 0; width: 100%; height: 100%;
@@ -224,6 +242,7 @@ nav {
   border-radius: 8px;
   width: 90%;
   max-width: 400px;
+  text-align: center;
 }
 
 /* --- Animations --- */
