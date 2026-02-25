@@ -50,12 +50,20 @@ async def upload_photo(
 
 
 @family_photos_router.get("/feed")
-def get_feed(limit: int = 10,
-             offset: int = 0,
-             db: Session = Depends(get_db)):
-    # Query with limit/offset for scrolling
-    photos = db.query(Photo).order_by(
-        Photo.timestamp.desc()).limit(limit).offset(offset).all()
+def get_feed(
+        user_id: int = None,
+        limit: int = 10,
+        offset: int = 0,
+        db: Session = Depends(get_db)):
+    # 1. Start with the base query
+    query = db.query(Photo)
+
+    # 2. If a user_id is provided, filter the photos by that uploader
+    if user_id:
+        query = query.filter(Photo.uploader_id == user_id)
+
+    # 3. Apply ordering and pagination
+    photos = query.order_by(Photo.timestamp.desc()).limit(limit).offset(offset).all()
 
     feed_data = []
     for p in photos:
@@ -77,7 +85,6 @@ def get_feed(limit: int = 10,
                 "comments": len(p.comments),
                 "views": len(p.views)
             },
-            # Just return the last 3 comments for the "preview"
             "recent_comments": [
                 {"username": c.user.username, "text": c.text}
                 for c in p.comments[-3:]
