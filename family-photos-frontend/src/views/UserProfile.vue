@@ -22,7 +22,7 @@
               <button @click="handleLike(photo.id)" class="like-btn">
                 ❤️ {{ photo.stats.likes }}
               </button>
-              <span class="view-count">👁️ {{ photo.stats.views }}</span>
+              <span class="view-count">👥 {{ photo.stats.views }}</span>
             </div>
 
             <div class="comments-preview">
@@ -90,7 +90,8 @@
 
     <div class="fab-container">
       <button class="fab-sub" @click="showUploadModal = true" title="Upload Photo">📸</button>
-      <button class="fab-main" @click="toggleView">
+
+      <button class="fab-main" @click="currentMode = currentMode === 'feed' ? 'profile' : 'feed'">
         {{ currentMode === 'feed' ? '👤' : '🖼️' }}
       </button>
     </div>
