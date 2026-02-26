@@ -85,14 +85,13 @@ const createUser = async () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 3rem;
-  color: grey;
-  transition: all 0.2s;
+  font-size: 2.5rem; /* Better scale for the + icon */
+  color: #808080;
 }
 
 .add-tile:hover .plus-avatar {
-  background: grey;
-  color: white;
+  background: #e5e5e5;
+  color: #141414;
 }
 
 .modal-overlay {
@@ -102,6 +101,7 @@ const createUser = async () => {
   display: flex;
   align-items: center;
   justify-content: center;
+  z-index: 4000;
 }
 
 .modal-content {

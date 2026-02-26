@@ -71,9 +71,16 @@ nav {
 .photo-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, 380px);
-  gap: 30px;
-  padding: 20px 4% 120px;
+  gap: 40px; /* Increased gap for cleaner look */
+  padding: 20px 4% 150px; /* Extra bottom padding for FAB clear space */
   justify-content: center;
+}
+
+.interaction-bar {
+  display: flex;
+  gap: 20px; /* More space between Like and View icons */
+  align-items: center;
+  margin-bottom: 15px;
 }
 
 .photo-card {
@@ -218,26 +225,58 @@ nav {
     gap: 15px;
     align-items: flex-start;
   }
+
+  .profile-picker {
+    padding: 40px 10px;
+  }
+
+  .profile-picker h1 {
+    font-size: 1.8rem; /* Scaled down for mobile */
+  }
+
+  .profile-card {
+    width: 100px; /* Allow 2-3 profiles per row on small screens */
+  }
+
+  .avatar {
+    width: 100px;
+    height: 100px;
+  }
+
+  .fab-container {
+    bottom: 20px;
+    right: 20px;
+    gap: 10px;
+  }
 }
 
 /* --- Profile Picker Fixes --- */
 .profile-picker {
   display: flex;
   flex-direction: column;
-  justify-content: center;
+  justify-content: flex-start; /* Changed from center to allow header visibility */
   align-items: center;
-  height: 80vh;
+  min-height: 100vh;
+  padding: 60px 20px; /* Standardized top padding */
+}
+
+.profile-picker h1 {
+  font-size: 2.5rem;
+  margin-bottom: 2rem;
+  font-weight: 500;
+  text-align: center;
 }
 
 .user-grid {
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
-  gap: 2.5rem;
+  gap: 2rem; /* Consistent gap for touch targets */
+  max-width: 800px;
 }
 
 .profile-card {
-  width: 150px;
+  width: 130px; /* Slightly smaller for better mobile fit */
   text-align: center;
   cursor: pointer;
   transition: transform 0.2s;
@@ -248,11 +287,12 @@ nav {
 }
 
 .avatar {
-  width: 150px;
-  height: 150px;
+  width: 130px;
+  height: 130px;
   border-radius: 4px;
   object-fit: cover;
   border: 3px solid transparent;
+  margin-bottom: 10px;
 }
 
 .profile-card:hover .avatar {
