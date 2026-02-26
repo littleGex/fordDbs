@@ -32,11 +32,7 @@
             </div>
 
             <div class="comment-input-area">
-              <input
-                  v-model="commentTexts[photo.id]"
-                  placeholder="Add a comment..."
-                  @keyup.enter="handleComment(photo.id)"
-              />
+              <input v-model="commentTexts[photo.id]" placeholder="Add a comment..." @keyup.enter="handleComment(photo.id)" />
               <button @click="handleComment(photo.id)">Post</button>
             </div>
           </div>
@@ -56,7 +52,49 @@
       </div>
     </div>
 
+    <div v-else-if="currentMode === 'edit'" class="edit-view">
+      <div class="edit-mode-card">
+        <h3>Update Profile</h3>
+        <div class="form-group">
+          <label>Display Name</label>
+          <input type="text" v-model="tempDisplayName"/>
+        </div>
+        <div class="form-group">
+          <label>Profile Bio</label>
+          <textarea v-model="tempBio" placeholder="Tell the family something about yourself..."></textarea>
+        </div>
+        <div class="form-group">
+          <label>Change Photo</label>
+          <input type="file" @change="onProfileFileSelected" accept="image/*"/>
+        </div>
+        <div style="margin-top: 20px; display: flex; gap: 10px; justify-content: center;">
+          <button @click="saveProfile" class="like-btn" :disabled="uploading">
+            {{ uploading ? 'Saving...' : 'Save Changes' }}
+          </button>
+          <button @click="currentMode = 'profile'" class="like-btn">Cancel</button>
+        </div>
+      </div>
     </div>
+
+    <div v-if="showUploadModal" class="modal-overlay">
+      <div class="modal-content">
+        <h3>Post to Family Feed</h3>
+        <input type="file" @change="onFeedFileSelected" accept="image/*" style="margin: 20px 0; color: white;" />
+        <textarea v-model="newCaption" placeholder="Write a caption (optional)..." style="width: 100%; background: #2b2b2b; color: white; border: 1px solid #444; padding: 10px; margin-bottom: 20px;"></textarea>
+        <div style="display: flex; gap: 10px; justify-content: center;">
+          <button @click="handleUpload" :disabled="uploading" class="like-btn">Post Photo</button>
+          <button @click="showUploadModal = false" class="like-btn">Cancel</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="fab-container">
+      <button class="fab-sub" @click="showUploadModal = true" title="Upload Photo">📸</button>
+      <button class="fab-main" @click="toggleView">
+        {{ currentMode === 'feed' ? '👤' : '🖼️' }}
+      </button>
+    </div>
+  </div>
 </template>
 
 <script setup>

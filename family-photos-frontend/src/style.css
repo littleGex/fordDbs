@@ -219,3 +219,42 @@ nav {
     align-items: flex-start;
   }
 }
+
+/* --- Profile Picker Fixes --- */
+.profile-picker {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  height: 80vh;
+}
+
+.user-grid {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 2.5rem;
+}
+
+.profile-card {
+  width: 150px;
+  text-align: center;
+  cursor: pointer;
+  transition: transform 0.2s;
+}
+
+.profile-card:hover {
+  transform: scale(1.1);
+}
+
+.avatar {
+  width: 150px;
+  height: 150px;
+  border-radius: 4px;
+  object-fit: cover;
+  border: 3px solid transparent;
+}
+
+.profile-card:hover .avatar {
+  border-color: #fff;
+}
