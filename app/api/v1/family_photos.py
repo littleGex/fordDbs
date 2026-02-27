@@ -1,4 +1,3 @@
-from datetime import datetime
 from fastapi import (APIRouter, UploadFile, File, Depends,
                      HTTPException, Form)
 from sqlalchemy.orm import Session
@@ -7,7 +6,6 @@ from app.core.storage import (upload_image_to_storage, get_image_url,
                               minio_client, BUCKET_NAME)
 from app.models.photo_model import Photo, Like, Comment, View
 from app.models.user_models import User
-from minio.error import S3Error
 import uuid
 import logging
 import os
@@ -43,7 +41,8 @@ async def get_current_user(token: str = Depends(oauth2_scheme),
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         user_id = payload.get("sub")
-        if not user_id: raise HTTPException(status_code=401)
+        if not user_id:
+            raise HTTPException(status_code=401)
     except JWTError:
         raise HTTPException(status_code=401)
 
@@ -54,7 +53,8 @@ async def get_current_user(token: str = Depends(oauth2_scheme),
 @family_photos_router.post("/login")
 def login(data: dict, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.id == data.get('user_id')).first()
-    if not user: raise HTTPException(status_code=404)
+    if not user:
+        raise HTTPException(status_code=404)
 
     # 1. Check if user needs to set a password (Null check)
     if user.hashed_password is None:
@@ -62,12 +62,19 @@ def login(data: dict, db: Session = Depends(get_db)):
 
     # 2. Verify password
     if not verify_pw(data.get('password'), user.hashed_password):
-        raise HTTPException(status_code=401, detail="Invalid password")
+        raise HTTPException(status_code=401,
+                            detail="Invalid password")
 
     # 3. Create Token
-    token = jwt.encode({"sub": str(user.id), "exp": datetime.now(timezone.utc) + timedelta(hours=24)}, SECRET_KEY,
-                       algorithm=ALGORITHM)
-    return {"access_token": token, "token_type": "bearer", "user": {"id": user.id, "role": user.role}}
+    token = jwt.encode(
+        {"sub": str(user.id),
+         "exp": datetime.now(timezone.utc) + timedelta(hours=24)},
+        SECRET_KEY,
+        algorithm=ALGORITHM)
+    return {"access_token": token,
+            "token_type": "bearer",
+            "user": {"id": user.id,
+                     "role": user.role}}
 
 
 @family_photos_router.post("/users/set-password")
@@ -77,7 +84,9 @@ def set_password(data: dict, db: Session = Depends(get_db)):
         user.hashed_password = hash_pw(data.get('password'))
         db.commit()
         return {"status": "success"}
-    raise HTTPException(status_code=400, detail="Password already set or user not found")
+    raise HTTPException(
+        status_code=400,
+        detail="Password already set or user not found")
 
 
 @family_photos_router.post("/upload")
@@ -124,7 +133,8 @@ def get_feed(
         query = query.filter(Photo.uploader_id == user_id)
 
     # 3. Apply ordering and pagination
-    photos = query.order_by(Photo.timestamp.desc()).limit(limit).offset(offset).all()
+    photos = query.order_by(
+        Photo.timestamp.desc()).limit(limit).offset(offset).all()
 
     feed_data = []
     for p in photos:
@@ -173,10 +183,9 @@ def like_photo(
 
 @family_photos_router.delete("/{photo_id}")
 def delete_photo(
-    photo_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user) # Secure identity from JWT
-):
+        photo_id: int,
+        db: Session = Depends(get_db),
+        current_user: User = Depends(get_current_user)):
     photo = db.query(Photo).filter(Photo.id == photo_id).first()
 
     if not photo:
@@ -222,8 +231,7 @@ def add_comment(
 def record_view(
         photo_id: int,
         db: Session = Depends(get_db),
-        current_user: User = Depends(get_current_user) # Added JWT dependency
-):
+        current_user: User = Depends(get_current_user)):
     # Use current_user.id instead of a passed parameter
     existing_view = db.query(View).filter_by(
         photo_id=photo_id,
@@ -258,7 +266,7 @@ async def update_profile(
         bio: str = Form(None),
         file: UploadFile = File(None),
         db: Session = Depends(get_db),
-        current_user: User = Depends(get_current_user)  # Secure: Identity from token
+        current_user: User = Depends(get_current_user)
 ):
     # Use the user object directly from the JWT payload
     user = current_user
@@ -287,15 +295,19 @@ async def update_profile(
             )
             user.profile_photo_key = new_photo_key
         except Exception as e:
-            logger.error(f"Failed to upload profile photo for user {user.id}: {e}")
-            raise HTTPException(status_code=500, detail="Storage upload failed")
+            logger.error(
+                f"Failed to upload profile photo for user {user.id}: "
+                f"{e}")
+            raise HTTPException(status_code=500,
+                                detail="Storage upload failed")
 
     try:
         db.commit()
         db.refresh(user)
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=500, detail="Database update failed")
+        raise HTTPException(status_code=500,
+                            detail=f"Database update failed - {e}")
 
     # 4. Cleanup OLD photo
     if file and old_photo_key:
@@ -310,7 +322,9 @@ async def update_profile(
         "display_name": user.display_name,
         "role": user.role,
         "bio": user.bio,
-        "profile_photo_url": get_image_url(user.profile_photo_key) if user.profile_photo_key else None
+        "profile_photo_url": get_image_url(
+            user.profile_photo_key) if user.profile_photo_key else
+        None
     }
 
 
@@ -349,10 +363,13 @@ def create_user(data: dict, db: Session = Depends(get_db)):
 
 # Admin Reset Override
 @family_photos_router.post("/admin/reset-password")
-def admin_reset(target_id: int, new_pass: str, current_user: User = Depends(get_current_user),
+def admin_reset(target_id: int,
+                new_pass: str,
+                current_user: User = Depends(get_current_user),
                 db: Session = Depends(get_db)):
     if current_user.role != "parent":
-        raise HTTPException(status_code=403, detail="Only parents can reset passwords")
+        raise HTTPException(status_code=403,
+                            detail="Only parents can reset passwords")
     target = db.query(User).filter(User.id == target_id).first()
     target.hashed_password = hash_pw(new_pass)
     db.commit()
@@ -361,14 +378,15 @@ def admin_reset(target_id: int, new_pass: str, current_user: User = Depends(get_
 
 @family_photos_router.post("/refresh")
 def refresh_token(
-    current_user: User = Depends(get_current_user), # Validates current identity
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     # Generate a new token with a fresh expiration (e.g., another 24 hours)
     access_token_expires = timedelta(hours=24)
 
     new_token = jwt.encode(
-        {"sub": str(current_user.id), "exp": datetime.now(timezone.utc) + access_token_expires},
+        {"sub": str(current_user.id),
+         "exp": datetime.now(timezone.utc) + access_token_expires},
         SECRET_KEY,
         algorithm=ALGORITHM
     )
