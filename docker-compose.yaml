@@ -60,7 +60,7 @@ services:
     build:
       context: ./family-photos-frontend
       args:
-        - VITE_API_BASE=http://ford-home-pi.local:8005/v1/family-photos
+        - VITE_API_BASE=https://api-pocket-money.ford-home-apps.com/v1/family-photos
     image: family-photos-frontend:latest
     container_name: family-photos-frontend-ui
     ports:
@@ -78,11 +78,14 @@ services:
       - MINIO_ACCESS_KEY=admin
       - MINIO_SECRET_KEY=instaFord
       # EXTERNAL: How the phone/browser finds MinIO on your Wi-Fi
-      - EXTERNAL_URL_HOST=ford-home-pi.local:9000
+      - EXTERNAL_URL_HOST=https://photos-data.ford-home-apps.com
     depends_on:
       - minio
       - db
     restart: always
+    networks:
+      - default
+      - proxy_network
   minio:
     image: minio/minio
     container_name: family_photos_storage
@@ -93,6 +96,8 @@ services:
     environment:
       - MINIO_ROOT_USER=${MINIO_ROOT_USER}
       - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}
+      - MINIO_BROWSER_REDIRECT_URL=https://photos-data.ford-home-apps.com
+      - MINIO_SERVER_URL=https://photos-data.ford-home-apps.com
     volumes:
       - minio_data:/data
     command: server /data --console-address ":9001"
