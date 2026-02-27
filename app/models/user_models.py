@@ -57,6 +57,7 @@ class User(Base):
     id = Column(Integer, primary_key=True)
     username = Column(String, unique=True, nullable=False)
     role = Column(String, default="parent")
+    hashed_password = Column(String, nullable=True)
 
     profile_photo_key = Column(String, nullable=True)
     bio = Column(String(160), nullable=True)

@@ -10,24 +10,86 @@ from app.models.user_models import User
 from minio.error import S3Error
 import uuid
 import logging
-
+import os
+from jose import jwt, JWTError
+from passlib.context import CryptContext
+from datetime import datetime, timedelta, timezone
+from fastapi.security import OAuth2PasswordBearer
 
 logger = logging.getLogger("app.api.users")
 family_photos_router = APIRouter()
+
+# Load from your .env
+SECRET_KEY = os.getenv("SECRET_KEY", "your-default-secret")
+ALGORITHM = "HS256"
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login", auto_error=False)
+
+
+# Utilities
+def hash_pw(pw):
+    return pwd_context.hash(pw)
+
+
+def verify_pw(pw, hashed):
+    return pwd_context.verify(pw, hashed)
+
+
+# JWT Dependency to protect routes
+async def get_current_user(token: str = Depends(oauth2_scheme),
+                           db: Session = Depends(get_db)):
+    if not token:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        user_id = payload.get("sub")
+        if not user_id: raise HTTPException(status_code=401)
+    except JWTError:
+        raise HTTPException(status_code=401)
+
+    user = db.query(User).filter(User.id == int(user_id)).first()
+    return user
+
+
+@family_photos_router.post("/login")
+def login(data: dict, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.id == data.get('user_id')).first()
+    if not user: raise HTTPException(status_code=404)
+
+    # 1. Check if user needs to set a password (Null check)
+    if user.hashed_password is None:
+        return {"status": "needs_initial_password"}
+
+    # 2. Verify password
+    if not verify_pw(data.get('password'), user.hashed_password):
+        raise HTTPException(status_code=401, detail="Invalid password")
+
+    # 3. Create Token
+    token = jwt.encode({"sub": str(user.id), "exp": datetime.now(timezone.utc) + timedelta(hours=24)}, SECRET_KEY,
+                       algorithm=ALGORITHM)
+    return {"access_token": token, "token_type": "bearer", "user": {"id": user.id, "role": user.role}}
+
+
+@family_photos_router.post("/users/set-password")
+def set_password(data: dict, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.id == data.get('user_id')).first()
+    if user and user.hashed_password is None:
+        user.hashed_password = hash_pw(data.get('password'))
+        db.commit()
+        return {"status": "success"}
+    raise HTTPException(status_code=400, detail="Password already set or user not found")
 
 
 @family_photos_router.post("/upload")
 async def upload_photo(
         caption: str = Form(None),
-        uploader_id: int = Form(...),
         file: UploadFile = File(...),
-        db: Session = Depends(get_db)
+        db: Session = Depends(get_db),
+        current_user: User = Depends(get_current_user)
 ):
-    # 1. Generate unique filename for MinIO
     file_ext = file.filename.split(".")[-1]
     minio_key = f"{uuid.uuid4()}.{file_ext}"
 
-    # 2. Stream the file to MinIO
     minio_client.put_object(
         "family-photos",
         minio_key,
@@ -36,17 +98,16 @@ async def upload_photo(
         part_size=10 * 1024 * 1024
     )
 
-    # 3. Save to Postgres
     new_photo = Photo(
         minio_key=minio_key,
         caption=caption,
-        uploader_id=uploader_id,
-        timestamp=datetime.now()
+        uploader_id=current_user.id,  # TRUST THE TOKEN, NOT THE FORM
+        timestamp=datetime.now(timezone.utc)
     )
     db.add(new_photo)
     db.commit()
 
-    return {"message": "Photo posted to feed!"}
+    return {"message": "Success"}
 
 
 @family_photos_router.get("/feed")
@@ -94,86 +155,83 @@ def get_feed(
 
 
 @family_photos_router.post("/{photo_id}/like")
-def like_photo(photo_id: int,
-               user_id: int,
-               db: Session = Depends(get_db)):
-    # Check if already liked to prevent duplicates
-    existing = db.query(Like).filter_by(photo_id=photo_id,
-                                        user_id=user_id).first()
-    if existing:
-        db.delete(existing)
-        db.commit()
-        return {"message": "Unliked"}
-
-    new_like = Like(photo_id=photo_id, user_id=user_id)
-    db.add(new_like)
+def like_photo(
+        photo_id: int,
+        db: Session = Depends(get_db),
+        current_user: User = Depends(get_current_user)
+):
+    # Toggle logic using current_user.id
+    like = db.query(Like).filter_by(photo_id=photo_id,
+                                    user_id=current_user.id).first()
+    if like:
+        db.delete(like)
+    else:
+        db.add(Like(photo_id=photo_id, user_id=current_user.id))
     db.commit()
-    return {"message": "Liked"}
+    return {"status": "updated"}
 
 
 @family_photos_router.delete("/{photo_id}")
-def delete_photo(photo_id: int,
-                 user_id: int,
-                 db: Session = Depends(get_db)):
+def delete_photo(
+    photo_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user) # Secure identity from JWT
+):
     photo = db.query(Photo).filter(Photo.id == photo_id).first()
 
     if not photo:
         raise HTTPException(status_code=404, detail="Photo not found")
 
-    # Simple Permission Check: Only the uploader or a 'parent' can delete
-    requesting_user = db.query(User).filter(User.id == user_id).first()
-    if photo.uploader_id != user_id and requesting_user.role != "parent":
-        raise HTTPException(status_code=403,
-                            detail="Not authorized to delete this photo")
+    # Permission Check: Only the uploader or a 'parent' can delete
+    # We now trust current_user.id from the token
+    if photo.uploader_id != current_user.id and current_user.role != "parent":
+        raise HTTPException(
+            status_code=403,
+            detail="Not authorized to delete this photo"
+        )
 
     try:
-        # 1. Remove from MinIO
+        # 1. Remove file from storage
         minio_client.remove_object(BUCKET_NAME, photo.minio_key)
 
-        # 2. Remove from Postgres (Cascade will handle Likes/Comments/Views)
+        # 2. Remove from database
         db.delete(photo)
         db.commit()
         return {"status": "success", "message": "Photo and file deleted"}
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=500,
-                            detail=f"Cleanup failed: {str(e)}")
+        logger.error(f"Delete failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Cleanup failed")
 
 
 @family_photos_router.post("/{photo_id}/comment")
-def add_comment(photo_id: int,
-                user_id: int,
-                text: str,
-                db: Session = Depends(get_db)):
-    # Verify the photo exists
-    photo = db.query(Photo).filter(Photo.id == photo_id).first()
-    if not photo:
-        raise HTTPException(status_code=404,
-                            detail="Photo not found")
-
-    new_comment = Comment(
-        photo_id=photo_id,
-        user_id=user_id,
-        text=text
-    )
-    db.add(new_comment)
+def add_comment(
+        photo_id: int,
+        text: str = Form(...),
+        db: Session = Depends(get_db),
+        current_user: User = Depends(get_current_user)
+):
+    db.add(Comment(photo_id=photo_id,
+                   user_id=current_user.id,
+                   text=text))
     db.commit()
-    db.refresh(new_comment)
-    return {"message": "Comment added",
-            "comment": new_comment.text}
+    return {"status": "added"}
 
 
 @family_photos_router.post("/{photo_id}/view")
-def record_view(photo_id: int,
-                user_id: int,
-                db: Session = Depends(get_db)):
-    # Check if this user has already viewed this photo to avoid
-    # duplicate counts
-    existing_view = db.query(View).filter_by(photo_id=photo_id,
-                                             user_id=user_id).first()
+def record_view(
+        photo_id: int,
+        db: Session = Depends(get_db),
+        current_user: User = Depends(get_current_user) # Added JWT dependency
+):
+    # Use current_user.id instead of a passed parameter
+    existing_view = db.query(View).filter_by(
+        photo_id=photo_id,
+        user_id=current_user.id
+    ).first()
 
     if not existing_view:
-        new_view = View(photo_id=photo_id, user_id=user_id)
+        new_view = View(photo_id=photo_id, user_id=current_user.id)
         db.add(new_view)
         db.commit()
         return {"status": "view_recorded"}
@@ -196,15 +254,14 @@ def get_photo_stats(photo_id: int, db: Session = Depends(get_db)):
 
 @family_photos_router.post("/profile/update")
 async def update_profile(
-        user_id: int = Form(...),
         display_name: str = Form(None),
         bio: str = Form(None),
         file: UploadFile = File(None),
-        db: Session = Depends(get_db)
+        db: Session = Depends(get_db),
+        current_user: User = Depends(get_current_user)  # Secure: Identity from token
 ):
-    user = db.query(User).filter(User.id == user_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+    # Use the user object directly from the JWT payload
+    user = current_user
 
     # 1. Store the old key for later cleanup
     old_photo_key = user.profile_photo_key
@@ -219,7 +276,7 @@ async def update_profile(
     # 3. Process new photo if provided
     if file:
         file_ext = file.filename.split(".")[-1]
-        new_photo_key = f"profiles/{user_id}_{uuid.uuid4().hex[:6]}.{file_ext}"
+        new_photo_key = f"profiles/{user.id}_{uuid.uuid4().hex[:6]}.{file_ext}"
 
         try:
             upload_image_to_storage(
@@ -230,35 +287,22 @@ async def update_profile(
             )
             user.profile_photo_key = new_photo_key
         except Exception as e:
-            logger.error("Failed to upload new profile photo for user "
-                         f"{user_id}: {e}")
-            raise HTTPException(status_code=500,
-                                detail="Storage upload failed")
+            logger.error(f"Failed to upload profile photo for user {user.id}: {e}")
+            raise HTTPException(status_code=500, detail="Storage upload failed")
 
     try:
-        # 4. Commit DB changes first (The point of no return)
         db.commit()
         db.refresh(user)
     except Exception as e:
         db.rollback()
-        logger.error(f"Database commit failed for user {user_id}: {e}")
         raise HTTPException(status_code=500, detail="Database update failed")
 
-    # 5. Cleanup OLD photo only AFTER successful DB commit
+    # 4. Cleanup OLD photo
     if file and old_photo_key:
         try:
             minio_client.remove_object(BUCKET_NAME, old_photo_key)
-        except S3Error as e:
-            # We don't raise an exception here because the user's
-            # new profile is already active and saved.
-            if e.code == "NoSuchKey":
-                logger.warning(f"Old photo {old_photo_key}"
-                               f" already gone from MinIO.")
-            else:
-                logger.error(
-                    f"Non-critical cleanup failure for {old_photo_key}: {e}")
         except Exception as e:
-            logger.error(f"Unexpected error during old photo cleanup: {e}")
+            logger.error(f"Cleanup failure: {e}")
 
     return {
         "id": user.id,
@@ -266,8 +310,7 @@ async def update_profile(
         "display_name": user.display_name,
         "role": user.role,
         "bio": user.bio,
-        "profile_photo_url": get_image_url(
-            user.profile_photo_key) if user.profile_photo_key else None
+        "profile_photo_url": get_image_url(user.profile_photo_key) if user.profile_photo_key else None
     }
 
 
@@ -292,11 +335,42 @@ def get_all_users(db: Session = Depends(get_db)):
 
 @family_photos_router.post("/users")
 def create_user(data: dict, db: Session = Depends(get_db)):
+    # Updated to include password
     new_user = User(
         username=data['username'],
         display_name=data['display_name'],
-        role="child"  # Default role
+        hashed_password=hash_pw(data['password']),
+        role="child"
     )
     db.add(new_user)
     db.commit()
     return {"status": "success"}
+
+
+# Admin Reset Override
+@family_photos_router.post("/admin/reset-password")
+def admin_reset(target_id: int, new_pass: str, current_user: User = Depends(get_current_user),
+                db: Session = Depends(get_db)):
+    if current_user.role != "parent":
+        raise HTTPException(status_code=403, detail="Only parents can reset passwords")
+    target = db.query(User).filter(User.id == target_id).first()
+    target.hashed_password = hash_pw(new_pass)
+    db.commit()
+    return {"status": "reset successful"}
+
+
+@family_photos_router.post("/refresh")
+def refresh_token(
+    current_user: User = Depends(get_current_user), # Validates current identity
+    db: Session = Depends(get_db)
+):
+    # Generate a new token with a fresh expiration (e.g., another 24 hours)
+    access_token_expires = timedelta(hours=24)
+
+    new_token = jwt.encode(
+        {"sub": str(current_user.id), "exp": datetime.now(timezone.utc) + access_token_expires},
+        SECRET_KEY,
+        algorithm=ALGORITHM
+    )
+
+    return {"access_token": new_token}

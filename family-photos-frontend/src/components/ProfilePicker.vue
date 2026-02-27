@@ -5,26 +5,43 @@
     <div v-if="loading" class="loading">Loading profiles...</div>
 
     <div v-else class="user-grid">
-      <div v-for="user in users" :key="user.id" class="profile-card" @click="selectUser(user)">
+      <div v-for="user in users" :key="user.id" class="profile-card" @click="openLoginModal(user)">
         <img :src="user.profile_photo_url || '/avatars/default.png'" class="avatar" />
         <h3>{{ user.display_name }}</h3>
       </div>
 
-      <div class="profile-card add-tile" @click="showModal = true">
-        <div class="avatar plus-avatar">
-          <span>+</span>
-        </div>
+      <div class="profile-card add-tile" @click="showCreateModal = true">
+        <div class="avatar plus-avatar"><span>+</span></div>
         <h3>Add Profile</h3>
       </div>
     </div>
 
-    <div v-if="showModal" class="modal-overlay">
+    <div v-if="showPassModal" class="modal-overlay">
+      <div class="modal-content">
+        <h2>{{ needsInitialSetup ? 'Set Your Password' : 'Enter Password' }}</h2>
+        <p>Profile: {{ selectedUser?.display_name }}</p>
+        <input
+          v-model="passInput"
+          type="password"
+          :placeholder="needsInitialSetup ? 'Create a password' : 'Enter password'"
+          @keyup.enter="submitAuth"
+          autofocus
+        />
+        <div class="modal-btns">
+          <button @click="closeModals">Cancel</button>
+          <button @click="submitAuth">{{ needsInitialSetup ? 'Save & Login' : 'Unlock' }}</button>
+        </div>
+      </div>
+    </div>
+
+    <div v-if="showCreateModal" class="modal-overlay">
       <div class="modal-content">
         <h2>New Profile</h2>
-        <input v-model="newUserName" placeholder="Enter name" @keyup.enter="createUser" />
+        <input v-model="newUserName" placeholder="Display Name" />
+        <input v-model="newUserPassword" type="password" placeholder="Password" />
         <div class="modal-btns">
-          <button @click="showModal = false">Cancel</button>
-          <button @click="createUser" :disabled="!newUserName">Create</button>
+          <button @click="closeModals">Cancel</button>
+          <button @click="createUser" :disabled="!newUserName || !newUserPassword">Create</button>
         </div>
       </div>
     </div>
@@ -39,15 +56,24 @@ import { useAuthStore } from '../stores/auth.js';
 const auth = useAuthStore();
 const users = ref([]);
 const loading = ref(true);
-const showModal = ref(false);
+
+// Modal States
+const showPassModal = ref(false);
+const showCreateModal = ref(false);
+const needsInitialSetup = ref(false);
+
+// Form States
+const selectedUser = ref(null);
+const passInput = ref('');
 const newUserName = ref('');
+const newUserPassword = ref('');
 
 const fetchUsers = async () => {
   try {
     const response = await api.get('/users');
     users.value = response.data;
   } catch (error) {
-    console.error("Failed to fetch users", error);
+    console.error("Fetch error", error);
   } finally {
     loading.value = false;
   }
@@ -55,25 +81,66 @@ const fetchUsers = async () => {
 
 onMounted(fetchUsers);
 
-const selectUser = (user) => auth.login(user);
+const openLoginModal = (user) => {
+  selectedUser.value = user;
+  passInput.value = '';
+  showPassModal.value = true;
+  needsInitialSetup.value = false; // Reset setup flag
+};
 
-const createUser = async () => {
-  if (!newUserName.value) return;
+const closeModals = () => {
+  showPassModal.value = false;
+  showCreateModal.value = false;
+  passInput.value = '';
+};
+
+const submitAuth = async () => {
   try {
-    // Generate a simple username by stripping spaces and lowercasing
-    const generatedUsername = newUserName.value.toLowerCase().replace(/\s/g, '');
-
-    await api.post('/users', {
-      username: generatedUsername, // satisfy backend requirement
-      display_name: newUserName.value
+    // 1. Attempt Login
+    const res = await api.post('/login', {
+      user_id: selectedUser.value.id,
+      password: passInput.value
     });
 
+    // 2. Handle Case: Existing user with no password in DB
+    if (res.data.status === 'needs_initial_password') {
+      needsInitialSetup.value = true;
+      alert("This profile needs a password. Please enter the password you want to use.");
+      return;
+    }
+
+    // 3. Handle Case: Just set the password, now logging in
+    if (needsInitialSetup.value) {
+        await api.post('/users/set-password', {
+            user_id: selectedUser.value.id,
+            password: passInput.value
+        });
+        // Recursively call to get the JWT after setting password
+        return submitAuth();
+    }
+
+    // 4. Success: Store JWT and Login
+    localStorage.setItem('token', res.data.access_token);
+    auth.login(selectedUser.value);
+  } catch (err) {
+    alert(err.response?.data?.detail || "Authentication failed");
+  }
+};
+
+const createUser = async () => {
+  try {
+    const generatedUsername = newUserName.value.toLowerCase().replace(/\s/g, '');
+    await api.post('/users', {
+      username: generatedUsername,
+      display_name: newUserName.value,
+      password: newUserPassword.value
+    });
     newUserName.value = '';
-    showModal.value = false;
+    newUserPassword.value = '';
+    showCreateModal.value = false;
     fetchUsers();
   } catch (error) {
-    console.error("Creation error:", error.response?.data || error);
-    alert("Failed to create profile. Check console for details.");
+    alert("Creation failed: " + (error.response?.data?.detail || "Check console"));
   }
 };
 </script>

@@ -32,7 +32,8 @@
             </div>
 
             <div class="comment-input-area">
-              <input v-model="commentTexts[photo.id]" placeholder="Add a comment..." @keyup.enter="handleComment(photo.id)" />
+              <input v-model="commentTexts[photo.id]" placeholder="Add a comment..."
+                     @keyup.enter="handleComment(photo.id)"/>
               <button @click="handleComment(photo.id)">Post</button>
             </div>
           </div>
@@ -79,8 +80,9 @@
     <div v-if="showUploadModal" class="modal-overlay">
       <div class="modal-content">
         <h3>Post to Family Feed</h3>
-        <input type="file" @change="onFeedFileSelected" accept="image/*" style="margin: 20px 0; color: white;" />
-        <textarea v-model="newCaption" placeholder="Write a caption (optional)..." style="width: 100%; background: #2b2b2b; color: white; border: 1px solid #444; padding: 10px; margin-bottom: 20px;"></textarea>
+        <input type="file" @change="onFeedFileSelected" accept="image/*" style="margin: 20px 0; color: white;"/>
+        <textarea v-model="newCaption" placeholder="Write a caption (optional)..."
+                  style="width: 100%; background: #2b2b2b; color: white; border: 1px solid #444; padding: 10px; margin-bottom: 20px;"></textarea>
         <div style="display: flex; gap: 10px; justify-content: center;">
           <button @click="handleUpload" :disabled="uploading" class="like-btn">Post Photo</button>
           <button @click="showUploadModal = false" class="like-btn">Cancel</button>
@@ -99,8 +101,8 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue';
-import { useAuthStore } from '../stores/auth';
+import {ref, onMounted} from 'vue';
+import {useAuthStore} from '../stores/auth';
 import api from '../api/axios';
 
 const auth = useAuthStore();
@@ -118,8 +120,12 @@ const tempDisplayName = ref(auth.currentUser.display_name || '');
 const tempBio = ref(auth.currentUser.bio || '');
 const selectedProfileFile = ref(null);
 
-const onFeedFileSelected = (e) => { selectedFeedFile.value = e.target.files[0]; };
-const onProfileFileSelected = (e) => { selectedProfileFile.value = e.target.files[0]; };
+const onFeedFileSelected = (e) => {
+  selectedFeedFile.value = e.target.files[0];
+};
+const onProfileFileSelected = (e) => {
+  selectedProfileFile.value = e.target.files[0];
+};
 
 const toggleView = () => {
   currentMode.value = currentMode.value === 'feed' ? 'profile' : 'feed';
@@ -132,8 +138,8 @@ const toggleFilter = (onlyMe) => {
 
 const fetchPhotos = async () => {
   try {
-    const params = showOnlyMyPhotos.value ? { user_id: auth.currentUser.id } : {};
-    const res = await api.get('/feed', { params });
+    const params = showOnlyMyPhotos.value ? {user_id: auth.currentUser.id} : {};
+    const res = await api.get('/feed', {params});
     photos.value = res.data;
   } catch (err) {
     console.error("Feed error:", err);
@@ -141,49 +147,88 @@ const fetchPhotos = async () => {
 };
 
 const handleUpload = async () => {
-  if (!selectedFeedFile.value) return;
+  if (!selectedFeedFile.value) {
+    alert("Please select a photo first!");
+    return;
+  }
+
   uploading.value = true;
   const formData = new FormData();
   formData.append('file', selectedFeedFile.value);
   formData.append('caption', newCaption.value || "");
   formData.append('uploader_id', auth.currentUser.id);
+
   try {
     await api.post('/upload', formData);
+
+    // Reset state only on success
     showUploadModal.value = false;
     newCaption.value = '';
+    selectedFeedFile.value = null;
     fetchPhotos();
-  } catch (err) { console.error(err); }
-  finally { uploading.value = false; }
+  } catch (err) {
+    console.error("Upload failed:", err);
+    alert("Upload failed. Please try again.");
+  } finally {
+    uploading.value = false;
+  }
 };
 
 const handleLike = async (id) => {
-  await api.post(`/${id}/like`, null, { params: { user_id: auth.currentUser.id } });
+  await api.post(`/${id}/like`);
   fetchPhotos();
 };
 
 const handleComment = async (id) => {
   if (!commentTexts.value[id]) return;
-  await api.post(`/${id}/comment`, null, { params: { user_id: auth.currentUser.id, text: commentTexts.value[id] } });
+  // Use URLSearchParams for Form data if backend expects it, otherwise a simple object
+  const formData = new FormData();
+  formData.append('text', commentTexts.value[id]);
+
+  await api.post(`/${id}/comment`, formData);
   commentTexts.value[id] = '';
   fetchPhotos();
 };
 
+const handleDelete = async (photoId) => {
+  if (!confirm("Are you sure you want to delete this memory?")) return;
+
+  try {
+    // No need to pass user_id; the backend gets it from the header
+    await api.delete(`/${photoId}`);
+
+    // Refresh the feed to show the photo is gone
+    fetchPhotos();
+  } catch (err) {
+    const msg = err.response?.data?.detail || "Delete failed";
+    alert(msg);
+  }
+};
+
 const recordView = async (id) => {
-  await api.post(`/${id}/view`, null, { params: { user_id: auth.currentUser.id } });
+  await api.post(`/${id}/view`);
 };
 
 const saveProfile = async () => {
   uploading.value = true;
   const formData = new FormData();
-  formData.append('user_id', auth.currentUser.id);
+
   formData.append('display_name', tempDisplayName.value);
   formData.append('bio', tempBio.value);
-  if (selectedProfileFile.value) formData.append('file', selectedProfileFile.value);
+
+  if (selectedProfileFile.value) {
+    formData.append('file', selectedProfileFile.value);
+  }
+
   try {
     const res = await api.post('/profile/update', formData);
     auth.updateUser(res.data);
     currentMode.value = 'profile';
-  } finally { uploading.value = false; }
+  } catch (err) {
+    console.error("Profile update failed:", err);
+  } finally {
+    uploading.value = false;
+  }
 };
 
 onMounted(fetchPhotos);
@@ -191,5 +236,7 @@ onMounted(fetchPhotos);
 
 <style scoped>
 /* Scoped overrides if needed; otherwise relies on style.css */
-.user-container { padding-top: 20px; }
+.user-container {
+  padding-top: 20px;
+}
 </style>

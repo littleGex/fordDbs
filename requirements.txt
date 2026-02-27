@@ -10,3 +10,5 @@ pytest
 pytest-cov
 minio
 python-multipart
+python-jose
+passlib
