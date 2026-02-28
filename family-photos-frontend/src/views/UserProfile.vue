@@ -244,12 +244,6 @@ const getYearAgoText = (dateString) => {
   const years = new Date().getFullYear() - new Date(dateString).getFullYear();
   return `${years} year${years > 1 ? 's' : ''} ago`;
 };
-
-const getYearAgoText = (dateString) => {
-  const years = new Date().getFullYear() - new Date(dateString).getFullYear();
-  return `${years} year${years > 1 ? 's' : ''} ago`;
-};
-
 </script>
 
 <style scoped>
