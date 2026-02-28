@@ -95,34 +95,54 @@ const closeModals = () => {
 };
 
 const submitAuth = async () => {
-  try {
-    // 1. Attempt Login
-    const res = await api.post('/login', {
-      user_id: selectedUser.value.id,
-      password: passInput.value
-    });
+  if (!passInput.value) {
+    alert("Password is required");
+    return;
+  }
 
-    // 2. Handle Case: Existing user with no password in DB
+  try {
+    let res;
+
+    if (needsInitialSetup.value) {
+      // FIX: Call the correct endpoint to SAVE the password first
+      await api.post('/users/set-password', {
+        user_id: selectedUser.value.id,
+        password: passInput.value
+      }, {
+        // Manually restore content-type since it's deleted in axios.js
+        headers: { 'Content-Type': 'application/json' }
+      });
+
+      // Now that it's saved, attempt a normal login
+      res = await api.post('/login', {
+        user_id: selectedUser.value.id,
+        password: passInput.value
+      }, {
+        headers: { 'Content-Type': 'application/json' }
+      });
+    } else {
+      // Normal login flow
+      res = await api.post('/login', {
+        user_id: selectedUser.value.id,
+        password: passInput.value
+      }, {
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    // Handle the "needs setup" response from the backend
     if (res.data.status === 'needs_initial_password') {
       needsInitialSetup.value = true;
-      alert("This profile needs a password. Please enter the password you want to use.");
-      return;
+      return; // Stop here so the user can see the "Set Password" prompt
     }
 
-    // 3. Handle Case: Just set the password, now logging in
-    if (needsInitialSetup.value) {
-        await api.post('/users/set-password', {
-            user_id: selectedUser.value.id,
-            password: passInput.value
-        });
-        // Recursively call to get the JWT after setting password
-        return submitAuth();
-    }
-
-    // 4. Success: Store JWT and Login
+    // Success: Store token and enter app
     localStorage.setItem('token', res.data.access_token);
     auth.login(selectedUser.value);
+    showPassModal.value = false;
+
   } catch (err) {
+    console.error("Auth error:", err.response?.data);
     alert(err.response?.data?.detail || "Authentication failed");
   }
 };
