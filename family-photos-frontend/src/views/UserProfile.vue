@@ -9,6 +9,18 @@
         </div>
       </div>
 
+      <div v-if="historicalPhotos.length > 0" class="on-this-day-container">
+        <h3 class="historical-title">
+          <span class="icon">📅</span> On This Day...
+        </h3>
+        <div class="historical-scroll">
+          <div v-for="photo in historicalPhotos" :key="photo.id" class="historical-card">
+            <img :src="photo.url"/>
+            <div class="historical-label">{{ getYearAgoText(photo.created_at) }}</div>
+          </div>
+        </div>
+      </div>
+
       <div class="photo-grid">
         <div v-for="photo in photos" :key="photo.id" class="photo-card">
           <img :src="photo.url" loading="lazy" @load="recordView(photo.id)"/>
@@ -119,6 +131,7 @@ const selectedFeedFile = ref(null);
 const tempDisplayName = ref(auth.currentUser.display_name || '');
 const tempBio = ref(auth.currentUser.bio || '');
 const selectedProfileFile = ref(null);
+const historicalPhotos = ref([]);
 
 const onFeedFileSelected = (e) => {
   selectedFeedFile.value = e.target.files[0];
@@ -216,7 +229,27 @@ const saveProfile = async () => {
   }
 };
 
-onMounted(fetchPhotos);
+onMounted(async () => {
+  fetchPhotos();
+  try {
+    const res = await api.get('/historical');
+    historicalPhotos.value = res.data;
+  } catch (err) {
+    console.error("Historical fetch failed", err);
+  }
+});
+
+// Helper for the label
+const getYearAgoText = (dateString) => {
+  const years = new Date().getFullYear() - new Date(dateString).getFullYear();
+  return `${years} year${years > 1 ? 's' : ''} ago`;
+};
+
+const getYearAgoText = (dateString) => {
+  const years = new Date().getFullYear() - new Date(dateString).getFullYear();
+  return `${years} year${years > 1 ? 's' : ''} ago`;
+};
+
 </script>
 
 <style scoped>

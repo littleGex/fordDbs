@@ -1,5 +1,6 @@
 from fastapi import (APIRouter, UploadFile, File, Depends,
                      HTTPException, Form)
+from sqlalchemy import extract
 from sqlalchemy.orm import Session
 from app.database.database import get_db
 from app.core.storage import (upload_image_to_storage, get_image_url,
@@ -162,6 +163,39 @@ def get_feed(
             ]
         })
     return feed_data
+
+
+@family_photos_router.get("/historical")
+def on_this_day(db: Session = Depends(get_db)):
+    today = datetime.date.today()
+
+    # Filter photos where Month and Day match today, but
+    # Year is strictly less than current year
+    query = db.query(Photo).filter(
+        extract('month', Photo.timestamp) == today.month,
+        extract('day', Photo.timestamp) == today.day,
+        extract('year', Photo.timestamp) < today.year
+    )
+
+    # Order by most recent years first (e.g., 1 year ago, then 2 years ago)
+    photos = query.order_by(Photo.timestamp.desc()).all()
+
+    historical_data = []
+    for p in photos:
+        historical_data.append({
+            "id": p.id,
+            "url": get_image_url(p.minio_key),
+            "caption": p.caption,
+            "created_at": p.timestamp.isoformat(),
+            "uploader": {
+                "display_name": p.uploader.display_name or p.uploader.username,
+            },
+            "stats": {
+                "likes": len(p.likes),
+                "views": len(p.views)
+            }
+        })
+    return historical_data
 
 
 @family_photos_router.post("/{photo_id}/like")
