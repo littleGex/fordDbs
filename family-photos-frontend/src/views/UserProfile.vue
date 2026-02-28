@@ -1,15 +1,11 @@
 <template>
   <div :class="['user-container', currentTheme]">
-    <div class="seasonal-overlay">
-      <div
-          v-for="(style, index) in particles"
-          :key="index"
-          class="particle"
-          :style="style"
-      ></div>
-    </div>
     <div v-if="currentMode === 'feed'" class="feed-view">
       <div class="feed-header">
+        <div class="seasonal-overlay">
+          <div v-for="(style, index) in particles" :key="index" class="particle" :style="style"></div>
+        </div>
+
         <h2 class="section-title">Family Moments</h2>
         <div class="filter-tabs">
           <button @click="toggleFilter(false)" :class="{ active: !showOnlyMyPhotos }" class="tab-btn">Everyone</button>
@@ -146,7 +142,7 @@ const toggleFilter = (onlyMe) => {
 };
 
 const currentTheme = computed(() => {
-  const month = new Date().getMonth(); // 0 = Jan, 1 = Feb, etc.
+  const month = new Date().getMonth();
   if (month >= 2 && month <= 4) return 'theme-spring';
   if (month >= 5 && month <= 7) return 'theme-summer';
   if (month >= 8 && month <= 10) return 'theme-halloween';
@@ -250,12 +246,11 @@ const saveProfile = async () => {
 
 onMounted(() => {
   fetchPhotos();
-
-  // Generate 20 random particles for the seasonal overlay
-  particles.value = Array.from({length: 20}).map(() => ({
-    left: `${Math.random() * 100}vw`, // Random horizontal position
-    animationDuration: `${Math.random() * 5 + 5}s`, // Falls between 5 and 10 seconds
-    animationDelay: `${Math.random() * 5}s` // Staggers the start times
+  // Icons now fall only within the header width
+  particles.value = Array.from({ length: 15 }).map(() => ({
+    left: `${Math.random() * 100}%`,
+    animationDuration: `${Math.random() * 3 + 3}s`,
+    animationDelay: `${Math.random() * 5}s`
   }));
 });
 </script>

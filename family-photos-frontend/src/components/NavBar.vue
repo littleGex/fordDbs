@@ -1,5 +1,5 @@
 <template>
-  <nav v-if="auth.currentUser">
+  <nav v-if="auth.currentUser" :class="currentTheme">
     <div class="nav-left">
       <h2 class="nav-logo" @click="refreshFeed" title="Refresh Feed">
         FORDSTAGRAM
@@ -20,9 +20,18 @@
 </template>
 
 <script setup>
+import { computed } from 'vue';
 import { useAuthStore } from '../stores/auth';
 
 const auth = useAuthStore();
+
+const currentTheme = computed(() => {
+  const month = new Date().getMonth();
+  if (month >= 2 && month <= 4) return 'theme-spring';
+  if (month >= 5 && month <= 7) return 'theme-summer';
+  if (month >= 8 && month <= 10) return 'theme-halloween';
+  return 'theme-winter';
+});
 
 const refreshFeed = () => {
   // If you want a hard refresh:
