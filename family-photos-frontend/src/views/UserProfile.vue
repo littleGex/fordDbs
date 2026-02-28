@@ -1,5 +1,13 @@
 <template>
   <div class="user-container">
+    <div class="seasonal-overlay">
+      <div
+        v-for="(style, index) in particles"
+        :key="index"
+        class="particle"
+        :style="style"
+      ></div>
+    </div>
     <div v-if="currentMode === 'feed'" class="feed-view">
       <div class="feed-header">
         <h2 class="section-title">Family Moments</h2>
@@ -101,7 +109,7 @@
 </template>
 
 <script setup>
-import {ref, onMounted} from 'vue';
+import {ref, onMounted, computed} from 'vue';
 import {useAuthStore} from '../stores/auth';
 import api from '../api/axios';
 
@@ -119,6 +127,7 @@ const selectedFeedFile = ref(null);
 const tempDisplayName = ref(auth.currentUser.display_name || '');
 const tempBio = ref(auth.currentUser.bio || '');
 const selectedProfileFile = ref(null);
+const particles = ref([]);
 
 const onFeedFileSelected = (e) => {
   selectedFeedFile.value = e.target.files[0];
@@ -135,6 +144,14 @@ const toggleFilter = (onlyMe) => {
   showOnlyMyPhotos.value = onlyMe;
   fetchPhotos();
 };
+
+const currentTheme = computed(() => {
+  const month = new Date().getMonth(); // 0 = Jan, 1 = Feb, etc.
+  if (month >= 2 && month <= 4) return 'theme-spring';
+  if (month >= 5 && month <= 7) return 'theme-summer';
+  if (month >= 8 && month <= 10) return 'theme-halloween';
+  return 'theme-winter';
+});
 
 const fetchPhotos = async () => {
   try {
@@ -231,7 +248,16 @@ const saveProfile = async () => {
   }
 };
 
-onMounted(fetchPhotos);
+onMounted(() => {
+  fetchPhotos();
+
+  // Generate 20 random particles for the seasonal overlay
+  particles.value = Array.from({ length: 20 }).map(() => ({
+    left: `${Math.random() * 100}vw`, // Random horizontal position
+    animationDuration: `${Math.random() * 5 + 5}s`, // Falls between 5 and 10 seconds
+    animationDelay: `${Math.random() * 5}s` // Staggers the start times
+  }));
+});
 </script>
 
 <style scoped>

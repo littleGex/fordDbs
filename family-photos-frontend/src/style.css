@@ -332,3 +332,82 @@ nav {
   margin-bottom: 15px;
   color: white;
 }
+
+/* --- THEME DEFINITIONS --- */
+
+/* 🎃 HALLOWEEN: Nightmare Before Christmas style */
+.theme-halloween {
+  --bg-main: #1a1a1a;
+  --accent: #9d50bb;
+  --font-title: 'Jim Nightshade', cursive;
+  --card-bg: #2a2a2a;
+  --border-style: 2px dashed #444; /* Stitched look */
+}
+
+/* ❄️ WINTER: Festive & Cozy */
+.theme-winter {
+  --bg-main: #f0f8ff;
+  --accent: #2c3e50;
+  --font-title: 'Mountains of Christmas', cursive;
+  --card-bg: #ffffff;
+  --border-style: 2px solid #add8e6;
+}
+
+/* 🌸 SPRING: Cherry Blossoms & Freshness */
+.theme-spring {
+  --bg-main: #fff0f6; /* Pale pink */
+  --accent: #d63384; /* Deep pink */
+  --font-title: 'Pacifico', cursive;
+  --card-bg: #ffffff;
+  --border-style: 2px solid #ffdeeb;
+}
+
+/* ☀️ SUMMER: Retro Beach & Sun */
+.theme-summer {
+  --bg-main: #fff9e6; /* Sand */
+  --accent: #ff8c00; /* Sunset Orange */
+  --font-title: 'Bungee Shade', cursive; /* Thick, sunny font */
+  --card-bg: #ffffff;
+  --border-style: 4px solid #ffd700;
+}
+
+.seasonal-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  pointer-events: none; /* Let clicks pass through */
+  z-index: 100;
+  overflow: hidden;
+}
+
+.particle {
+  position: absolute;
+  top: -50px;
+  animation: fall linear infinite;
+  font-size: 1.5rem; /* Adjust size of emojis */
+}
+
+@keyframes fall {
+  to { transform: translateY(110vh) rotate(360deg); }
+}
+
+/* Theme specific overrides for the emoji */
+.theme-winter .particle::before { content: "❄️"; }
+.theme-halloween .particle::before { content: "🎃"; }
+.theme-summer .particle::before { content: "☀️"; }
+.theme-spring .particle::before { content: "🌸"; }
+
+.user-container {
+  background-color: var(--bg-main);
+  transition: background-color 1.0s ease;
+}
+
+.section-title {
+  font-family: var(--font-title), sans-serif;
+  color: var(--accent);
+  transition: all 0.5s ease; /* Makes theme transitions smooth */
+}
+
+.photo-card {
+  background: var(--card-bg, #1a1a1a);
+  border: var(--border-style, none);
+}
