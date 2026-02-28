@@ -1,11 +1,18 @@
 <template>
   <div class="user-container">
     <div v-if="currentMode === 'feed'" class="feed-view">
+
       <div class="feed-header">
         <h2 class="section-title">Family Moments</h2>
-        <div class="filter-tabs">
-          <button @click="currentView = 'feed'; selectedAlbum = null" :class="{ active: currentView === 'feed' }" class="tab-btn">Feed</button>
-          <button @click="currentView = 'albums'; selectedAlbum = null" :class="{ active: currentView === 'albums' }" class="tab-btn">Albums</button>
+        <div class="segmented-control">
+          <button
+            @click="currentView = 'feed'; selectedAlbum = null"
+            :class="{ active: currentView === 'feed' }"
+          >Timeline</button>
+          <button
+            @click="currentView = 'albums'; selectedAlbum = null"
+            :class="{ active: currentView === 'albums' }"
+          >Albums</button>
         </div>
       </div>
 
@@ -15,16 +22,18 @@
         </h3>
         <div class="historical-scroll">
           <div v-for="photo in historicalPhotos" :key="photo.id" class="historical-card">
-            <img :src="photo.url"/>
-            <div class="historical-label">{{ getYearAgoText(photo.created_at) }}</div>
+            <img :src="photo.url" loading="lazy" />
+            <div class="historical-label">{{ getYearAgoText(photo.timestamp) }}</div>
           </div>
         </div>
       </div>
 
       <div v-if="currentView === 'feed'" class="photo-grid">
-        <div class="filter-tabs" style="grid-column: 1/-1; justify-content: flex-start; margin-bottom: 15px;">
-           <button @click="toggleFilter(false)" :class="{ active: !showOnlyMyPhotos }" class="tab-btn">Everyone</button>
-           <button @click="toggleFilter(true)" :class="{ active: showOnlyMyPhotos }" class="tab-btn">My Photos</button>
+        <div class="filter-container" style="grid-column: 1/-1; margin-bottom: 10px;">
+          <div class="segmented-control mini">
+            <button @click="toggleFilter(false)" :class="{ active: !showOnlyMyPhotos }">Family</button>
+            <button @click="toggleFilter(true)" :class="{ active: showOnlyMyPhotos }">Mine</button>
+          </div>
         </div>
 
         <div v-for="photo in photos" :key="photo.id" class="photo-card">
@@ -51,33 +60,31 @@
       </div>
 
       <div v-else-if="currentView === 'albums' && !selectedAlbum" class="photo-grid">
-        <div class="photo-card album-placeholder" @click="handleCreateAlbum" style="display: flex; align-items: center; justify-content: center; border: 2px dashed #444; cursor: pointer; height: 250px;">
-           <div style="text-align: center; color: #888;">
-             <span style="font-size: 3rem;">+</span>
+        <div class="photo-card album-placeholder" @click="handleCreateAlbum">
+           <div class="placeholder-content">
+             <span class="plus-icon">+</span>
              <p>New Album</p>
            </div>
         </div>
 
-        <div v-for="album in albums" :key="album.id" class="photo-card" @click="openAlbum(album)" style="cursor: pointer;">
-          <img :src="album.cover_url || '/placeholder-album.png'" style="height: 200px; object-fit: cover;"/>
-          <div class="photo-content">
-            <h3 style="margin: 0;">{{ album.title }}</h3>
-            <p style="color: #888; font-size: 0.9rem;">{{ album.photo_count }} Photos</p>
+        <div v-for="album in albums" :key="album.id" class="photo-card album-card" @click="openAlbum(album)">
+          <img :src="album.cover_url || '/placeholder-album.png'" class="album-cover"/>
+          <div class="photo-content album-info">
+            <h3>{{ album.title }}</h3>
+            <p>{{ album.photo_count }} Photos</p>
           </div>
         </div>
       </div>
 
       <div v-else-if="selectedAlbum" class="album-detail-view">
-        <div class="feed-header" style="background: none; position: static;">
-          <button @click="selectedAlbum = null" class="tab-btn">← Back to Albums</button>
+        <div class="feed-header detail-header">
+          <button @click="selectedAlbum = null" class="back-btn">← Back to Albums</button>
           <h2 class="section-title">{{ selectedAlbum.title }}</h2>
         </div>
-        <p style="padding: 0 4%; color: #888; margin-bottom: 20px;">{{ selectedAlbum.description }}</p>
-
         <div class="photo-grid">
           <div v-for="photo in albumPhotos" :key="photo.id" class="photo-card">
             <img :src="photo.url" loading="lazy"/>
-            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -87,7 +94,7 @@
         <img :src="auth.currentUser.profile_photo_url || '/avatars/default.png'" class="large-avatar"/>
         <h1>{{ auth.currentUser.display_name }}</h1>
         <p class="bio-text">{{ auth.currentUser.bio || 'Sharing memories with the family.' }}</p>
-        <div style="margin-top: 20px; display: flex; gap: 10px; justify-content: center;">
+        <div class="profile-actions">
           <button @click="currentMode = 'edit'" class="like-btn">Edit Profile</button>
           <button @click="auth.logout()" class="like-btn">Logout</button>
         </div>
@@ -97,22 +104,11 @@
     <div v-else-if="currentMode === 'edit'" class="edit-view">
       <div class="edit-mode-card">
         <h3>Update Profile</h3>
-        <div class="form-group">
-          <label>Display Name</label>
-          <input type="text" v-model="tempDisplayName"/>
-        </div>
-        <div class="form-group">
-          <label>Profile Bio</label>
-          <textarea v-model="tempBio"></textarea>
-        </div>
-        <div class="form-group">
-          <label>Change Photo</label>
-          <input type="file" @change="onProfileFileSelected" accept="image/*"/>
-        </div>
-        <div style="margin-top: 20px; display: flex; gap: 10px; justify-content: center;">
-          <button @click="saveProfile" class="like-btn" :disabled="uploading">
-            {{ uploading ? 'Saving...' : 'Save Changes' }}
-          </button>
+        <div class="form-group"><label>Display Name</label><input type="text" v-model="tempDisplayName"/></div>
+        <div class="form-group"><label>Profile Bio</label><textarea v-model="tempBio"></textarea></div>
+        <div class="form-group"><label>Change Photo</label><input type="file" @change="onProfileFileSelected" accept="image/*"/></div>
+        <div class="profile-actions">
+          <button @click="saveProfile" class="like-btn" :disabled="uploading">{{ uploading ? 'Saving...' : 'Save Changes' }}</button>
           <button @click="currentMode = 'profile'" class="like-btn">Cancel</button>
         </div>
       </div>
@@ -121,32 +117,24 @@
     <div v-if="showUploadModal" class="modal-overlay">
       <div class="modal-content">
         <h3>Post to Family Feed</h3>
-        <input type="file" @change="onFeedFileSelected" accept="image/*" style="margin: 20px 0; color: white;"/>
-
-        <textarea v-model="newCaption" placeholder="Write a caption (optional)..."
-                  style="width: 100%; background: #2b2b2b; color: white; border: 1px solid #444; padding: 10px; margin-bottom: 10px;"></textarea>
-
+        <input type="file" @change="onFeedFileSelected" accept="image/*" class="file-input"/>
+        <textarea v-model="newCaption" placeholder="Write a caption (optional)..." class="modal-textarea"></textarea>
         <div class="form-group">
-          <label style="font-size: 0.8rem; color: #888; display: block; margin-bottom: 5px;">Add to Album (Optional)</label>
-          <select v-model="selectedAlbumId" style="width: 100%; background: #2b2b2b; color: white; border: 1px solid #444; padding: 10px; margin-bottom: 20px;">
+          <label class="modal-label">Add to Album (Optional)</label>
+          <select v-model="selectedAlbumId" class="modal-select">
             <option :value="null">No Album (General Feed)</option>
-            <option v-for="album in albums" :key="album.id" :value="album.id">
-              {{ album.title }}
-            </option>
+            <option v-for="album in albums" :key="album.id" :value="album.id">{{ album.title }}</option>
           </select>
         </div>
-
-        <div style="display: flex; gap: 10px; justify-content: center;">
-          <button @click="handleUpload" :disabled="uploading" class="like-btn">
-            {{ uploading ? 'Uploading...' : 'Post Photo' }}
-          </button>
+        <div class="profile-actions">
+          <button @click="handleUpload" :disabled="uploading" class="like-btn">{{ uploading ? 'Uploading...' : 'Post Photo' }}</button>
           <button @click="showUploadModal = false" class="like-btn">Cancel</button>
         </div>
       </div>
     </div>
 
     <div class="fab-container">
-      <button class="fab-sub" @click="showUploadModal = true" title="Upload Photo">📸</button>
+      <button class="fab-sub" @click="showUploadModal = true">📸</button>
       <button class="fab-main" @click="currentMode = currentMode === 'feed' ? 'profile' : 'feed'">
         {{ currentMode === 'feed' ? '👤' : '🖼️' }}
       </button>
@@ -330,7 +318,9 @@ onMounted(async () => {
 
 // Helper for the label
 const getYearAgoText = (dateString) => {
+  if (!dateString) return "Sometime ago";
   const years = new Date().getFullYear() - new Date(dateString).getFullYear();
+  if (years === 0) return "Less than a year ago";
   return `${years} year${years > 1 ? 's' : ''} ago`;
 };
 </script>
