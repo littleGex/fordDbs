@@ -1,11 +1,11 @@
 <template>
-  <div class="user-container">
+  <div :class="['user-container', currentTheme]">
     <div class="seasonal-overlay">
       <div
-        v-for="(style, index) in particles"
-        :key="index"
-        class="particle"
-        :style="style"
+          v-for="(style, index) in particles"
+          :key="index"
+          class="particle"
+          :style="style"
       ></div>
     </div>
     <div v-if="currentMode === 'feed'" class="feed-view">
@@ -252,7 +252,7 @@ onMounted(() => {
   fetchPhotos();
 
   // Generate 20 random particles for the seasonal overlay
-  particles.value = Array.from({ length: 20 }).map(() => ({
+  particles.value = Array.from({length: 20}).map(() => ({
     left: `${Math.random() * 100}vw`, // Random horizontal position
     animationDuration: `${Math.random() * 5 + 5}s`, // Falls between 5 and 10 seconds
     animationDelay: `${Math.random() * 5}s` // Staggers the start times

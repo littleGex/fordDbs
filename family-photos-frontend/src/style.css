@@ -397,17 +397,25 @@ nav {
 .theme-spring .particle::before { content: "🌸"; }
 
 .user-container {
-  background-color: var(--bg-main);
+  background-color: var(--bg-main, #141414);
+  min-height: 100vh;
   transition: background-color 1.0s ease;
 }
 
 .section-title {
-  font-family: var(--font-title), sans-serif;
-  color: var(--accent);
-  transition: all 0.5s ease; /* Makes theme transitions smooth */
+  font-family: var(--font-title, 'Inter', sans-serif);
+  color: var(--accent, #ffffff);
+  transition: all 0.5s ease;
 }
 
 .photo-card {
-  background: var(--card-bg, #1a1a1a);
+  background-color: var(--card-bg, #1a1a1a);
   border: var(--border-style, none);
+  transition: all 0.5s ease;
+}
+
+.theme-winter .photo-content,
+.theme-spring .photo-content,
+.theme-summer .photo-content {
+  color: #141414; /* Dark text for light seasonal cards */
 }
