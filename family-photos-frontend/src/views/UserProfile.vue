@@ -1,13 +1,8 @@
 <template>
-  <div :class="['user-container', currentTheme]">
+  <div class="user-container">
     <div v-if="currentMode === 'feed'" class="feed-view">
       <div class="feed-header">
-        <div class="seasonal-overlay">
-          <div v-for="(style, index) in particles" :key="index" class="particle" :style="style"></div>
-        </div>
-
         <h2 class="section-title">Family Moments</h2>
-
         <div class="filter-tabs">
           <button @click="toggleFilter(false)" :class="{ active: !showOnlyMyPhotos }" class="tab-btn">Everyone</button>
           <button @click="toggleFilter(true)" :class="{ active: showOnlyMyPhotos }" class="tab-btn">My Photos</button>
@@ -106,7 +101,7 @@
 </template>
 
 <script setup>
-import {ref, onMounted, computed} from 'vue';
+import {ref, onMounted} from 'vue';
 import {useAuthStore} from '../stores/auth';
 import api from '../api/axios';
 
@@ -124,7 +119,6 @@ const selectedFeedFile = ref(null);
 const tempDisplayName = ref(auth.currentUser.display_name || '');
 const tempBio = ref(auth.currentUser.bio || '');
 const selectedProfileFile = ref(null);
-const particles = ref([]);
 
 const onFeedFileSelected = (e) => {
   selectedFeedFile.value = e.target.files[0];
@@ -141,14 +135,6 @@ const toggleFilter = (onlyMe) => {
   showOnlyMyPhotos.value = onlyMe;
   fetchPhotos();
 };
-
-const currentTheme = computed(() => {
-  const month = new Date().getMonth();
-  if (month >= 2 && month <= 4) return 'theme-spring';
-  if (month >= 5 && month <= 7) return 'theme-summer';
-  if (month >= 8 && month <= 10) return 'theme-halloween';
-  return 'theme-winter';
-});
 
 const fetchPhotos = async () => {
   try {
@@ -204,21 +190,6 @@ const handleComment = async (id) => {
   fetchPhotos();
 };
 
-const handleDelete = async (photoId) => {
-  if (!confirm("Are you sure you want to delete this memory?")) return;
-
-  try {
-    // No need to pass user_id; the backend gets it from the header
-    await api.delete(`/${photoId}`);
-
-    // Refresh the feed to show the photo is gone
-    fetchPhotos();
-  } catch (err) {
-    const msg = err.response?.data?.detail || "Delete failed";
-    alert(msg);
-  }
-};
-
 const recordView = async (id) => {
   await api.post(`/${id}/view`);
 };
@@ -245,15 +216,7 @@ const saveProfile = async () => {
   }
 };
 
-onMounted(() => {
-  fetchPhotos();
-  // Icons now fall only within the header width
-  particles.value = Array.from({length: 15}).map(() => ({
-    left: `${Math.random() * 100}%`,
-    animationDuration: `${Math.random() * 3 + 3}s`,
-    animationDelay: `${Math.random() * 5}s`
-  }));
-});
+onMounted(fetchPhotos);
 </script>
 
 <style scoped>

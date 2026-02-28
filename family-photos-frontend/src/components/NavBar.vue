@@ -49,7 +49,6 @@ const returnToProfiles = () => {
 
 <style scoped>
 .nav-logo {
-  color: #e50914;
   cursor: pointer;
   transition: transform 0.1s;
 }

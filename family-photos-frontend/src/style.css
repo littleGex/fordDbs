@@ -28,18 +28,14 @@ nav {
 }
 
 .feed-header {
-  position: sticky;
-  top: 65px;
-  z-index: 1000;
-  background-color: #141414;
-  padding: 20px 4%;
-  overflow: hidden;
-  border-bottom: 1px solid #222;
-
-  /* Ensure the Title and Tabs stay at opposite ends */
   display: flex;
   justify-content: space-between;
   align-items: center;
+  padding: 20px 4%;
+  background-color: #141414; /* Solid color masks scroll */
+  position: sticky;
+  top: 65px;
+  z-index: 1000;
 }
 
 /* --- Underline Tabs --- */
@@ -52,16 +48,14 @@ nav {
   background: none;
   border: none;
   color: #808080;
+  padding: 8px 0;
+  font-size: 1rem;
+  font-weight: 500;
   cursor: pointer;
-  font-family: inherit;
-  transition: all 0.3s;
+  position: relative;
 }
 
-.tab-btn.active {
-  color: var(--accent, #ffffff) !important;
-  font-family: var(--font-title, 'Inter'), sans-serif;
-  border-bottom: 2px solid var(--accent);
-}
+.tab-btn.active { color: #fff; }
 .tab-btn.active::after {
   content: '';
   position: absolute;
@@ -84,10 +78,9 @@ nav {
 
 .interaction-bar {
   display: flex;
-  gap: 15px;
-  margin-top: 10px;
-  color: #cccccc; /* Light gray for likes/views */
-  font-size: 0.9rem;
+  gap: 20px; /* More space between Like and View icons */
+  align-items: center;
+  margin-bottom: 15px;
 }
 
 .photo-card {
@@ -108,11 +101,10 @@ nav {
 }
 
 .photo-content {
-  padding: 12px;
+  padding: 20px;
   flex: 1;
   display: flex;
   flex-direction: column;
-  color: #ffffff;
 }
 
 .comments-preview {
@@ -121,13 +113,6 @@ nav {
   margin: 10px 0;
   border-top: 1px solid #333;
   padding-top: 10px;
-  color: #bbbbbb;
-}
-
-.comment {
-  font-size: 0.85rem;
-  color: #bbbbbb; /* Gray for comments */
-  margin-top: 4px;
 }
 
 /* --- Profile View & Edit Dashboard --- */
@@ -234,10 +219,6 @@ nav {
   .photo-card img {
     height: 300px;
   }
-
-  .caption strong {
-  color: var(--accent, #e50914); /* Use the seasonal accent for the username! */
-}
 
   .feed-header {
     flex-direction: column;
@@ -352,81 +333,20 @@ nav {
   color: white;
 }
 
-/* --- THEME DEFINITIONS --- */
+/* --- NavBar Seasonal Logic --- */
+.theme-halloween { --accent: #9d50bb; --font-title: 'Jim Nightshade'; }
+.theme-winter { --accent: #add8e6; --font-title: 'Mountains of Christmas'; }
+.theme-spring { --accent: #d63384; --font-title: 'Pacifico'; }
+.theme-summer { --accent: #ff8c00; --font-title: 'Bungee Shade'; }
 
-.theme-halloween {
-  --accent: #9d50bb;
-  --font-title: 'Jim Nightshade', cursive;
-}
-.theme-winter {
-  --accent: #add8e6;
-  --font-title: 'Mountains of Christmas', cursive;
-}
-.theme-spring {
-  --accent: #d63384;
-  --font-title: 'Pacifico', cursive;
-}
-.theme-summer {
-  --accent: #ff8c00;
-  --font-title: 'Bungee Shade', cursive;
-}
-
-.seasonal-overlay {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  pointer-events: none;
-  z-index: 0;
-}
-
-.particle {
-  position: absolute;
-  top: -20px;
-  animation: fall-header 6s linear infinite;
-  opacity: 0.3; /* Subtle transparency */
-}
-
-@keyframes fall-header {
-  to { transform: translateY(150px) rotate(360deg); } /* Stops at header bottom */
-}
-
-/* Theme specific overrides for the emoji */
-.theme-winter .particle::before { content: "❄️"; }
-.theme-halloween .particle::before { content: "🎃"; }
-.theme-summer .particle::before { content: "☀️"; }
-.theme-spring .particle::before { content: "🌸"; }
-
-.user-container {
-  background-color: #0a0a0a !important;
-  min-height: 100vh;
-}
-
-.section-title {
-  position: relative;
-  z-index: 1;
-  font-family: var(--font-title, 'Inter'), sans-serif;
-  color: var(--accent, #ffffff);
-  margin: 0;
-}
-
-.photo-card {
-  background-color: #1a1a1a; /* Keep cards slightly lighter than the black background */
-  border-radius: 8px;
-  overflow: hidden;
-  transition: transform 0.2s;
-}
-
-.theme-winter .photo-content,
-.theme-spring .photo-content,
-.theme-summer .photo-content {
-  color: #141414; /* Dark text for light seasonal cards */
+nav {
+  background-color: #141414;
+  border-bottom: 2px solid var(--accent, #222); /* Glowing seasonal border */
 }
 
 .nav-logo {
   font-family: var(--font-title, 'Inter'), sans-serif;
-  color: var(--accent, #e50914) !important; /* Seasonal or Netflix Red */
-  text-shadow: 0 0 10px rgba(0,0,0,0.5);
+  color: var(--accent, #e50914) !important; /* Seasonal color or Netflix Red */
+  cursor: pointer;
   transition: all 0.5s ease;
 }
