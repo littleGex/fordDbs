@@ -1,6 +1,6 @@
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text
+from sqlalchemy import (Column, Integer, String,
+                        DateTime, ForeignKey, Text, func)
 from sqlalchemy.orm import relationship
-from datetime import datetime, timezone
 from app.database.database import Base
 
 
@@ -11,7 +11,7 @@ class Photo(Base):
     caption = Column(String)
     # Changed: removed () so it calls the function on insert
     timestamp = Column(DateTime,
-                       default=lambda: datetime.now(timezone.utc))
+                       default=func.now())
     uploader_id = Column(Integer, ForeignKey("users.id"))
 
     uploader = relationship("User", back_populates="photos")
@@ -24,6 +24,8 @@ class Photo(Base):
     views = relationship("View",
                          back_populates="photo",
                          cascade="all, delete-orphan")
+    album_id = Column(Integer, ForeignKey("albums.id"), nullable=True)
+    album = relationship("Album", back_populates="photos")
 
 
 class Like(Base):
@@ -31,7 +33,7 @@ class Like(Base):
     id = Column(Integer, primary_key=True)
     photo_id = Column(Integer, ForeignKey("photos.id"))
     user_id = Column(Integer, ForeignKey("users.id"))
-    timestamp = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    timestamp = Column(DateTime, default=func.now())
 
     photo = relationship("Photo", back_populates="likes")
     user = relationship("User")
@@ -43,7 +45,7 @@ class Comment(Base):
     photo_id = Column(Integer, ForeignKey("photos.id"))
     user_id = Column(Integer, ForeignKey("users.id"))
     text = Column(Text, nullable=False)
-    timestamp = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    timestamp = Column(DateTime, default=func.now())
 
     photo = relationship("Photo", back_populates="comments")
     user = relationship("User")
@@ -54,7 +56,20 @@ class View(Base):
     id = Column(Integer, primary_key=True)
     photo_id = Column(Integer, ForeignKey("photos.id"))
     user_id = Column(Integer, ForeignKey("users.id"))
-    timestamp = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    timestamp = Column(DateTime, default=func.now())
 
     photo = relationship("Photo", back_populates="views")
     user = relationship("User")
+
+
+class Album(Base):
+    __tablename__ = "albums"
+    id = Column(Integer, primary_key=True)
+    title = Column(String, nullable=False)
+    description = Column(String, nullable=True)
+    created_at = Column(DateTime, default=func.now())
+    owner_id = Column(Integer, ForeignKey("users.id"))
+
+    # Relationships
+    photos = relationship("Photo", back_populates="album")
+    owner = relationship("User")

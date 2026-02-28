@@ -445,3 +445,83 @@ nav {
     max-height: 400px;
   }
 }
+
+/* --- Album Grid & Cards --- */
+.album-placeholder {
+  transition: all 0.3s ease;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.album-placeholder:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: var(--accent, #e50914) !important;
+}
+
+.album-detail-view {
+  animation: fadeIn 0.4s ease-out;
+}
+
+/* Make album cards look more like "stacks" */
+.photo-grid .photo-card[style*="cursor: pointer"] {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid #333;
+}
+
+.photo-grid .photo-card[style*="cursor: pointer"]::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(to bottom, transparent 60%, rgba(0,0,0,0.8));
+  z-index: 1;
+}
+
+.photo-grid .photo-card[style*="cursor: pointer"] .photo-content {
+  position: absolute;
+  bottom: 0;
+  width: 100%;
+  z-index: 2;
+  padding: 15px;
+  background: none;
+}
+
+/* --- Modal Improvements --- */
+select {
+  cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='white'%3e%3cpath d='M7 10l5 5 5-5z'/%3e%3c/svg%3e");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  background-size: 20px;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Ensure photos inside an album use the same styling as the feed */
+.album-detail-view .photo-grid {
+  padding-top: 0; /* Remove double padding from the header */
+}
+
+/* Specific styling for the Album Detail Back button */
+.album-detail-view .tab-btn {
+  margin-right: auto;
+  color: var(--accent, #e50914);
+  font-weight: bold;
+}
+
+/* Improve the transition when clicking into an album */
+.album-detail-view {
+  animation: fadeIn 0.3s ease-in-out;
+}
+
+/* Fix for the select dropdown text color in some browsers */
+select option {
+  background: #181818;
+  color: white;
+}

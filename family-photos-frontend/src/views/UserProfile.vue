@@ -4,12 +4,12 @@
       <div class="feed-header">
         <h2 class="section-title">Family Moments</h2>
         <div class="filter-tabs">
-          <button @click="toggleFilter(false)" :class="{ active: !showOnlyMyPhotos }" class="tab-btn">Everyone</button>
-          <button @click="toggleFilter(true)" :class="{ active: showOnlyMyPhotos }" class="tab-btn">My Photos</button>
+          <button @click="currentView = 'feed'; selectedAlbum = null" :class="{ active: currentView === 'feed' }" class="tab-btn">Feed</button>
+          <button @click="currentView = 'albums'; selectedAlbum = null" :class="{ active: currentView === 'albums' }" class="tab-btn">Albums</button>
         </div>
       </div>
 
-      <div v-if="historicalPhotos.length > 0" class="on-this-day-container">
+      <div v-if="historicalPhotos.length > 0 && currentView === 'feed'" class="on-this-day-container">
         <h3 class="historical-title">
           <span class="icon">📅</span> On This Day...
         </h3>
@@ -21,34 +21,63 @@
         </div>
       </div>
 
-      <div class="photo-grid">
+      <div v-if="currentView === 'feed'" class="photo-grid">
+        <div class="filter-tabs" style="grid-column: 1/-1; justify-content: flex-start; margin-bottom: 15px;">
+           <button @click="toggleFilter(false)" :class="{ active: !showOnlyMyPhotos }" class="tab-btn">Everyone</button>
+           <button @click="toggleFilter(true)" :class="{ active: showOnlyMyPhotos }" class="tab-btn">My Photos</button>
+        </div>
+
         <div v-for="photo in photos" :key="photo.id" class="photo-card">
           <img :src="photo.url" loading="lazy" @load="recordView(photo.id)"/>
-
           <div class="photo-content">
             <p class="caption">
               <strong>{{ photo.uploader.display_name }}</strong> {{ photo.caption }}
             </p>
-
             <div class="interaction-bar">
-              <button @click="handleLike(photo.id)" class="like-btn">
-                ❤️ {{ photo.stats.likes }}
-              </button>
+              <button @click="handleLike(photo.id)" class="like-btn">❤️ {{ photo.stats.likes }}</button>
               <span class="view-count">👥 {{ photo.stats.views }}</span>
             </div>
-
             <div class="comments-preview">
               <div v-for="comment in photo.recent_comments" :key="comment.text" class="comment">
                 <strong>{{ comment.username }}</strong> {{ comment.text }}
               </div>
             </div>
-
             <div class="comment-input-area">
-              <input v-model="commentTexts[photo.id]" placeholder="Add a comment..."
-                     @keyup.enter="handleComment(photo.id)"/>
+              <input v-model="commentTexts[photo.id]" placeholder="Add a comment..." @keyup.enter="handleComment(photo.id)"/>
               <button @click="handleComment(photo.id)">Post</button>
             </div>
           </div>
+        </div>
+      </div>
+
+      <div v-else-if="currentView === 'albums' && !selectedAlbum" class="photo-grid">
+        <div class="photo-card album-placeholder" @click="handleCreateAlbum" style="display: flex; align-items: center; justify-content: center; border: 2px dashed #444; cursor: pointer; height: 250px;">
+           <div style="text-align: center; color: #888;">
+             <span style="font-size: 3rem;">+</span>
+             <p>New Album</p>
+           </div>
+        </div>
+
+        <div v-for="album in albums" :key="album.id" class="photo-card" @click="openAlbum(album)" style="cursor: pointer;">
+          <img :src="album.cover_url || '/placeholder-album.png'" style="height: 200px; object-fit: cover;"/>
+          <div class="photo-content">
+            <h3 style="margin: 0;">{{ album.title }}</h3>
+            <p style="color: #888; font-size: 0.9rem;">{{ album.photo_count }} Photos</p>
+          </div>
+        </div>
+      </div>
+
+      <div v-else-if="selectedAlbum" class="album-detail-view">
+        <div class="feed-header" style="background: none; position: static;">
+          <button @click="selectedAlbum = null" class="tab-btn">← Back to Albums</button>
+          <h2 class="section-title">{{ selectedAlbum.title }}</h2>
+        </div>
+        <p style="padding: 0 4%; color: #888; margin-bottom: 20px;">{{ selectedAlbum.description }}</p>
+
+        <div class="photo-grid">
+          <div v-for="photo in albumPhotos" :key="photo.id" class="photo-card">
+            <img :src="photo.url" loading="lazy"/>
+            </div>
         </div>
       </div>
     </div>
@@ -60,7 +89,7 @@
         <p class="bio-text">{{ auth.currentUser.bio || 'Sharing memories with the family.' }}</p>
         <div style="margin-top: 20px; display: flex; gap: 10px; justify-content: center;">
           <button @click="currentMode = 'edit'" class="like-btn">Edit Profile</button>
-          <button @click="auth.logout()" class="like-btn">Switch Profile</button>
+          <button @click="auth.logout()" class="like-btn">Logout</button>
         </div>
       </div>
     </div>
@@ -74,7 +103,7 @@
         </div>
         <div class="form-group">
           <label>Profile Bio</label>
-          <textarea v-model="tempBio" placeholder="Tell the family something about yourself..."></textarea>
+          <textarea v-model="tempBio"></textarea>
         </div>
         <div class="form-group">
           <label>Change Photo</label>
@@ -93,10 +122,24 @@
       <div class="modal-content">
         <h3>Post to Family Feed</h3>
         <input type="file" @change="onFeedFileSelected" accept="image/*" style="margin: 20px 0; color: white;"/>
+
         <textarea v-model="newCaption" placeholder="Write a caption (optional)..."
-                  style="width: 100%; background: #2b2b2b; color: white; border: 1px solid #444; padding: 10px; margin-bottom: 20px;"></textarea>
+                  style="width: 100%; background: #2b2b2b; color: white; border: 1px solid #444; padding: 10px; margin-bottom: 10px;"></textarea>
+
+        <div class="form-group">
+          <label style="font-size: 0.8rem; color: #888; display: block; margin-bottom: 5px;">Add to Album (Optional)</label>
+          <select v-model="selectedAlbumId" style="width: 100%; background: #2b2b2b; color: white; border: 1px solid #444; padding: 10px; margin-bottom: 20px;">
+            <option :value="null">No Album (General Feed)</option>
+            <option v-for="album in albums" :key="album.id" :value="album.id">
+              {{ album.title }}
+            </option>
+          </select>
+        </div>
+
         <div style="display: flex; gap: 10px; justify-content: center;">
-          <button @click="handleUpload" :disabled="uploading" class="like-btn">Post Photo</button>
+          <button @click="handleUpload" :disabled="uploading" class="like-btn">
+            {{ uploading ? 'Uploading...' : 'Post Photo' }}
+          </button>
           <button @click="showUploadModal = false" class="like-btn">Cancel</button>
         </div>
       </div>
@@ -104,7 +147,6 @@
 
     <div class="fab-container">
       <button class="fab-sub" @click="showUploadModal = true" title="Upload Photo">📸</button>
-
       <button class="fab-main" @click="currentMode = currentMode === 'feed' ? 'profile' : 'feed'">
         {{ currentMode === 'feed' ? '👤' : '🖼️' }}
       </button>
@@ -132,6 +174,12 @@ const tempDisplayName = ref(auth.currentUser.display_name || '');
 const tempBio = ref(auth.currentUser.bio || '');
 const selectedProfileFile = ref(null);
 const historicalPhotos = ref([]);
+
+const currentView = ref('feed'); // 'feed' or 'albums'
+const albums = ref([]);
+const selectedAlbum = ref(null);
+const selectedAlbumId = ref(null);
+const albumPhotos = ref([]);
 
 const onFeedFileSelected = (e) => {
   selectedFeedFile.value = e.target.files[0];
@@ -171,6 +219,10 @@ const handleUpload = async () => {
   formData.append('caption', newCaption.value || "");
   formData.append('uploader_id', auth.currentUser.id);
 
+  if (selectedAlbumId.value) {
+    formData.append('album_id', selectedAlbumId.value);
+  }
+
   try {
     await api.post('/upload', formData);
 
@@ -179,12 +231,14 @@ const handleUpload = async () => {
     newCaption.value = '';
     selectedFeedFile.value = null;
     fetchPhotos();
+    fetchAlbums();
   } catch (err) {
     console.error("Upload failed:", err);
     alert("Upload failed. Please try again.");
   } finally {
     uploading.value = false;
   }
+  selectedAlbumId.value = null; // Reset after upload
 };
 
 const handleLike = async (id) => {
@@ -229,8 +283,43 @@ const saveProfile = async () => {
   }
 };
 
+const fetchAlbums = async () => {
+  try {
+    const res = await api.get('/albums');
+    albums.value = res.data;
+  } catch (err) {
+    console.error("Failed to fetch albums", err);
+  }
+};
+
+const openAlbum = async (album) => {
+  selectedAlbum.value = album;
+  try {
+    const res = await api.get(`/albums/${album.id}/photos`);
+    albumPhotos.value = res.data;
+  } catch (err) {
+    console.error("Error loading album photos", err);
+  }
+};
+
+const handleCreateAlbum = async () => {
+  const title = prompt("Enter Album Name:");
+  if (!title) return;
+
+  const formData = new FormData();
+  formData.append('title', title);
+
+  try {
+    const res = await api.post('/albums', formData);
+    albums.value.push(res.data); // Your improved backend response makes this easy!
+  } catch (err) {
+    alert("Could not create album.");
+  }
+};
+
 onMounted(async () => {
   fetchPhotos();
+  fetchAlbums();
   try {
     const res = await api.get('/historical');
     historicalPhotos.value = res.data;

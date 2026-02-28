@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from app.database.database import get_db
 from app.core.storage import (upload_image_to_storage, get_image_url,
                               minio_client, BUCKET_NAME)
-from app.models.photo_model import Photo, Like, Comment, View
+from app.models.photo_model import Photo, Like, Comment, View, Album
 from app.models.user_models import User
 import uuid
 import logging
@@ -32,6 +32,34 @@ def hash_pw(pw):
 
 def verify_pw(pw, hashed):
     return pwd_context.verify(pw, hashed)
+
+
+def format_photo_list(photos):
+    data = []
+    for p in photos:
+        data.append({
+            "id": p.id,
+            "url": get_image_url(p.minio_key),
+            "caption": p.caption,
+            "timestamp": p.timestamp,
+            "uploader": {
+                "id": p.uploader.id,
+                "display_name": p.uploader.display_name or p.uploader.username,
+                "profile_photo_url": get_image_url(
+                    p.uploader.profile_photo_key) if
+                p.uploader.profile_photo_key else None
+            },
+            "stats": {
+                "likes": len(p.likes),
+                "comments": len(p.comments),
+                "views": len(p.views)
+            },
+            "recent_comments": [
+                {"username": c.user.username, "text": c.text}
+                for c in p.comments[-3:]
+            ]
+        })
+    return data
 
 
 # JWT Dependency to protect routes
@@ -93,6 +121,7 @@ def set_password(data: dict, db: Session = Depends(get_db)):
 @family_photos_router.post("/upload")
 async def upload_photo(
         caption: str = Form(None),
+        album_id: int = Form(None),
         file: UploadFile = File(...),
         db: Session = Depends(get_db),
         current_user: User = Depends(get_current_user)
@@ -111,7 +140,8 @@ async def upload_photo(
     new_photo = Photo(
         minio_key=minio_key,
         caption=caption,
-        uploader_id=current_user.id,  # TRUST THE TOKEN, NOT THE FORM
+        uploader_id=current_user.id,
+        album_id=album_id,
         timestamp=datetime.now(timezone.utc)
     )
     db.add(new_photo)
@@ -137,37 +167,12 @@ def get_feed(
     photos = query.order_by(
         Photo.timestamp.desc()).limit(limit).offset(offset).all()
 
-    feed_data = []
-    for p in photos:
-        feed_data.append({
-            "id": p.id,
-            "url": get_image_url(p.minio_key),
-            "caption": p.caption,
-            "timestamp": p.timestamp,
-            "uploader": {
-                "id": p.uploader.id,
-                "username": p.uploader.username,
-                "display_name": p.uploader.display_name or p.uploader.username,
-                "profile_photo_url": get_image_url(
-                    p.uploader.profile_photo_key) if
-                p.uploader.profile_photo_key else None
-            },
-            "stats": {
-                "likes": len(p.likes),
-                "comments": len(p.comments),
-                "views": len(p.views)
-            },
-            "recent_comments": [
-                {"username": c.user.username, "text": c.text}
-                for c in p.comments[-3:]
-            ]
-        })
-    return feed_data
+    return format_photo_list(photos)
 
 
 @family_photos_router.get("/historical")
 def on_this_day(db: Session = Depends(get_db)):
-    today = datetime.date.today()
+    today = datetime.now(timezone.utc).date()
 
     # Filter photos where Month and Day match today, but
     # Year is strictly less than current year
@@ -180,22 +185,7 @@ def on_this_day(db: Session = Depends(get_db)):
     # Order by most recent years first (e.g., 1 year ago, then 2 years ago)
     photos = query.order_by(Photo.timestamp.desc()).all()
 
-    historical_data = []
-    for p in photos:
-        historical_data.append({
-            "id": p.id,
-            "url": get_image_url(p.minio_key),
-            "caption": p.caption,
-            "created_at": p.timestamp.isoformat(),
-            "uploader": {
-                "display_name": p.uploader.display_name or p.uploader.username,
-            },
-            "stats": {
-                "likes": len(p.likes),
-                "views": len(p.views)
-            }
-        })
-    return historical_data
+    return format_photo_list(photos)
 
 
 @family_photos_router.post("/{photo_id}/like")
@@ -426,3 +416,61 @@ def refresh_token(
     )
 
     return {"access_token": new_token}
+
+
+@family_photos_router.post("/albums")
+def create_album(
+    title: str = Form(...),
+    description: str = Form(None),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)):
+    new_album = Album(
+        title=title,
+        description=description,
+        owner_id=current_user.id
+    )
+    db.add(new_album)
+    db.commit()
+    db.refresh(new_album)
+
+    return {
+        "id": new_album.id,
+        "title": new_album.title,
+        "description": new_album.description,
+        "photo_count": 0,
+        "cover_url": None,
+        "created_at": new_album.created_at
+    }
+
+
+@family_photos_router.get("/albums")
+def list_albums(db: Session = Depends(get_db)):
+    albums = db.query(Album).all()
+    result = []
+    for a in albums:
+        # Fetch the first photo to use as a cover
+        cover_photo = db.query(Photo).filter(
+            Photo.album_id == a.id).first()
+        result.append({
+            "id": a.id,
+            "title": a.title,
+            "description": a.description,
+            "photo_count": len(a.photos),
+            "cover_url": get_image_url(
+                cover_photo.minio_key) if cover_photo else None,
+            "created_at": a.created_at
+        })
+    return result
+
+
+@family_photos_router.get("/albums/{album_id}/photos")
+def get_album_photos(album_id: int, db: Session = Depends(get_db)):
+    album = db.query(Album).filter(Album.id == album_id).first()
+    if not album:
+        raise HTTPException(status_code=404, detail="Album not found")
+
+    photos = db.query(Photo).filter(
+        Photo.album_id == album_id).order_by(
+        Photo.timestamp.desc()).all()
+
+    return format_photo_list(photos)
