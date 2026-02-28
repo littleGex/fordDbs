@@ -1,9 +1,16 @@
 <template>
-  <nav v-if="auth.currentUser" :class="currentTheme">
+  <nav v-if="auth.currentUser" :class="['main-nav', currentTheme]">
+    <div class="seasonal-overlay">
+      <div
+        v-for="(style, index) in particles"
+        :key="index"
+        class="particle"
+        :style="style"
+      ></div>
+    </div>
+
     <div class="nav-left">
-      <h2 class="nav-logo" @click="refreshFeed" title="Refresh Feed">
-        FORDSTAGRAM
-      </h2>
+      <h2 class="nav-logo" @click="refreshFeed">FORDSTAGRAM</h2>
     </div>
 
     <div class="nav-right">
@@ -20,10 +27,11 @@
 </template>
 
 <script setup>
-import { computed } from 'vue';
+import { ref, onMounted, computed } from 'vue';
 import { useAuthStore } from '../stores/auth';
 
 const auth = useAuthStore();
+const particles = ref([]);
 
 const currentTheme = computed(() => {
   const month = new Date().getMonth();
@@ -39,6 +47,15 @@ const refreshFeed = () => {
   // OR if you want to just tell UserProfile to fetch photos again:
   // emit('refresh');
 };
+
+onMounted(() => {
+  // Generate 10-12 emojis specifically for the navbar width
+  particles.value = Array.from({ length: 12 }).map(() => ({
+    left: `${Math.random() * 100}%`,
+    animationDuration: `${Math.random() * 3 + 2}s`,
+    animationDelay: `${Math.random() * 5}s`
+  }));
+});
 
 const returnToProfiles = () => {
   // Simply clearing the user sends them back to the ProfilePicker
