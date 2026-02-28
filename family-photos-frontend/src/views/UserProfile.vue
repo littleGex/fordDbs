@@ -7,6 +7,7 @@
         </div>
 
         <h2 class="section-title">Family Moments</h2>
+
         <div class="filter-tabs">
           <button @click="toggleFilter(false)" :class="{ active: !showOnlyMyPhotos }" class="tab-btn">Everyone</button>
           <button @click="toggleFilter(true)" :class="{ active: showOnlyMyPhotos }" class="tab-btn">My Photos</button>
@@ -247,7 +248,7 @@ const saveProfile = async () => {
 onMounted(() => {
   fetchPhotos();
   // Icons now fall only within the header width
-  particles.value = Array.from({ length: 15 }).map(() => ({
+  particles.value = Array.from({length: 15}).map(() => ({
     left: `${Math.random() * 100}%`,
     animationDuration: `${Math.random() * 3 + 3}s`,
     animationDelay: `${Math.random() * 5}s`

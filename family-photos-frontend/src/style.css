@@ -33,8 +33,13 @@ nav {
   z-index: 1000;
   background-color: #141414;
   padding: 20px 4%;
-  overflow: hidden; /* CRITICAL: This stops icons from falling into the feed */
+  overflow: hidden;
   border-bottom: 1px solid #222;
+
+  /* Ensure the Title and Tabs stay at opposite ends */
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
 
 /* --- Underline Tabs --- */
@@ -79,9 +84,10 @@ nav {
 
 .interaction-bar {
   display: flex;
-  gap: 20px; /* More space between Like and View icons */
-  align-items: center;
-  margin-bottom: 15px;
+  gap: 15px;
+  margin-top: 10px;
+  color: #cccccc; /* Light gray for likes/views */
+  font-size: 0.9rem;
 }
 
 .photo-card {
@@ -102,10 +108,11 @@ nav {
 }
 
 .photo-content {
-  padding: 20px;
+  padding: 12px;
   flex: 1;
   display: flex;
   flex-direction: column;
+  color: #ffffff;
 }
 
 .comments-preview {
@@ -114,6 +121,12 @@ nav {
   margin: 10px 0;
   border-top: 1px solid #333;
   padding-top: 10px;
+}
+
+.comment {
+  font-size: 0.85rem;
+  color: #bbbbbb; /* Gray for comments */
+  margin-top: 4px;
 }
 
 /* --- Profile View & Edit Dashboard --- */
@@ -220,6 +233,10 @@ nav {
   .photo-card img {
     height: 300px;
   }
+
+  .caption strong {
+  color: var(--accent, #e50914); /* Use the seasonal accent for the username! */
+}
 
   .feed-header {
     flex-direction: column;
@@ -355,7 +372,10 @@ nav {
 
 .seasonal-overlay {
   position: absolute;
-  top: 0; left: 0; width: 100%; height: 100%;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
   pointer-events: none;
   z-index: 0;
 }
@@ -391,9 +411,10 @@ nav {
 }
 
 .photo-card {
-  background-color: var(--card-bg, #1a1a1a);
-  border: var(--border-style, none);
-  transition: all 0.5s ease;
+  background-color: #1a1a1a; /* Keep cards slightly lighter than the black background */
+  border-radius: 8px;
+  overflow: hidden;
+  transition: transform 0.2s;
 }
 
 .theme-winter .photo-content,
