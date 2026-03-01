@@ -5,8 +5,12 @@
 
       <div class="sub-nav">
         <div class="tabs-container">
-          <button @click="currentView = 'feed'; selectedAlbum = null" :class="{ active: currentView === 'feed' }" class="nav-tab">Timeline</button>
-          <button @click="currentView = 'albums'; selectedAlbum = null" :class="{ active: currentView === 'albums' }" class="nav-tab">Albums</button>
+          <button @click="currentView = 'feed'; selectedAlbum = null" :class="{ active: currentView === 'feed' }"
+                  class="nav-tab">Timeline
+          </button>
+          <button @click="currentView = 'albums'; selectedAlbum = null" :class="{ active: currentView === 'albums' }"
+                  class="nav-tab">Albums
+          </button>
         </div>
       </div>
 
@@ -45,7 +49,8 @@
                 </div>
               </div>
               <div class="comment-input-area">
-                <input v-model="commentTexts[photo.id]" placeholder="Add a comment..." @keyup.enter="handleComment(photo.id)"/>
+                <input v-model="commentTexts[photo.id]" placeholder="Add a comment..."
+                       @keyup.enter="handleComment(photo.id)"/>
                 <button @click="handleComment(photo.id)">Post</button>
               </div>
             </div>
@@ -55,7 +60,8 @@
 
       <div v-else-if="currentView === 'albums' && !selectedAlbum" class="photo-grid" style="padding-top: 20px;">
         <div class="photo-card album-placeholder" @click="handleCreateAlbum">
-          <div class="placeholder-content"><span class="plus-icon">+</span><p>New Album</p></div>
+          <div class="placeholder-content"><span class="plus-icon">+</span>
+            <p>New Album</p></div>
         </div>
         <div v-for="album in albums" :key="album.id" class="photo-card album-card" @click="openAlbum(album)">
           <img :src="album.cover_url || '/placeholder-album.png'" class="album-cover"/>
@@ -78,7 +84,8 @@
         </div>
       </div>
 
-    </div> <div v-else-if="currentMode === 'profile'" class="bio-view">
+    </div>
+    <div v-else-if="currentMode === 'profile'" class="bio-view">
       <div class="bio-card">
         <img :src="auth.currentUser.profile_photo_url || '/avatars/default.png'" class="large-avatar"/>
         <h1>{{ auth.currentUser.display_name }}</h1>
@@ -95,7 +102,8 @@
         <h3>Update Profile</h3>
         <div class="form-group"><label>Display Name</label><input type="text" v-model="tempDisplayName"/></div>
         <div class="form-group"><label>Profile Bio</label><textarea v-model="tempBio"></textarea></div>
-        <div class="form-group"><label>Change Photo</label><input type="file" @change="onProfileFileSelected" accept="image/*"/></div>
+        <div class="form-group"><label>Change Photo</label><input type="file" @change="onProfileFileSelected"
+                                                                  accept="image/*"/></div>
         <div class="profile-actions">
           <button @click="saveProfile" class="like-btn" :disabled="uploading">Save Changes</button>
           <button @click="currentMode = 'profile'" class="like-btn">Cancel</button>
@@ -104,29 +112,65 @@
     </div>
 
     <div v-if="showUploadModal" class="modal-overlay">
-      <div class="modal-content">
-        <h3>Post to Family Feed</h3>
-        <input type="file" @change="onFeedFileSelected" accept="image/*" class="file-input"/>
-        <textarea v-model="newCaption" placeholder="Write a caption (optional)..." class="modal-textarea"></textarea>
-        <div class="form-group">
-          <label class="modal-label">Add to Album (Optional)</label>
-          <select v-model="selectedAlbumId" class="modal-select">
-            <option :value="null">No Album (General Feed)</option>
-            <option v-for="album in albums" :key="album.id" :value="album.id">{{ album.title }}</option>
-          </select>
+      <div class="modal-content advanced-modal">
+
+        <div class="modal-header">
+          <h3>Post to Family Feed</h3>
+          <button @click="showUploadModal = false" class="close-modal-btn">✕</button>
         </div>
-        <div class="profile-actions">
-          <button @click="handleUpload" :disabled="uploading" class="like-btn">{{ uploading ? 'Uploading...' : 'Post Photo' }}</button>
-          <button @click="showUploadModal = false" class="like-btn">Cancel</button>
+
+        <div class="modal-body">
+          <div class="upload-preview-area" @click="$refs.fileInput.click()">
+            <div v-if="!selectedFeedFile" class="preview-placeholder">
+              <span class="upload-icon">📸</span>
+              <p>Click or Drag to Upload</p>
+            </div>
+
+            <img v-else :src="uploadPreviewUrl" class="live-preview-img"/>
+
+            <input
+                type="file"
+                ref="fileInput"
+                @change="onFeedFileSelected"
+                accept="image/*"
+                class="hidden-file-input"
+            />
+          </div>
+
+          <div class="form-group styled-group">
+            <label>Caption</label>
+            <div class="styled-textarea-wrapper">
+          <textarea
+              v-model="newCaption"
+              placeholder="Write a caption (optional)..."
+              class="styled-textarea"
+              rows="3"
+          ></textarea>
+            </div>
+          </div>
+
+          <div class="form-group styled-group">
+            <label>Add to Album</label>
+            <div class="styled-dropdown-wrapper">
+              <select v-model="selectedAlbumId" class="styled-dropdown">
+                <option :value="null">General Feed (No Album)</option>
+                <option v-for="album in albums" :key="album.id" :value="album.id">
+                  {{ album.title }}
+                </option>
+              </select>
+              <span class="dropdown-arrow">▼</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button @click="showUploadModal = false" class="btn-secondary">Cancel</button>
+          <button @click="handleUpload" :disabled="uploading" class="btn-primary">
+            <span v-if="uploading">Uploading...</span>
+            <span v-else>Post Photo</span>
+          </button>
         </div>
       </div>
-    </div>
-
-    <div class="fab-container">
-      <button class="fab-sub" @click="showUploadModal = true">📸</button>
-      <button class="fab-main" @click="currentMode = currentMode === 'feed' ? 'profile' : 'feed'">
-        {{ currentMode === 'feed' ? '👤' : '🖼️' }}
-      </button>
     </div>
   </div>
 </template>
@@ -157,10 +201,22 @@ const albums = ref([]);
 const selectedAlbum = ref(null);
 const selectedAlbumId = ref(null);
 const albumPhotos = ref([]);
+const uploadPreviewUrl = ref(null);
 
 const onFeedFileSelected = (e) => {
-  selectedFeedFile.value = e.target.files[0];
+  const file = e.target.files[0];
+  if (!file) return;
+
+  selectedFeedFile.value = file;
+
+  // Generate a preview URL for the selected file
+  const reader = new FileReader();
+  reader.onload = (event) => {
+    uploadPreviewUrl.value = event.target.result;
+  };
+  reader.readAsDataURL(file);
 };
+
 const onProfileFileSelected = (e) => {
   selectedProfileFile.value = e.target.files[0];
 };
