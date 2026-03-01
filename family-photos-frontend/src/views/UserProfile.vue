@@ -172,6 +172,12 @@
         </div>
       </div>
     </div>
+    <div class="fab-container">
+      <button class="fab-sub" @click="showUploadModal = true">📸</button>
+      <button class="fab-main" @click="currentMode = currentMode === 'feed' ? 'profile' : 'feed'">
+        {{ currentMode === 'feed' ? '👤' : '🖼️' }}
+      </button>
+    </div>
   </div>
 </template>
 
