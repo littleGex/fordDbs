@@ -1,72 +1,62 @@
 <template>
   <div class="user-container">
-    <div v-if="currentMode === 'feed'" class="feed-view">
 
-      <div class="feed-header">
-        <h2 class="section-title">Family Moments</h2>
-        <div class="segmented-control">
-          <button
-            @click="currentView = 'feed'; selectedAlbum = null"
-            :class="{ active: currentView === 'feed' }"
-          >Timeline</button>
-          <button
-            @click="currentView = 'albums'; selectedAlbum = null"
-            :class="{ active: currentView === 'albums' }"
-          >Albums</button>
+    <div v-if="currentMode === 'feed'">
+
+      <div class="sub-nav">
+        <div class="tabs-container">
+          <button @click="currentView = 'feed'; selectedAlbum = null" :class="{ active: currentView === 'feed' }" class="nav-tab">Timeline</button>
+          <button @click="currentView = 'albums'; selectedAlbum = null" :class="{ active: currentView === 'albums' }" class="nav-tab">Albums</button>
         </div>
       </div>
 
-      <div v-if="historicalPhotos.length > 0 && currentView === 'feed'" class="on-this-day-container">
-        <h3 class="historical-title">
-          <span class="icon">📅</span> On This Day...
-        </h3>
-        <div class="historical-scroll">
-          <div v-for="photo in historicalPhotos" :key="photo.id" class="historical-card">
-            <img :src="photo.url" loading="lazy" />
-            <div class="historical-label">{{ getYearAgoText(photo.timestamp) }}</div>
+      <div v-if="currentView === 'feed'" class="feed-view">
+
+        <div v-if="historicalPhotos.length > 0" class="on-this-day-container">
+          <h3 class="historical-title"><span class="icon">📅</span> On This Day...</h3>
+          <div class="historical-scroll">
+            <div v-for="photo in historicalPhotos" :key="photo.id" class="historical-card">
+              <img :src="photo.url" loading="lazy"/>
+              <div class="historical-label">{{ getYearAgoText(photo.timestamp) }}</div>
+            </div>
           </div>
         </div>
-      </div>
 
-      <div v-if="currentView === 'feed'" class="photo-grid">
-        <div class="filter-container" style="grid-column: 1/-1; margin-bottom: 10px;">
-          <div class="segmented-control mini">
-            <button @click="toggleFilter(false)" :class="{ active: !showOnlyMyPhotos }">Family</button>
+        <div class="feed-header">
+          <h2 class="section-title">Family Moments</h2>
+          <div class="mini-toggle">
+            <button @click="toggleFilter(false)" :class="{ active: !showOnlyMyPhotos }">Everyone</button>
             <button @click="toggleFilter(true)" :class="{ active: showOnlyMyPhotos }">Mine</button>
           </div>
         </div>
 
-        <div v-for="photo in photos" :key="photo.id" class="photo-card">
-          <img :src="photo.url" loading="lazy" @load="recordView(photo.id)"/>
-          <div class="photo-content">
-            <p class="caption">
-              <strong>{{ photo.uploader.display_name }}</strong> {{ photo.caption }}
-            </p>
-            <div class="interaction-bar">
-              <button @click="handleLike(photo.id)" class="like-btn">❤️ {{ photo.stats.likes }}</button>
-              <span class="view-count">👥 {{ photo.stats.views }}</span>
-            </div>
-            <div class="comments-preview">
-              <div v-for="comment in photo.recent_comments" :key="comment.text" class="comment">
-                <strong>{{ comment.username }}</strong> {{ comment.text }}
+        <div class="photo-grid">
+          <div v-for="photo in photos" :key="photo.id" class="photo-card">
+            <img :src="photo.url" loading="lazy" @load="recordView(photo.id)"/>
+            <div class="photo-content">
+              <p class="caption"><strong>{{ photo.uploader.display_name }}</strong> {{ photo.caption }}</p>
+              <div class="interaction-bar">
+                <button @click="handleLike(photo.id)" class="like-btn">❤️ {{ photo.stats.likes }}</button>
+                <span class="view-count">👥 {{ photo.stats.views }}</span>
               </div>
-            </div>
-            <div class="comment-input-area">
-              <input v-model="commentTexts[photo.id]" placeholder="Add a comment..." @keyup.enter="handleComment(photo.id)"/>
-              <button @click="handleComment(photo.id)">Post</button>
+              <div class="comments-preview">
+                <div v-for="comment in photo.recent_comments" :key="comment.text" class="comment">
+                  <strong>{{ comment.username }}</strong> {{ comment.text }}
+                </div>
+              </div>
+              <div class="comment-input-area">
+                <input v-model="commentTexts[photo.id]" placeholder="Add a comment..." @keyup.enter="handleComment(photo.id)"/>
+                <button @click="handleComment(photo.id)">Post</button>
+              </div>
             </div>
           </div>
         </div>
       </div>
 
-      <div v-else-if="currentView === 'albums' && !selectedAlbum" class="photo-grid">
+      <div v-else-if="currentView === 'albums' && !selectedAlbum" class="photo-grid" style="padding-top: 20px;">
         <div class="photo-card album-placeholder" @click="handleCreateAlbum">
-           <div class="placeholder-content">
-             <span class="plus-icon">+</span>
-             <p>New Album</p>
-           </div>
+          <div class="placeholder-content"><span class="plus-icon">+</span><p>New Album</p></div>
         </div>
-
         <div v-for="album in albums" :key="album.id" class="photo-card album-card" @click="openAlbum(album)">
           <img :src="album.cover_url || '/placeholder-album.png'" class="album-cover"/>
           <div class="photo-content album-info">
@@ -87,9 +77,8 @@
           </div>
         </div>
       </div>
-    </div>
 
-    <div v-else-if="currentMode === 'profile'" class="bio-view">
+    </div> <div v-else-if="currentMode === 'profile'" class="bio-view">
       <div class="bio-card">
         <img :src="auth.currentUser.profile_photo_url || '/avatars/default.png'" class="large-avatar"/>
         <h1>{{ auth.currentUser.display_name }}</h1>
@@ -108,37 +97,15 @@
         <div class="form-group"><label>Profile Bio</label><textarea v-model="tempBio"></textarea></div>
         <div class="form-group"><label>Change Photo</label><input type="file" @change="onProfileFileSelected" accept="image/*"/></div>
         <div class="profile-actions">
-          <button @click="saveProfile" class="like-btn" :disabled="uploading">{{ uploading ? 'Saving...' : 'Save Changes' }}</button>
+          <button @click="saveProfile" class="like-btn" :disabled="uploading">Save Changes</button>
           <button @click="currentMode = 'profile'" class="like-btn">Cancel</button>
         </div>
       </div>
     </div>
 
-    <div v-if="showUploadModal" class="modal-overlay">
-      <div class="modal-content">
-        <h3>Post to Family Feed</h3>
-        <input type="file" @change="onFeedFileSelected" accept="image/*" class="file-input"/>
-        <textarea v-model="newCaption" placeholder="Write a caption (optional)..." class="modal-textarea"></textarea>
-        <div class="form-group">
-          <label class="modal-label">Add to Album (Optional)</label>
-          <select v-model="selectedAlbumId" class="modal-select">
-            <option :value="null">No Album (General Feed)</option>
-            <option v-for="album in albums" :key="album.id" :value="album.id">{{ album.title }}</option>
-          </select>
-        </div>
-        <div class="profile-actions">
-          <button @click="handleUpload" :disabled="uploading" class="like-btn">{{ uploading ? 'Uploading...' : 'Post Photo' }}</button>
-          <button @click="showUploadModal = false" class="like-btn">Cancel</button>
-        </div>
-      </div>
-    </div>
+    <div v-if="showUploadModal" class="modal-overlay">...</div>
+    <div class="fab-container">...</div>
 
-    <div class="fab-container">
-      <button class="fab-sub" @click="showUploadModal = true">📸</button>
-      <button class="fab-main" @click="currentMode = currentMode === 'feed' ? 'profile' : 'feed'">
-        {{ currentMode === 'feed' ? '👤' : '🖼️' }}
-      </button>
-    </div>
   </div>
 </template>
 
