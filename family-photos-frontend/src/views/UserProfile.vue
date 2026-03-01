@@ -26,7 +26,7 @@
           <h2 class="section-title">Family Moments</h2>
           <div class="mini-toggle">
             <button @click="toggleFilter(false)" :class="{ active: !showOnlyMyPhotos }">Everyone</button>
-            <button @click="toggleFilter(true)" :class="{ active: showOnlyMyPhotos }">Mine</button>
+            <button @click="toggleFilter(true)" :class="{ active: showOnlyMyPhotos }">My Photos</button>
           </div>
         </div>
 
@@ -103,9 +103,31 @@
       </div>
     </div>
 
-    <div v-if="showUploadModal" class="modal-overlay">...</div>
-    <div class="fab-container">...</div>
+    <div v-if="showUploadModal" class="modal-overlay">
+      <div class="modal-content">
+        <h3>Post to Family Feed</h3>
+        <input type="file" @change="onFeedFileSelected" accept="image/*" class="file-input"/>
+        <textarea v-model="newCaption" placeholder="Write a caption (optional)..." class="modal-textarea"></textarea>
+        <div class="form-group">
+          <label class="modal-label">Add to Album (Optional)</label>
+          <select v-model="selectedAlbumId" class="modal-select">
+            <option :value="null">No Album (General Feed)</option>
+            <option v-for="album in albums" :key="album.id" :value="album.id">{{ album.title }}</option>
+          </select>
+        </div>
+        <div class="profile-actions">
+          <button @click="handleUpload" :disabled="uploading" class="like-btn">{{ uploading ? 'Uploading...' : 'Post Photo' }}</button>
+          <button @click="showUploadModal = false" class="like-btn">Cancel</button>
+        </div>
+      </div>
+    </div>
 
+    <div class="fab-container">
+      <button class="fab-sub" @click="showUploadModal = true">📸</button>
+      <button class="fab-main" @click="currentMode = currentMode === 'feed' ? 'profile' : 'feed'">
+        {{ currentMode === 'feed' ? '👤' : '🖼️' }}
+      </button>
+    </div>
   </div>
 </template>
 
