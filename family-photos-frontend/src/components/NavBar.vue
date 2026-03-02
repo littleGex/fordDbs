@@ -28,9 +28,11 @@
 
 <script setup>
 import { ref, onMounted, computed } from 'vue';
+import { useRouter } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
 
 const auth = useAuthStore();
+const router = useRouter();
 const particles = ref([]);
 
 const currentTheme = computed(() => {
@@ -42,10 +44,7 @@ const currentTheme = computed(() => {
 });
 
 const refreshFeed = () => {
-  // If you want a hard refresh:
-  window.location.reload();
-  // OR if you want to just tell UserProfile to fetch photos again:
-  // emit('refresh');
+  router.push('/home');
 };
 
 onMounted(() => {
@@ -61,6 +60,7 @@ const returnToProfiles = () => {
   // Simply clearing the user sends them back to the ProfilePicker
   // because of the v-if logic in App.vue
   auth.logout();
+  router.push('/');
 };
 </script>
 
