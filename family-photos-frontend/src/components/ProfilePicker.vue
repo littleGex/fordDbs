@@ -141,7 +141,7 @@ const submitAuth = async () => {
     // Success: Store token and enter app
     localStorage.setItem('token', res.data.access_token);
     auth.login(selectedUser.value);
-    router.push("/home");
+    router.push("/");
     showPassModal.value = false;
 
   } catch (err) {
