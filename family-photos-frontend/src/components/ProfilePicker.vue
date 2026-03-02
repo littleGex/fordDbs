@@ -50,10 +50,12 @@
 
 <script setup>
 import { ref, onMounted } from 'vue';
+import { useRouter } from 'vue-router';
 import api from '../api/axios.js';
 import { useAuthStore } from '../stores/auth.js';
 
 const auth = useAuthStore();
+const router = useRouter();
 const users = ref([]);
 const loading = ref(true);
 
@@ -139,6 +141,7 @@ const submitAuth = async () => {
     // Success: Store token and enter app
     localStorage.setItem('token', res.data.access_token);
     auth.login(selectedUser.value);
+    router.push("/home");
     showPassModal.value = false;
 
   } catch (err) {

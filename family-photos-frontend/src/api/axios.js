@@ -1,11 +1,24 @@
-// axios.js
 import axios from 'axios';
+import { useAuthStore } from '../stores/auth'; // Adjust path if necessary
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_BASE,
 });
 
-// Request Interceptor (Existing)
+let isRefreshing = false;
+let failedQueue = [];
+
+const processQueue = (error, token = null) => {
+  failedQueue.forEach(prom => {
+    if (error) {
+      prom.reject(error);
+    } else {
+      prom.resolve(token);
+    }
+  });
+  failedQueue = [];
+};
+
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('token');
   if (token) {
@@ -14,19 +27,29 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// Response Interceptor (New Silent Refresh Logic)
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config;
+    // Access the store inside the function to ensure Pinia is initialized
+    const auth = useAuthStore();
 
-    // Check if error is 401 and we haven't tried to refresh this specific request yet
     if (error.response?.status === 401 && !originalRequest._retry) {
+      if (isRefreshing) {
+        return new Promise(function(resolve, reject) {
+          failedQueue.push({ resolve, reject });
+        }).then(token => {
+          originalRequest.headers.Authorization = `Bearer ${token}`;
+          return api(originalRequest);
+        }).catch(err => {
+          return Promise.reject(err);
+        });
+      }
+
       originalRequest._retry = true;
+      isRefreshing = true;
 
       try {
-        // Call the new refresh endpoint
-        // Note: We use the base axios here to avoid an infinite loop
         const res = await axios.post(`${import.meta.env.VITE_API_BASE}/refresh`, {}, {
           headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
         });
@@ -34,16 +57,19 @@ api.interceptors.response.use(
         if (res.data.access_token) {
           const newToken = res.data.access_token;
           localStorage.setItem('token', newToken);
-
-          // Update the header for the original failed request and retry it
+          processQueue(null, newToken);
           originalRequest.headers.Authorization = `Bearer ${newToken}`;
           return api(originalRequest);
         }
       } catch (refreshError) {
-        // If the refresh itself fails (e.g., token is totally invalid),
-        // clear storage and send them to the profile picker
-        localStorage.removeItem('token');
-        window.location.href = '/';
+        processQueue(refreshError, null);
+
+        auth.logout();
+
+        // Use the router to redirect to login smoothly
+        import('../router/index').then(m => m.default.push({ name: 'login' }));
+      } finally {
+        isRefreshing = false; // RELEASE THE LOCK
       }
     }
     return Promise.reject(error);

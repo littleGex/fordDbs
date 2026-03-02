@@ -1,8 +1,10 @@
 import { createApp } from 'vue';
 import { createPinia } from 'pinia';
 import App from './App.vue';
-import './style.css'; // If using Tailwind or standard CSS
+import router from './router'; // Import the router
+import './style.css';
 
 const app = createApp(App);
 app.use(createPinia());
+app.use(router); // Use the router
 app.mount('#app');

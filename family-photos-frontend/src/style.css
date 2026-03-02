@@ -965,7 +965,7 @@ select option {
   background-color: var(--accent);
   border: none;
   color: white;
-  min-width: 110px; /* Prevents button jump on "Uploading..." state */
+  min-width: 110px;
 }
 
 .btn-primary:hover {
