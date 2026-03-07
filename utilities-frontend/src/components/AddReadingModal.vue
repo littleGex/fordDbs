@@ -78,12 +78,13 @@ const submitReadings = async () => {
   isSubmitting.value = true;
   const errors = [];
 
-  // Filter out nulls first to avoid empty requests
+  // 1. Filter out empty values
   const activeReadings = Object.entries(formData.readings)
     .filter(([_, value]) => value !== null && value !== '');
 
-  for (const [key, value] of activeReadings) {
-    try {
+  try {
+    // 2. Loop through and send requests
+    for (const [key, value] of activeReadings) {
       await axios.post(`${import.meta.env.VITE_API_BASE}/add-util`, null, {
         params: {
           util_date: formData.date,
@@ -91,24 +92,14 @@ const submitReadings = async () => {
           util_reading: value
         }
       });
-    } catch (err) {
-      errors.push(key);
     }
-  }
 
-  if (errors.length > 0) {
-    alert(`Failed to save: ${errors.join(', ')}. Please check your values.`);
-  } else {
+    // 3. If all loops finish successfully
     emit('refresh');
     emit('close');
-  }
-  isSubmitting.value = false;
-};
 
-    await Promise.all(promises);
-    emit('refresh');
-    emit('close');
   } catch (error) {
+    // This is where line 111 likely is—ensure the braces above are closed!
     alert("Error saving readings. Please try again.");
     console.error(error);
   } finally {
