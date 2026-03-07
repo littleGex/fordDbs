@@ -14,7 +14,7 @@
         </button>
       </header>
 
-      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+      <div v-if="!isLoading" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
         <UtilityCard title="Water" :value="data.latest.readings?.water" unit="m³" :usage="data.latest.usage?.water" />
         <UtilityCard title="Gas" :value="data.latest.readings?.gas" unit="m³" :usage="data.latest.usage?.gas" />
         <UtilityCard title="Elect. Used" :value="data.latest.readings?.elect_u" unit="kWh" :usage="data.latest.usage?.elect_u" />
@@ -32,11 +32,21 @@
             </tr>
           </thead>
           <tbody class="divide-y divide-gray-100">
+            <tr v-if="isLoading">
+              <td colspan="4" class="px-6 py-10 text-center text-gray-400">Loading data...</td>
+            </tr>
+
+            <tr v-else-if="data.history.length === 0">
+              <td colspan="4" class="px-6 py-10 text-center text-gray-400 italic">
+                No readings found. Click "+ Add Reading" to get started.
+              </td>
+            </tr>
+
             <tr v-for="entry in data.history" :key="entry.date"
                 :class="{'bg-blue-50/50': entry.is_february}">
               <td class="px-6 py-4">
                 <span class="font-medium text-gray-900">{{ entry.date }}</span>
-                <span v-if="entry.is_february" class="ml-2 text-[10px] bg-blue-100 text-blue-700 px-2 py-0.5 rounded uppercase">Official</span>
+                <span v-if="entry.is_february" class="ml-2 text-[10px] bg-blue-100 text-blue-700 px-2 py-0.5 rounded uppercase font-bold">Official</span>
               </td>
               <td class="px-6 py-4 text-right">{{ entry.usage.water }} m³</td>
               <td class="px-6 py-4 text-right">{{ entry.usage.gas }} m³</td>
@@ -49,26 +59,35 @@
       </div>
     </div>
 
-    <div v-if="showModal"> ... Add Entry Form ... </div>
+    <AddReadingModal
+      v-if="showModal"
+      @close="showModal = false"
+      @refresh="fetchData"
+    />
   </div>
 </template>
 
-<tr v-if="data.history.length === 0">
-  <td colspan="4" class="px-6 py-10 text-center text-gray-400 italic">
-    No readings found. Click "Add Reading" to get started.
-  </td>
-</tr>
-
 <script setup>
-const isLoading = ref(true); // New loading state
+import { ref, onMounted } from 'vue';
+import axios from 'axios';
+import UtilityCard from '../components/UtilityCard.vue';
+import AddReadingModal from "../components/AddReadingModal.vue";
+
+const showModal = ref(false);
+const isLoading = ref(true);
+const data = ref({ latest: { readings: {}, usage: {} }, history: [] });
 
 const fetchData = async () => {
   isLoading.value = true;
   try {
-    const response = await axios.get(`${import.meta.env.VITE_API_BASE}/dashboard`);
+    const response = await axios.get(`${import.meta.env.VITE_API_BASE}/utilities/dashboard`);
     data.value = response.data;
+  } catch (error) {
+    console.error("Failed to fetch dashboard data:", error);
   } finally {
     isLoading.value = false;
   }
 };
+
+onMounted(fetchData);
 </script>
