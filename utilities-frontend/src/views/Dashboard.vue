@@ -75,13 +75,29 @@ import AddReadingModal from "../components/AddReadingModal.vue";
 
 const showModal = ref(false);
 const isLoading = ref(true);
-const data = ref({ latest: { readings: {}, usage: {} }, history: [] });
+
+// Initialize with safe defaults so the template doesn't crash on 404
+const data = ref({
+  latest: {
+    readings: { water: 0, gas: 0, elect_u: 0 },
+    usage: { water: 0, gas: 0, elect_u: 0, net_elect: 0 }
+  },
+  history: []
+});
 
 const fetchData = async () => {
   isLoading.value = true;
   try {
-    const response = await axios.get(`${import.meta.env.VITE_API_BASE}/utilities/dashboard`);
-    data.value = response.data;
+    // Ensure VITE_API_BASE in .env is: https://api-pocket-money.ford-home-apps.com/v1/utilities
+    // No trailing slash in the .env!
+    const response = await axios.get(`${import.meta.env.VITE_API_BASE}/dashboard`);
+
+    // Check if the response actually has the expected nested data structure
+    if (response.data && response.data.latest) {
+      data.value = response.data;
+    } else if (response.data.data) { // Handle cases where API wraps result in 'data'
+      data.value = response.data.data;
+    }
   } catch (error) {
     console.error("Failed to fetch dashboard data:", error);
   } finally {

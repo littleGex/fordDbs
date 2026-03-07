@@ -93,6 +93,8 @@ services:
     container_name: utilities-ui
     ports:
       - 8085:80
+    env_file:
+      - ./utilities-frontend/.env
     environment:
       - VITE_API_BASE=https://api-pocket-money.ford-home-apps.com/v1/utilities
     restart: always
