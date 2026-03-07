@@ -1,19 +1,9 @@
-from fastapi import (APIRouter, UploadFile, File, Depends,
-                     HTTPException, Form)
-from pydantic.v1.datetime_parse import parse_date
-from sqlalchemy import extract
+from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from app.database.database import get_db
 from app.core.utils_core import prepare_dashboard_data
 from app.models.utilities import Utils
-from app.models.user_models import User
-import uuid
-import logging
-import os
-from jose import jwt, JWTError
-from passlib.context import CryptContext
-from datetime import datetime, timedelta, timezone
-from fastapi.security import OAuth2PasswordBearer
+from datetime import datetime
 
 
 utils_router = APIRouter()

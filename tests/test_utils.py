@@ -1,4 +1,3 @@
-import pytest
 from app.core.utils_core import (
     _parse_reading_value,
     _group_readings_by_date,
@@ -22,7 +21,10 @@ def test_parse_reading_value():
 
 
 def test_group_readings_by_date():
-    """Verify that multiple narrow rows are pivoted into a single date group."""
+    """
+    Verify that multiple narrow rows are pivoted into a single
+    date group.
+    """
     raw_data = [
         MockReading("2026-01-01", "water", "100.0"),
         MockReading("2026-01-01", "gas", "50.0"),
@@ -37,7 +39,9 @@ def test_group_readings_by_date():
 
 
 def test_calculate_deltas_and_net():
-    """Verify that usage (deltas) and net electricity are calculated correctly."""
+    """
+    Verify that usage (deltas) and net electricity are calculated correctly.
+    """
     grouped_data = {
         "2026-01-01": {
             "water": 100.0,

@@ -11,21 +11,27 @@ def _parse_reading_value(value: str) -> float:
         return 0.0
 
 
-def _group_readings_by_date(raw_readings: List[Any]) -> Dict[str, Dict[str, float]]:
+def _group_readings_by_date(
+        raw_readings: List[Any]) -> Dict[str, Dict[str, float]]:
     """Pivots narrow DB rows into a dictionary grouped by date."""
     grouped_data = defaultdict(dict)
 
     for row in raw_readings:
         # Handle both datetime objects and strings
-        date_str = row.reading_date.strftime("%Y-%m-%d") if isinstance(row.reading_date, datetime) else str(
+        date_str = row.reading_date.strftime("%Y-%m-%d") if isinstance(
+            row.reading_date, datetime) else str(
             row.reading_date)
-        grouped_data[date_str][row.utility_name] = _parse_reading_value(row.reading_value)
+        grouped_data[date_str][row.utility_name] = _parse_reading_value(
+            row.reading_value)
 
     return grouped_data
 
 
-def _calculate_deltas_and_net(grouped_data: Dict[str, Dict[str, float]]) -> List[Dict[str, Any]]:
-    """Calculates usage (deltas) and net electricity from chronological readings."""
+def _calculate_deltas_and_net(
+        grouped_data: Dict[str, Dict[str, float]]) -> List[Dict[str, Any]]:
+    """
+    Calculates usage (deltas) and net electricity from chronological readings.
+    """
     # Sort chronologically to ensure accurate delta calculation
     sorted_dates = sorted(grouped_data.keys())
     processed_records = []
@@ -64,8 +70,12 @@ def _calculate_deltas_and_net(grouped_data: Dict[str, Dict[str, float]]) -> List
     return processed_records
 
 
-def prepare_dashboard_data(raw_readings: List[Any]) -> Dict[str, Any]:
-    """Orchestrates the transformation of raw utility readings into dashboard data."""
+def prepare_dashboard_data(
+        raw_readings: List[Any]) -> Dict[str, Any]:
+    """
+    Orchestrates the transformation of raw utility readings into
+    dashboard data.
+    """
     if not raw_readings:
         return {"latest": {}, "history": []}
 

@@ -420,10 +420,10 @@ def refresh_token(
 
 @family_photos_router.post("/albums")
 def create_album(
-    title: str = Form(...),
-    description: str = Form(None),
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)):
+        title: str = Form(...),
+        description: str = Form(None),
+        current_user: User = Depends(get_current_user),
+        db: Session = Depends(get_db)):
     new_album = Album(
         title=title,
         description=description,
