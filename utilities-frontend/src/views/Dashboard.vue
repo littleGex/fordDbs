@@ -21,7 +21,7 @@
           <UtilityCard title="Water" :value="data.latest.readings?.water" unit="m³" :usage="data.latest.usage?.water" />
           <UtilityCard title="Gas" :value="data.latest.readings?.gas" unit="m³" :usage="data.latest.usage?.gas" />
           <UtilityCard title="Elect. Used" :value="data.latest.readings?.elect_u" unit="kWh" :usage="data.latest.usage?.elect_u" />
-          <UtilityCard title="Net Elect." :value="data.latest.usage?.net_elect" unit="kWh" />
+          <UtilityCard title="Elect. Prod" :value="data.latest.readings?.elect_p" unit="kWh" :usage="data.latest.usage?.elect_p" />
         </div>
 
         <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
@@ -36,8 +36,8 @@
                 <th class="px-6 py-4 text-xs font-semibold text-gray-500 uppercase">Date</th>
                 <th class="px-6 py-4 text-xs font-semibold text-gray-500 uppercase text-right">Water (Δ)</th>
                 <th class="px-6 py-4 text-xs font-semibold text-gray-500 uppercase text-right">Gas (Δ)</th>
-                <th class="px-6 py-4 text-xs font-semibold text-gray-500 uppercase text-right">Net Elect.</th>
-                <th class="px-6 py-4 text-xs font-semibold text-gray-500 uppercase text-right">Actions</th>
+                <th class="px-6 py-4 text-xs font-semibold text-gray-500 uppercase text-right">Elect. Used (Δ)</th>
+                <th class="px-6 py-4 text-xs font-semibold text-gray-500 uppercase text-right">Elect. Prod (Δ)</th>
               </tr>
             </thead>
             <tbody class="divide-y divide-gray-100">
