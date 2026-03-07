@@ -16,7 +16,7 @@
         <template v-else>▼</template>
         {{ Math.abs(usage) }} {{ unit }} usage
       </span>
-      <span class="ml-2 text-xs text-gray-400 text-nowrap">vs last month</span>
+      <span class="ml-2 text-xs text-gray-400 text-nowrap">vs last year</span>
     </div>
   </div>
 </template>
