@@ -14,20 +14,30 @@ def add_util(util_date: str,
              utility: str,
              util_reading: float,
              db: Session = Depends(get_db)):
-    parsed_date = None
+    parsed_date = datetime.strptime(util_date, "%Y-%m-%d").date()
 
-    if util_date:
-        parsed_date = datetime.strptime(util_date,
-                                        "%Y-%m-%d").date()
+    # Check if a record already exists for this date and utility
+    existing_record = db.query(Utils).filter(
+        Utils.reading_date == parsed_date,
+        Utils.utility_name == utility
+    ).first()
+
+    if existing_record:
+        # Update existing
+        existing_record.reading_value = util_reading
+        db.commit()
+        db.refresh(existing_record)
+        return {"status": "updated", "data": existing_record}
+
+    # Create new
     new_util = Utils(reading_date=parsed_date,
                      utility_name=utility,
                      reading_value=util_reading)
-
     db.add(new_util)
     db.commit()
     db.refresh(new_util)
 
-    return new_util
+    return {"status": "created", "data": new_util}
 
 
 @utils_router.get("/dashboard")

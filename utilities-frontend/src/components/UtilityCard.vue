@@ -2,7 +2,7 @@
   <div class="p-6 bg-white rounded-xl shadow-sm border border-gray-100">
     <div class="flex items-center justify-between mb-4">
       <h3 class="text-sm font-medium text-gray-500 uppercase tracking-wider">{{ title }}</h3>
-      <component :is="icon" class="w-6 h-6 text-blue-500" />
+      <span class="text-2xl">{{ title === 'Water' ? '💧' : title === 'Gas' ? '🔥' : '⚡' }}</span>
     </div>
 
     <div class="flex items-baseline space-x-2">

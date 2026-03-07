@@ -42,29 +42,16 @@ const props = defineProps({
 
 // Prepare data for the chart
 const chartData = computed(() => {
-  // We need at least 2 points to make a line
   if (props.history.length < 2) return { labels: [], datasets: [] };
-
-  // Clone and reverse so chronological order is left-to-right
-  const sortedHistory = [...props.history].reverse();
+  const sorted = [...props.history].reverse();
 
   return {
-    labels: sortedHistory.map(entry => entry.date),
+    labels: sorted.map(e => e.date),
     datasets: [
-      {
-        label: 'Gas Usage (m³)',
-        backgroundColor: '#3b82f6', // blue-500
-        borderColor: '#3b82f6',
-        data: sortedHistory.map(entry => entry.usage.gas),
-        tension: 0.3 // Adds slight curve to the line
-      },
-      {
-        label: 'Net Elect. (kWh)',
-        backgroundColor: '#ef4444', // red-500
-        borderColor: '#ef4444',
-        data: sortedHistory.map(entry => entry.usage.net_elect),
-        tension: 0.3
-      }
+      { label: 'Water (m³)', borderColor: '#0ea5e9', data: sorted.map(e => e.usage.water), tension: 0.3 },
+      { label: 'Gas (m³)', borderColor: '#f97316', data: sorted.map(e => e.usage.gas), tension: 0.3 },
+      { label: 'Elect Used (kWh)', borderColor: '#ef4444', data: sorted.map(e => e.usage.elect_u), tension: 0.3 },
+      { label: 'Net Elect (kWh)', borderColor: '#10b981', data: sorted.map(e => e.usage.net_elect), tension: 0.3 }
     ]
   };
 });

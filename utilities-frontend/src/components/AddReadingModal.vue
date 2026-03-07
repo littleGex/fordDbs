@@ -1,8 +1,10 @@
 <template>
-  <div class="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-    <div class="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
-      <div class="p-6 border-b border-gray-100 flex justify-between items-center">
-        <h2 class="text-xl font-bold text-gray-900">New Meter Reading</h2>
+  <div class="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in duration-200">
+      <div class="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
+        <h2 class="text-xl font-bold text-gray-900">
+          {{ initialData ? 'Edit Readings' : 'New Meter Reading' }}
+        </h2>
         <button @click="$emit('close')" class="text-gray-400 hover:text-gray-600 text-2xl">&times;</button>
       </div>
 
@@ -13,27 +15,25 @@
             v-model="formData.date"
             type="date"
             required
-            class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+            :disabled="!!initialData"
+            class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none disabled:bg-gray-100"
           />
         </div>
 
         <div class="grid grid-cols-2 gap-4">
           <div v-for="util in utilities" :key="util.key">
             <label class="block text-sm font-medium text-gray-700 mb-1">{{ util.label }}</label>
-            <div class="relative">
-              <input
-                v-model.number="formData.readings[util.key]"
-                type="number"
-                step="0.01"
-                placeholder="0.00"
-                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-              />
-              <span class="absolute right-3 top-2 text-gray-400 text-xs">{{ util.unit }}</span>
-            </div>
+            <input
+              v-model.number="formData.readings[util.key]"
+              type="number"
+              step="0.01"
+              :placeholder="util.unit"
+              class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+            />
           </div>
         </div>
 
-        <div class="pt-4 flex space-x-3">
+        <div class="pt-4 flex gap-3">
           <button
             type="button"
             @click="$emit('close')"
@@ -44,7 +44,7 @@
           <button
             type="submit"
             :disabled="isSubmitting"
-            class="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:opacity-50"
+            class="flex-1 bg-blue-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-blue-700 transition disabled:opacity-50"
           >
             {{ isSubmitting ? 'Saving...' : 'Save All' }}
           </button>
@@ -55,9 +55,10 @@
 </template>
 
 <script setup>
-import { ref, reactive } from 'vue';
+import { ref, reactive, onMounted } from 'vue';
 import axios from 'axios';
 
+const props = defineProps(['initialData']);
 const emit = defineEmits(['close', 'refresh']);
 
 const utilities = [
@@ -74,34 +75,32 @@ const formData = reactive({
 
 const isSubmitting = ref(false);
 
+onMounted(() => {
+  if (props.initialData && props.initialData.readings) {
+    formData.date = props.initialData.date;
+    Object.keys(formData.readings).forEach(key => {
+      // Use the readings object from the history entry
+      const val = props.initialData.readings[key];
+      formData.readings[key] = (val !== undefined) ? val : null;
+    });
+  }
+});
+
 const submitReadings = async () => {
   isSubmitting.value = true;
-  const errors = [];
-
-  // 1. Filter out empty values
-  const activeReadings = Object.entries(formData.readings)
-    .filter(([_, value]) => value !== null && value !== '');
-
   try {
-    // 2. Loop through and send requests
+    const activeReadings = Object.entries(formData.readings)
+      .filter(([_, value]) => value !== null && value !== '');
+
     for (const [key, value] of activeReadings) {
       await axios.post(`${import.meta.env.VITE_API_BASE}/add-util`, null, {
-        params: {
-          util_date: formData.date,
-          utility: key,
-          util_reading: value
-        }
+        params: { util_date: formData.date, utility: key, util_reading: value }
       });
     }
-
-    // 3. If all loops finish successfully
     emit('refresh');
     emit('close');
-
-  } catch (error) {
-    // This is where line 111 likely is—ensure the braces above are closed!
-    alert("Error saving readings. Please try again.");
-    console.error(error);
+  } catch (err) {
+    alert("Error saving data");
   } finally {
     isSubmitting.value = false;
   }
