@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.database.database import get_db
 from app.core.utils_core import prepare_dashboard_data
@@ -44,3 +44,25 @@ def data_for_dashboard(
     dashboard_data = prepare_dashboard_data(raw_readings)
 
     return dashboard_data
+
+
+@utils_router.put("/update-reading")
+def update_reading(
+        util_date: str,
+        utility: str,
+        value: float,
+        db: Session = Depends(get_db)):
+    # Find the specific record
+    record = db.query(Utils).filter(
+        Utils.reading_date == util_date,
+        Utils.utility_name == utility
+    ).first()
+
+    if not record:
+        raise HTTPException(status_code=404,
+                            detail="Reading not found")
+
+    record.reading_value = value
+    db.commit()
+
+    return {"status": "success"}
