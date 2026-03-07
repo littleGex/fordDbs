@@ -86,6 +86,19 @@ services:
     networks:
       - default
       - proxy_network
+  utilities-ui:
+    build:
+      context: ./utilities-frontend
+    image: utilities-frontend:latest
+    container_name: utilities-ui
+    ports:
+      - 8085:80
+    environment:
+      - VITE_API_BASE=https://api-pocket-money.ford-home-apps.com/v1/utilities
+    restart: always
+    networks:
+      - default
+      - proxy_network
   minio:
     image: minio/minio
     container_name: family_photos_storage

@@ -6,10 +6,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.v1.db_manager import db_router
 from app.api.v1.pocket_money import pocket_money_router
 from app.api.v1.family_photos import family_photos_router
+from app.api.v1.utils import utils_router
 from app.core.scheduler import start_scheduler
 from app.database.database import engine, Base
 from app.models.user_models import Child, Transaction  # noqa
 from app.models.photo_model import Photo  # noqa
+from app.models.utilities import Utils  # noqa
 from app.core.storage import init_storage
 
 
@@ -54,12 +56,23 @@ def create_app():
     Base.metadata.create_all(bind=engine)
 
     # Plug in our routes
-    app.include_router(db_router,
-                       prefix="/v1",
-                       tags=["Database Management"])
-    app.include_router(pocket_money_router,
-                       prefix="/v1/pocket-money",
-                       tags=["Pocket Money"])
+    app.include_router(
+        db_router,
+        prefix="/v1",
+        tags=["Database Management"]
+    )
+
+    app.include_router(
+        pocket_money_router,
+        prefix="/v1/pocket-money",
+        tags=["Pocket Money"]
+    )
+
+    app.include_router(
+        utils_router,
+        prefix="/v1/utilities",
+        tags=["Utilities"]
+    )
 
     app.include_router(
         family_photos_router,
