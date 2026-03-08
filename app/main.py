@@ -40,10 +40,8 @@ def create_app():
     app = FastAPI(lifespan=lifespan)
 
     # --- CORS CONFIGURATION ---
-    raw_origins = os.getenv("ALLOWED_ORIGINS", "")
-    # Only split if the string isn't empty, otherwise use a
-    # default or empty list
-    origins = [o.strip() for o in raw_origins.split(",") if o.strip()]
+    origins = os.getenv("ALLOWED_ORIGINS",
+                        "").split(",")
 
     app.add_middleware(
         CORSMiddleware,
