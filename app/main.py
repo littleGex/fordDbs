@@ -20,12 +20,19 @@ load_dotenv()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # --- Startup Logic ---
     print("🚀 Starting up...")
+
+    # 1. Ensure DB tables exist (Wrap in try/except for Docker DB readiness)
+    try:
+        Base.metadata.create_all(bind=engine)
+        print("✅ Database tables verified/created.")
+    except Exception as e:
+        print(f"❌ Database connection failed: {e}")
+        # In a real prod environment, you might want to retry here
+
     init_storage()
     start_scheduler()
     yield
-    # --- Shutdown Logic (Optional) ---
     print("🛑 Shutting down...")
 
 
@@ -33,8 +40,10 @@ def create_app():
     app = FastAPI(lifespan=lifespan)
 
     # --- CORS CONFIGURATION ---
-    origins = os.getenv("ALLOWED_ORIGINS",
-                        "").split(",")
+    raw_origins = os.getenv("ALLOWED_ORIGINS", "")
+    # Only split if the string isn't empty, otherwise use a
+    # default or empty list
+    origins = [o.strip() for o in raw_origins.split(",") if o.strip()]
 
     app.add_middleware(
         CORSMiddleware,
