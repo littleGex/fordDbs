@@ -36,7 +36,14 @@
 
         <div class="photo-grid">
           <div v-for="photo in photos" :key="photo.id" class="photo-card">
-            <img :src="photo.url" loading="lazy" @load="recordView(photo.id)"/>
+            <img
+                :src="photo.url"
+                loading="lazy"
+                @load="recordView(photo.id)"
+                @click="openZoom(photo)"
+                style="cursor: zoom-in"
+            />
+
             <div class="photo-content">
               <p class="caption"><strong>{{ photo.uploader.display_name }}</strong> {{ photo.caption }}</p>
               <div class="interaction-bar">
@@ -79,7 +86,12 @@
         </div>
         <div class="photo-grid">
           <div v-for="photo in albumPhotos" :key="photo.id" class="photo-card">
-            <img :src="photo.url" loading="lazy"/>
+            <img
+                :src="photo.url"
+                loading="lazy"
+                @click="openZoom(photo)"
+                style="cursor: zoom-in"
+            />
           </div>
         </div>
       </div>
@@ -179,10 +191,23 @@
       </button>
     </div>
   </div>
+  <div v-for="photo in filteredPhotos" :key="photo.id" class="photo-card">
+    <img :src="photo.url" @click="openZoom(photo)" style="cursor: zoom-in"/>
+  </div>
+
+  <div v-if="zoomedPhoto" class="lightbox-overlay" @click.self="closeZoom">
+    <div class="lightbox-content">
+      <button class="close-zoom" @click="closeZoom">×</button>
+      <img :src="zoomedPhoto.url" class="lightbox-img"/>
+      <p v-if="zoomedPhoto.caption" class="lightbox-caption">
+        {{ zoomedPhoto.caption }}
+      </p>
+    </div>
+  </div>
 </template>
 
 <script setup>
-import {ref, onMounted} from 'vue';
+import { ref, onMounted, onUnmounted } from 'vue';
 import {useAuthStore} from '../stores/auth';
 import api from '../api/axios';
 
@@ -208,6 +233,13 @@ const selectedAlbum = ref(null);
 const selectedAlbumId = ref(null);
 const albumPhotos = ref([]);
 const uploadPreviewUrl = ref(null);
+const zoomedPhoto = ref(null);
+
+const handleEsc = (e) => {
+  if (e.key === 'Escape' && zoomedPhoto.value) {
+    closeZoom();
+  }
+};
 
 const onFeedFileSelected = (e) => {
   const file = e.target.files[0];
@@ -369,11 +401,13 @@ onMounted(async () => {
   fetchPhotos();
   fetchAlbums();
 
+  window.addEventListener('keydown', handleEsc);
+
   // Listen for the click from the NavBar
   window.addEventListener('refresh-home-data', () => {
     fetchPhotos();
     fetchAlbums();
-    window.scrollTo({ top: 0, behavior: 'smooth' }); // Bonus: scroll to top!
+    window.scrollTo({top: 0, behavior: 'smooth'}); // Bonus: scroll to top!
   });
 
   try {
@@ -384,12 +418,27 @@ onMounted(async () => {
   }
 });
 
+onUnmounted(() => {
+  window.removeEventListener('keydown', handleEsc);
+});
+
 // Helper for the label
 const getYearAgoText = (dateString) => {
   if (!dateString) return "Sometime ago";
   const years = new Date().getFullYear() - new Date(dateString).getFullYear();
   if (years === 0) return "Less than a year ago";
   return `${years} year${years > 1 ? 's' : ''} ago`;
+};
+
+const openZoom = (photo) => {
+  zoomedPhoto.value = photo;
+  // Prevent scrolling the background while zoomed
+  document.body.style.overflow = 'hidden';
+};
+
+const closeZoom = () => {
+  zoomedPhoto.value = null;
+  document.body.style.overflow = 'auto';
 };
 </script>
 
