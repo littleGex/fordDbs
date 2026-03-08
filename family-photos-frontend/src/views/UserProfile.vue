@@ -297,7 +297,15 @@ const handleComment = async (id) => {
 };
 
 const recordView = async (id) => {
-  await api.post(`/${id}/view`);
+  // Prevent the request if the user is already logged out or token is gone
+  if (!auth.currentUser || !localStorage.getItem('token')) return;
+
+  try {
+    await api.post(`/${id}/view`);
+  } catch (err) {
+    // Silently fail view counts so they don't crash the UI
+    console.warn("Could not record view", err);
+  }
 };
 
 const saveProfile = async () => {

@@ -10,10 +10,8 @@ export const useAuthStore = defineStore('auth', {
       this.currentUser = user;
       localStorage.setItem('user', JSON.stringify(user));
     },
-    // The missing piece:
     updateUser(newData) {
       if (this.currentUser) {
-        // We spread the existing data and overwrite with the new updates
         this.currentUser = { ...this.currentUser, ...newData };
         localStorage.setItem('user', JSON.stringify(this.currentUser));
       }
@@ -21,6 +19,7 @@ export const useAuthStore = defineStore('auth', {
     logout() {
       this.currentUser = null;
       localStorage.removeItem('user');
+      localStorage.removeItem('token'); // <-- CRITICAL FIX: Add this line
     }
   }
 });

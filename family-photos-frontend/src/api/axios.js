@@ -64,12 +64,16 @@ api.interceptors.response.use(
       } catch (refreshError) {
         processQueue(refreshError, null);
 
+        // Failsafe token removal just in case
+        localStorage.removeItem('token');
         auth.logout();
 
-        // Use the router to redirect to login smoothly
         import('../router/index').then(m => m.default.push({ name: 'login' }));
+
+        // Explicitly return the rejection so the original request doesn't hang
+        return Promise.reject(refreshError);
       } finally {
-        isRefreshing = false; // RELEASE THE LOCK
+        isRefreshing = false;
       }
     }
     return Promise.reject(error);
