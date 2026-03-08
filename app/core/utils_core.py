@@ -42,9 +42,9 @@ def _calculate_deltas_and_net(
 
         record = {
             "date": date_str,
-            "is_february": date_str.split("-")[1] == "02",
             "readings": current_readings,
-            "usage": {}
+            "usage": {},
+            "resets": {}
         }
 
         # Calculate difference from the previous reading
@@ -57,13 +57,22 @@ def _calculate_deltas_and_net(
             else:
                 record["usage"][util] = 0.0
 
+            # REPLACED WITH RESET-AWARE LOGIC:
+            if current_val is not None and prev_val is not None:
+                if current_val < prev_val:
+                    # Meter reset detected!
+                    record["usage"][util] = round(current_val, 2)
+                    record["resets"][util] = True
+                else:
+                    record["usage"][util] = round(current_val - prev_val, 2)
+                    record["resets"][util] = False
+            else:
+                record["usage"][util] = 0.0
+                record["resets"][util] = False
+
+                # Update the tracker for the next iteration (next month)
             if current_val is not None:
                 previous_readings[util] = current_val
-
-        # Calculate Net Electricity
-        elect_used = record["usage"].get("elect_u", 0.0)
-        elect_prod = record["usage"].get("elect_p", 0.0)
-        record["usage"]["net_elect"] = round(elect_used - elect_prod, 2)
 
         processed_records.append(record)
 
