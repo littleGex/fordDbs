@@ -3,6 +3,7 @@ import { useAuthStore } from '../stores/auth'; // Adjust path if necessary
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_BASE,
+  timeout: 15000,
 });
 
 let isRefreshing = false;

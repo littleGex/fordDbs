@@ -269,6 +269,7 @@ const handleUpload = async () => {
     showUploadModal.value = false;
     newCaption.value = '';
     selectedFeedFile.value = null;
+    uploadPreviewUrl.value = null;
     fetchPhotos();
     fetchAlbums();
   } catch (err) {

@@ -63,19 +63,54 @@ def format_photo_list(photos):
 
 
 # JWT Dependency to protect routes
-async def get_current_user(token: str = Depends(oauth2_scheme),
-                           db: Session = Depends(get_db)):
+def get_current_user(token: str = Depends(oauth2_scheme),
+                     db: Session = Depends(get_db)):
     if not token:
         raise HTTPException(status_code=401, detail="Not authenticated")
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        user_id = payload.get("sub")
+        payload = jwt.decode(token,
+                             SECRET_KEY,
+                             algorithms=[ALGORITHM])
+        user_id: str = payload.get("sub")
         if not user_id:
-            raise HTTPException(status_code=401)
+            raise HTTPException(status_code=401, detail="Invalid token")
     except JWTError:
-        raise HTTPException(status_code=401)
+        raise HTTPException(status_code=401,
+                            detail="Could not validate credentials")
 
     user = db.query(User).filter(User.id == int(user_id)).first()
+
+    if user is None:
+        raise HTTPException(status_code=401, detail="User not found")
+
+    return user
+
+
+def get_current_user_for_refresh(
+        token: str = Depends(oauth2_scheme),
+        db: Session = Depends(get_db)):
+    if not token:
+        raise HTTPException(status_code=401,
+                            detail="Not authenticated")
+    try:
+        # ADDED: This ignores expiration ONLY to identify
+        # who needs a new token
+        payload = jwt.decode(token,
+                             SECRET_KEY,
+                             algorithms=[ALGORITHM],
+                             options={"verify_exp": False})
+        user_id: str = payload.get("sub")
+        if not user_id:
+            raise HTTPException(status_code=401,
+                                detail="Invalid token")
+    except JWTError:
+        raise HTTPException(status_code=401,
+                            detail="Could not validate credentials")
+
+    user = db.query(User).filter(User.id == int(user_id)).first()
+    if user is None:
+        raise HTTPException(status_code=401,
+                            detail="User not found")
     return user
 
 
@@ -119,7 +154,7 @@ def set_password(data: dict, db: Session = Depends(get_db)):
 
 
 @family_photos_router.post("/upload")
-async def upload_photo(
+def upload_photo(
         caption: str = Form(None),
         album_id: int = Form(None),
         file: UploadFile = File(...),
@@ -285,7 +320,7 @@ def get_photo_stats(photo_id: int, db: Session = Depends(get_db)):
 
 
 @family_photos_router.post("/profile/update")
-async def update_profile(
+def update_profile(
         display_name: str = Form(None),
         bio: str = Form(None),
         file: UploadFile = File(None),
@@ -402,11 +437,11 @@ def admin_reset(target_id: int,
 
 @family_photos_router.post("/refresh")
 def refresh_token(
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user_for_refresh),
     db: Session = Depends(get_db)
 ):
     # Generate a new token with a fresh expiration (e.g., another 24 hours)
-    access_token_expires = timedelta(hours=24)
+    access_token_expires = timedelta(minutes=60)
 
     new_token = jwt.encode(
         {"sub": str(current_user.id),
