@@ -48,6 +48,7 @@
               <th class="px-6 py-4 text-xs font-semibold text-gray-500 uppercase text-right">Gas (Δ)</th>
               <th class="px-6 py-4 text-xs font-semibold text-gray-500 uppercase text-right">Elect. Used (Δ)</th>
               <th class="px-6 py-4 text-xs font-semibold text-gray-500 uppercase text-right">Elect. Prod (Δ)</th>
+              <th class="px-6 py-4 text-xs font-semibold text-gray-500 uppercase">Actions</th>
             </tr>
             </thead>
             <tbody class="divide-y divide-gray-100">
@@ -55,12 +56,16 @@
               <td class="px-6 py-4 font-medium">{{ entry.date }}</td>
               <td class="px-6 py-4 text-right">{{ entry.usage.water }} m³</td>
               <td class="px-6 py-4 text-right">{{ entry.usage.gas }} m³</td>
-              <td class="px-6 py-4 text-right">
-                  <span :class="entry.usage.net_elect > 0 ? 'text-red-600' : 'text-green-600'" class="font-bold">
-                    {{ entry.usage.net_elect }} kWh
-                  </span>
+
+              <td class="px-6 py-4 text-right font-medium text-red-600">
+                {{ entry.usage.elect_u }} kWh
               </td>
-              <td class="px-6 py-4 text-right">
+
+              <td class="px-6 py-4 text-right font-medium text-green-600">
+                {{ entry.usage.elect_p }} kWh
+              </td>
+
+              <td class="px-6 py-4">
                 <button @click="openEditModal(entry)" class="text-blue-600 hover:underline">Edit</button>
               </td>
             </tr>
