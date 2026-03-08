@@ -3,8 +3,6 @@ from dotenv import load_dotenv
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse
-from fastapi.staticfiles import StaticFiles
 from app.api.v1.db_manager import db_router
 from app.api.v1.pocket_money import pocket_money_router
 from app.api.v1.family_photos import family_photos_router
@@ -53,10 +51,6 @@ def create_app():
         allow_headers=["*"],
     )
 
-    app.mount("/assets",
-              StaticFiles(directory="dist/assets"),
-              name="assets")
-
     @app.get("/")
     def root():
         return {
@@ -92,11 +86,6 @@ def create_app():
         prefix="/v1/family-photos",
         tags=["Family Photos"]
     )
-
-    @app.get("/{full_path:path}")
-    async def catch_all(full_path: str):
-        with open("dist/index.html") as f:
-            return HTMLResponse(f.read())
 
     return app
 
