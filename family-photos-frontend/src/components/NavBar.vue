@@ -62,10 +62,8 @@ onMounted(() => {
 });
 
 const returnToProfiles = () => {
-  // Simply clearing the user sends them back to the ProfilePicker
-  // because of the v-if logic in App.vue
   auth.logout();
-  router.push('/');
+  window.location.href = '/';
 };
 </script>
 

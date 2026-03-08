@@ -6,12 +6,12 @@
     </div>
 
     <template v-else>
-      <NavBar v-if="auth.currentUser" />
+      <NavBar v-if="auth.currentUser"/>
 
       <main :class="{ 'no-nav': !auth.currentUser }">
-        <router-view v-slot="{ Component }">
+        <router-view v-slot="{ Component, route }">
           <transition name="fade" mode="out-in">
-            <component :is="Component" />
+            <component :is="Component" :key="route.fullPath"/>
           </transition>
         </router-view>
       </main>
@@ -20,9 +20,9 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue';
+import {ref, onMounted} from 'vue';
 import NavBar from './components/NavBar.vue';
-import { useAuthStore } from './stores/auth'; //
+import {useAuthStore} from './stores/auth'; //
 
 const auth = useAuthStore();
 const isInitializing = ref(true);
@@ -71,7 +71,9 @@ main.no-nav {
 }
 
 @keyframes spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 /* --- Page Transition Animations --- */

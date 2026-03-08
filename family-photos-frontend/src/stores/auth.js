@@ -20,6 +20,7 @@ export const useAuthStore = defineStore('auth', {
       this.currentUser = null;
       localStorage.removeItem('user');
       localStorage.removeItem('token'); // <-- CRITICAL FIX: Add this line
+      document.body.style.overflow = 'auto';
     }
   }
 });
