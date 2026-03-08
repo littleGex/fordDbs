@@ -188,7 +188,7 @@ def upload_photo(
 @family_photos_router.get("/feed")
 def get_feed(
         user_id: int = None,
-        limit: int = 10,
+        limit: int = 20,
         offset: int = 0,
         db: Session = Depends(get_db)):
     # 1. Start with the base query
