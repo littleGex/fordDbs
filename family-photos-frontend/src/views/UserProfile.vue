@@ -368,6 +368,14 @@ const handleCreateAlbum = async () => {
 onMounted(async () => {
   fetchPhotos();
   fetchAlbums();
+
+  // Listen for the click from the NavBar
+  window.addEventListener('refresh-home-data', () => {
+    fetchPhotos();
+    fetchAlbums();
+    window.scrollTo({ top: 0, behavior: 'smooth' }); // Bonus: scroll to top!
+  });
+
   try {
     const res = await api.get('/historical');
     historicalPhotos.value = res.data;

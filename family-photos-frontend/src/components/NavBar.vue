@@ -44,7 +44,12 @@ const currentTheme = computed(() => {
 });
 
 const refreshFeed = () => {
-  router.push('/home');
+  if (router.currentRoute.value.path === '/home') {
+    // This tells the browser to dispatch a custom event
+    window.dispatchEvent(new CustomEvent('refresh-home-data'));
+  } else {
+    router.push('/home');
+  }
 };
 
 onMounted(() => {
