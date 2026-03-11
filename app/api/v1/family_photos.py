@@ -407,17 +407,65 @@ def get_all_users(db: Session = Depends(get_db)):
 
 
 @family_photos_router.post("/users")
-def create_user(data: dict, db: Session = Depends(get_db)):
-    # Updated to include password
+def create_user(
+        username: str = Form(...),
+        display_name: str = Form(...),
+        password: str = Form(...),
+        file: UploadFile = File(None),
+        db: Session = Depends(get_db)
+):
+    # 1. Check for existing user
+    existing_user = db.query(User).filter(User.username == username).first()
+    if existing_user:
+        raise HTTPException(status_code=400, detail="Username already taken")
+
+    # 2. Initialize new user
+    # Note: We use hashed_password to match your User model column name
     new_user = User(
-        username=data['username'],
-        display_name=data['display_name'],
-        hashed_password=hash_pw(data['password']),
-        role="child"
+        username=username,
+        display_name=display_name,
+        hashed_password=hash_pw(password),
+        role="parent"  # Default role
     )
+
     db.add(new_user)
+    db.flush()  # Flushes to get new_user.id for the filename
+
+    # 3. Handle Profile Photo Upload
+    if file:
+        try:
+            # Create a unique key (path) for the storage bucket
+            ext = os.path.splitext(file.filename)[1]
+            # Saving in an 'avatars' folder within your bucket
+            unique_key = \
+                f"avatars/user_{new_user.id}_{uuid.uuid4().hex[:6]}{ext}"
+
+            # Read file content and upload
+            contents = file.file.read()
+            upload_image_to_storage(contents, unique_key)
+
+            # Save the KEY to the database (not the full URL)
+            new_user.profile_photo_key = unique_key
+
+        except Exception as e:
+            logger.error(f"Failed to upload avatar: {e}")
+            # If upload fails, we don't want to create the user
+            # without their photo
+            db.rollback()
+            raise HTTPException(status_code=500, detail="Photo upload failed")
+
     db.commit()
-    return {"status": "success"}
+    db.refresh(new_user)
+
+    # 4. Return the new user data
+    # We use get_image_url to convert the key back to a URL for the frontend
+    return {
+        "id": new_user.id,
+        "username": new_user.username,
+        "display_name": new_user.display_name,
+        "profile_photo_url": get_image_url(
+            new_user.profile_photo_key) if new_user.profile_photo_key else None
+    }
 
 
 # Admin Reset Override

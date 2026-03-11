@@ -6,7 +6,7 @@
 
     <div v-else class="user-grid">
       <div v-for="user in users" :key="user.id" class="profile-card" @click="openLoginModal(user)">
-        <img :src="user.profile_photo_url || '/avatars/default.png'" class="avatar" />
+        <img :src="getAvatar(user)" class="avatar" />
         <h3>{{ user.display_name }}</h3>
       </div>
 
@@ -16,7 +16,7 @@
       </div>
     </div>
 
-    <div v-if="showPassModal" class="modal-overlay">
+    <div v-if="showPassModal" class="modal-overlay" @click.self="closeModals">
       <div class="modal-content">
         <h2>{{ needsInitialSetup ? 'Set Your Password' : 'Enter Password' }}</h2>
         <p>Profile: {{ selectedUser?.display_name }}</p>
@@ -26,30 +26,61 @@
           :placeholder="needsInitialSetup ? 'Create a password' : 'Enter password'"
           @keyup.enter="submitAuth"
           autofocus
+          class="styled-input"
         />
         <div class="modal-btns">
-          <button @click="closeModals">Cancel</button>
-          <button @click="submitAuth">{{ needsInitialSetup ? 'Save & Login' : 'Unlock' }}</button>
+          <button @click="closeModals" class="btn-secondary">Cancel</button>
+          <button @click="submitAuth" class="btn-primary">{{ needsInitialSetup ? 'Save & Login' : 'Unlock' }}</button>
         </div>
       </div>
     </div>
 
-    <div v-if="showCreateModal" class="modal-overlay">
+    <div v-if="showCreateModal" class="modal-overlay" @click.self="closeModals">
       <div class="modal-content">
-        <h2>New Profile</h2>
-        <input v-model="newUserName" placeholder="Display Name" />
-        <input v-model="newUserPassword" type="password" placeholder="Password" />
+        <h2>Add Profile</h2>
+
+        <div class="avatar-setup">
+          <img :src="newAvatarPreview" class="avatar large-preview" />
+
+          <input
+            type="file"
+            ref="newProfileFileInput"
+            @change="onNewProfileFileSelected"
+            accept="image/*"
+            class="hidden-file-input"
+          />
+
+          <button @click="$refs.newProfileFileInput.click()" class="btn-secondary mini-btn">
+            Upload Photo
+          </button>
+        </div>
+
+        <input
+          v-model="newUserName"
+          type="text"
+          placeholder="Display Name"
+          class="styled-input"
+        />
+        <input
+          v-model="newUserPassword"
+          type="password"
+          placeholder="Password"
+          @keyup.enter="createUser"
+          class="styled-input"
+        />
+
         <div class="modal-btns">
-          <button @click="closeModals">Cancel</button>
-          <button @click="createUser" :disabled="!newUserName || !newUserPassword">Create</button>
+          <button @click="closeModals" class="btn-secondary">Cancel</button>
+          <button @click="createUser" class="btn-primary" :disabled="!newUserName">Create User</button>
         </div>
       </div>
     </div>
+
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, computed } from 'vue';
 import { useRouter } from 'vue-router';
 import api from '../api/axios.js';
 import { useAuthStore } from '../stores/auth.js';
@@ -69,6 +100,8 @@ const selectedUser = ref(null);
 const passInput = ref('');
 const newUserName = ref('');
 const newUserPassword = ref('');
+const newProfileFile = ref(null);
+const uploadedPreviewUrl = ref(null);
 
 const fetchUsers = async () => {
   try {
@@ -83,17 +116,30 @@ const fetchUsers = async () => {
 
 onMounted(fetchUsers);
 
+// Helper to ALWAYS show a photo (uploaded or initials)
+const getAvatar = (user) => {
+  if (user.profile_photo_url) return user.profile_photo_url;
+  // Dynamic fallback using their name
+  const safeName = encodeURIComponent(user.display_name || 'User');
+  return `https://ui-avatars.com/api/?name=${safeName}&background=333333&color=fff&size=150`;
+};
+
 const openLoginModal = (user) => {
   selectedUser.value = user;
   passInput.value = '';
   showPassModal.value = true;
-  needsInitialSetup.value = false; // Reset setup flag
+  needsInitialSetup.value = false;
 };
 
 const closeModals = () => {
   showPassModal.value = false;
   showCreateModal.value = false;
   passInput.value = '';
+  // Reset create form if closed
+  newUserName.value = '';
+  newUserPassword.value = '';
+  newProfileFile.value = null;
+  uploadedPreviewUrl.value = null;
 };
 
 const submitAuth = async () => {
@@ -106,16 +152,13 @@ const submitAuth = async () => {
     let res;
 
     if (needsInitialSetup.value) {
-      // FIX: Call the correct endpoint to SAVE the password first
       await api.post('/users/set-password', {
         user_id: selectedUser.value.id,
         password: passInput.value
       }, {
-        // Manually restore content-type since it's deleted in axios.js
         headers: { 'Content-Type': 'application/json' }
       });
 
-      // Now that it's saved, attempt a normal login
       res = await api.post('/login', {
         user_id: selectedUser.value.id,
         password: passInput.value
@@ -123,7 +166,6 @@ const submitAuth = async () => {
         headers: { 'Content-Type': 'application/json' }
       });
     } else {
-      // Normal login flow
       res = await api.post('/login', {
         user_id: selectedUser.value.id,
         password: passInput.value
@@ -132,13 +174,11 @@ const submitAuth = async () => {
       });
     }
 
-    // Handle the "needs setup" response from the backend
     if (res.data.status === 'needs_initial_password') {
       needsInitialSetup.value = true;
-      return; // Stop here so the user can see the "Set Password" prompt
+      return;
     }
 
-    // Success: Store token and enter app
     localStorage.setItem('token', res.data.access_token);
     auth.login(selectedUser.value);
     router.push("/home");
@@ -150,17 +190,40 @@ const submitAuth = async () => {
   }
 };
 
+const newAvatarPreview = computed(() => {
+  if (uploadedPreviewUrl.value) return uploadedPreviewUrl.value;
+
+  if (newUserName.value) {
+    return `https://ui-avatars.com/api/?name=${encodeURIComponent(newUserName.value)}&background=333333&color=fff&size=150`;
+  }
+
+  return 'https://ui-avatars.com/api/?name=New+User&background=141414&color=333&size=150';
+});
+
+const onNewProfileFileSelected = (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  newProfileFile.value = file;
+  uploadedPreviewUrl.value = URL.createObjectURL(file);
+};
+
 const createUser = async () => {
   try {
     const generatedUsername = newUserName.value.toLowerCase().replace(/\s/g, '');
-    await api.post('/users', {
-      username: generatedUsername,
-      display_name: newUserName.value,
-      password: newUserPassword.value
-    });
-    newUserName.value = '';
-    newUserPassword.value = '';
-    showCreateModal.value = false;
+
+    const formData = new FormData();
+    formData.append('username', generatedUsername);
+    formData.append('display_name', newUserName.value);
+    formData.append('password', newUserPassword.value);
+
+    if (newProfileFile.value) {
+      formData.append('file', newProfileFile.value);
+    }
+
+    await api.post('/users', formData);
+
+    // Reset form after success
+    closeModals();
     fetchUsers();
   } catch (error) {
     alert("Creation failed: " + (error.response?.data?.detail || "Check console"));
@@ -169,13 +232,13 @@ const createUser = async () => {
 </script>
 
 <style scoped>
-/* Add to your existing styles */
+/* Profile Grid Styles */
 .plus-avatar {
   background: #333;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 2.5rem; /* Better scale for the + icon */
+  font-size: 2.5rem;
   color: #808080;
 }
 
@@ -184,6 +247,7 @@ const createUser = async () => {
   color: #141414;
 }
 
+/* Modal Core Styles */
 .modal-overlay {
   position: fixed;
   top: 0; left: 0; right: 0; bottom: 0;
@@ -199,14 +263,62 @@ const createUser = async () => {
   padding: 30px;
   border-radius: 8px;
   text-align: center;
+  width: 90%;
+  max-width: 400px; /* Keep modal from getting too wide on desktop */
 }
 
-.modal-content input {
-  padding: 10px;
-  margin: 20px 0;
+/* Avatar Upload Styles */
+.avatar-setup {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 15px;
+  margin-bottom: 20px;
+}
+
+.large-preview {
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  border: 3px solid #333;
+  object-fit: cover;
+}
+
+.hidden-file-input {
+  display: none;
+}
+
+/* Form Input Styles */
+.styled-input {
   width: 100%;
-  background: #333;
+  padding: 12px;
+  background: #2b2b2b;
+  border: 1px solid #444;
+  border-radius: 6px;
   color: white;
-  border: none;
+  margin-bottom: 15px;
+  box-sizing: border-box; /* Ensures padding doesn't push width over 100% */
+}
+
+.styled-input:focus {
+  outline: none;
+  border-color: #e50914; /* Netflix red focus ring */
+}
+
+.mini-btn {
+  padding: 6px 12px;
+  font-size: 0.85rem;
+}
+
+/* Modal Buttons Flexbox */
+.modal-btns {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.modal-btns button {
+  flex: 1; /* Makes buttons equal width */
 }
 </style>
