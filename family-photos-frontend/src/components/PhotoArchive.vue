@@ -6,6 +6,8 @@
       <div v-for="photo in photos" :key="photo.id" class="photo-card">
         <img
             :src="photo.url"
+            @click="handlePhotoClick(photo)"
+            style="cursor: zoom-in"
             :alt="photo.caption"
             loading="lazy"
             draggable="false"
@@ -46,6 +48,8 @@ const limit = 20; // How many to fetch per click
 const loading = ref(false);
 const hasMore = ref(true); // Assumes we have photos until the API returns fewer than 20
 
+const emit = defineEmits(['photo-click'])
+
 const fetchPhotos = async () => {
   if (loading.value || !hasMore.value) return;
 
@@ -71,6 +75,10 @@ const fetchPhotos = async () => {
   }
 };
 
+const handlePhotoClick = (photo) => {
+  emit('photo-click', photo);
+}
+
 // Fetch the first batch when the component loads
 onMounted(() => {
   fetchPhotos();
@@ -91,7 +99,8 @@ const loadMore = () => {
 .photo-card img {
   width: 100%;
   height: 250px;
-  object-fit: cover;
+  object-fit: contain;
+  background-color: #000;
   border-radius: 8px;
   /* Extra mobile protection against selection */
   user-select: none;

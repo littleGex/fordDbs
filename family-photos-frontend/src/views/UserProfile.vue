@@ -103,7 +103,7 @@
       </div>
 
       <div v-else-if="currentView ==='archive'" class="archive-view">
-        <PhotoArchive />
+        <PhotoArchive @photo-click="openZoom" />
       </div>
 
     </div>
