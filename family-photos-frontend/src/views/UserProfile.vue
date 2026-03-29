@@ -11,6 +11,12 @@
           <button @click="currentView = 'albums'; selectedAlbum = null" :class="{ active: currentView === 'albums' }"
                   class="nav-tab">Albums
           </button>
+          <button
+              @click="currentView = 'archive'; selectedAlbum = null"
+              :class="{ active: currentView === 'archive' }"
+              class="nav-tab"
+          >Archive
+          </button>
         </div>
       </div>
 
@@ -94,6 +100,10 @@
             />
           </div>
         </div>
+      </div>
+
+      <div v-else-if="currentView ==='archive'" class="archive-view">
+        <PhotoArchive />
       </div>
 
     </div>
@@ -191,9 +201,6 @@
       </button>
     </div>
   </div>
-  <div v-for="photo in filteredPhotos" :key="photo.id" class="photo-card">
-    <img :src="photo.url" @click="openZoom(photo)" style="cursor: zoom-in"/>
-  </div>
 
   <div v-if="zoomedPhoto" class="lightbox-overlay" @click.self="closeZoom">
     <div class="lightbox-content">
@@ -207,9 +214,10 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue';
+import {ref, onMounted, onUnmounted} from 'vue';
 import {useAuthStore} from '../stores/auth';
 import api from '../api/axios';
+import PhotoArchive from "../components/PhotoArchive.vue";
 
 const auth = useAuthStore();
 const currentMode = ref('feed');

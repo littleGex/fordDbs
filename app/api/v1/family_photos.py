@@ -1,5 +1,5 @@
 from fastapi import (APIRouter, UploadFile, File, Depends,
-                     HTTPException, Form)
+                     HTTPException, Form, Query)
 from sqlalchemy import extract
 from sqlalchemy.orm import Session
 from app.database.database import get_db
@@ -555,5 +555,24 @@ def get_album_photos(album_id: int, db: Session = Depends(get_db)):
     photos = db.query(Photo).filter(
         Photo.album_id == album_id).order_by(
         Photo.timestamp.desc()).all()
+
+    return format_photo_list(photos)
+
+
+@family_photos_router.get("/archive")
+async def get_photo_archive(
+        skip: int = Query(0, description="Skip number of photos to archive"),
+        limit: int = Query(20, description="How many photos to return"),
+        db: Session = Depends(get_db)):
+    """
+    Fetches a paginated list of all photos in the archive.
+    """
+    photos = (
+        db.query(Photo)
+        .order_by(Photo.timestamp.desc())
+        .offset(skip)
+        .limit(limit)
+        .all()
+    )
 
     return format_photo_list(photos)
