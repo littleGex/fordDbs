@@ -498,11 +498,24 @@ onMounted(fetchChildren)
     overflow: hidden;
     text-overflow: ellipsis; /* Adds "..." if the name is too long */
   }
+
+  .tx-date {
+    /* Slightly smaller on mobile to ensure it fits */
+    font-size: 0.65rem;
+  }
+
+  .tx-amount {
+    font-weight: bold;
+    white-space: nowrap; /* Keep the price on one line */
+  }
 }
 
 .tx-info {
   display: flex;
   flex-direction: column;
+  flex: 1; /* Add this to let info take available space */
+  min-width: 0; /* Prevents flex items from overflowing */
+  margin-right: 10px; /* Space between text and amount */
 }
 
 .tx-cat {
@@ -681,13 +694,21 @@ onMounted(fetchChildren)
 
 .tx-meta {
   display: flex;
-  gap: 5px;
+  gap: 8px;
   align-items: center;
+  flex-wrap: wrap;
 }
 
 .tx-date {
   color: #888;
-  font-size: 0.75rem;
+  font-size: 0.7rem;
+  white-space: nowrap;
+}
+
+.tx-cat + .tx-date::before {
+  content: "•";
+  margin-right: 4px;
+  color: #ccc;
 }
 
 </style>
