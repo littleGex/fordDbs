@@ -97,6 +97,19 @@ const calculateAge = (birthdayStr) => {
   return age;
 };
 
+const formatDate = (dateString) => {
+  if (!dateString) return "";
+  const date = new Date(dateString);
+
+  return date.toLocaleString("de-DE", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit"
+  });
+}
+
 // Calculate % of the year completed until next birthday
 const getBirthdayProgress = (birthdayStr) => {
   if (!birthdayStr) return 0;
@@ -241,11 +254,14 @@ onMounted(fetchChildren)
           <li v-for="tx in recentTransactions" :key="tx.id">
             <div class="tx-info">
               <span class="tx-desc">{{ tx.description }}</span>
-              <small class="tx-cat">{{ tx.category }}</small>
+              <div class="tx-meta">
+                <small class="tx-cat">{{ tx.category }}</small>
+                <small v-if="tx.timestamp" class="tx-date"> • {{ formatDate(tx.timestamp) }}</small>
+              </div>
             </div>
             <span :class="['tx-amount', tx.amount < 0 ? 'minus' : 'plus']">
-              {{ tx.amount < 0 ? '-' : '+' }} €{{ Math.abs(tx.amount).toFixed(2) }}
-            </span>
+    {{ tx.amount < 0 ? '-' : '+' }} €{{ Math.abs(tx.amount).toFixed(2) }}
+  </span>
           </li>
         </ul>
       </div>
@@ -293,6 +309,7 @@ onMounted(fetchChildren)
   .child-nav {
     flex-wrap: wrap; /* Allows buttons to drop to a second row if needed */
   }
+
   .child-nav button {
     flex: 1; /* Makes buttons grow to fill the width */
     min-width: 120px;
@@ -474,6 +491,7 @@ onMounted(fetchChildren)
   .transaction-list li {
     font-size: 0.9rem;
   }
+
   .tx-desc {
     max-width: 150px;
     white-space: nowrap;
@@ -660,4 +678,16 @@ onMounted(fetchChildren)
   font-size: 0.8rem;
   opacity: 0.8;
 }
+
+.tx-meta {
+  display: flex;
+  gap: 5px;
+  align-items: center;
+}
+
+.tx-date {
+  color: #888;
+  font-size: 0.75rem;
+}
+
 </style>
