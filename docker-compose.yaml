@@ -47,6 +47,7 @@ services:
   frontend:
     build:
       context: ./frontend
+    image: pocket-money-ui:latest
     container_name: pocket_money_ui
     restart: always
     ports:
