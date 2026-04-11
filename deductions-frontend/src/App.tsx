@@ -33,13 +33,13 @@ function App() {
     const handleUpdateCount = (name: string, delta: number) => {
         setCounts(prev => {
             const currentCount = prev[name] || 0;
-            const newCount = currentCount + delta;
 
-            // Gap Fix: Only allow 0 or higher (no negative integers)
-            return {
-                ...prev,
-                [name]: Math.max(0, Math.floor(newCount))
-            };
+            // Safety check:
+            // 1. Math.max(0, ...) ensures we never go below zero.
+            // 2. Math.round(...) ensures we stay with whole numbers.
+            const newCount = Math.max(0, Math.round(currentCount + delta));
+
+            return {...prev, [name]: newCount};
         });
     };
 
@@ -83,21 +83,22 @@ function App() {
 
     // App.tsx UI Update
     return (
-        <div className="max-w-md mx-auto min-h-screen bg-[#F8F9FA] pb-32">
-            <header className="p-6 pt-10 flex justify-between items-center">
-                <h1 className="text-3xl font-black text-gray-900 tracking-tight text-red-600">Deductions</h1>
-                <select
-                    value={childId}
-                    onChange={(e) => setChildId(parseInt(e.target.value))}
-                    className="bg-white border-none shadow-sm rounded-xl px-4 py-2 font-bold text-gray-700 outline-none ring-1 ring-black/5"
-                >
-                    {children.map(child => (
-                        <option key={child.id} value={child.id}>{child.name}</option>
-                    ))}
-                </select>
+        <div className="max-w-md mx-auto min-h-screen bg-[#F8F9FA] pb-40">
+            <header className="p-8 pb-4 flex justify-between items-center">
+                <h1 className="text-3xl font-black text-gray-900 tracking-tight">Deductions</h1>
+                {/* Selector styled like a button */}
+                <div className="relative">
+                    <select
+                        value={childId}
+                        onChange={(e) => setChildId(parseInt(e.target.value))}
+                        className="appearance-none bg-white shadow-sm rounded-xl px-4 py-2 pr-8 font-bold text-gray-700 ring-1 ring-black/5 outline-none"
+                    >
+                        {children.map(child => <option key={child.id} value={child.id}>{child.name}</option>)}
+                    </select>
+                </div>
             </header>
 
-            <main className="px-6 space-y-3">
+            <main className="px-6 space-y-4"> {/* Consistent gaps start here */}
                 {catalog.map(item => (
                     <DeductionItem
                         key={item.id}
@@ -106,6 +107,13 @@ function App() {
                         onUpdate={handleUpdateCount}
                     />
                 ))}
+
+                {/* Section Divider */}
+                <div className="pt-4 opacity-50">
+                    <div className="h-px bg-gray-200 w-full"/>
+                </div>
+
+                <AddRuleForm onRuleAdded={handleAddRule}/>
             </main>
             <div className="px-6 mt-8 mb-12">
                 <AddRuleForm onRuleAdded={handleAddRule}/>
@@ -114,7 +122,7 @@ function App() {
             <footer
                 className="fixed bottom-0 left-0 right-0 p-6 bg-white/80 backdrop-blur-md border-t border-gray-100 flex items-center justify-between z-50">
                 <div className="flex flex-col">
-                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest leading-none mb-1">Total Fine</span>
+                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest leading-none mb-1">Total Fine: </span>
                     <span className="text-3xl font-black text-red-600 leading-none">{totalFine.toFixed(2)}€</span>
                 </div>
                 <button

@@ -16,13 +16,12 @@ export default function DeductionItem({ item, count, onUpdate }: Props) {
 
       <div className="flex items-center gap-4 bg-gray-100 rounded-xl p-1">
         <button
-          onClick={() => onUpdate(item.name, -1)}
+          onClick={() => onUpdate(item.name, -1)} // Still sends -1, but App.tsx will block < 0
           className="w-10 h-10 flex items-center justify-center rounded-lg bg-white shadow-sm text-gray-500 hover:bg-gray-200 transition-all active:scale-90"
         >
           -
         </button>
 
-        {/* Count is now guaranteed to be a positive integer */}
         <span className="w-6 text-center font-black text-gray-700">
           {count}
         </span>
