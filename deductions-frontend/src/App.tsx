@@ -12,7 +12,7 @@ function App() {
 
     // 1. Updated Fetch data logic to include children
     useEffect(() => {
-        const initApp = async () => {
+        const init = async () => {
             try {
                 const [catalogData, childrenData] = await Promise.all([
                     pocketMoneyApi.getDeductionTypes(),
@@ -21,12 +21,12 @@ function App() {
                 setCatalog(catalogData);
                 setChildren(childrenData);
             } catch (err) {
-                console.error("Initial load failed:", err);
+                console.error("Failed to load initial data:", err);
             } finally {
                 setLoading(false);
             }
         };
-        initApp();
+        init();
     }, []);
 
     // Actions
@@ -81,7 +81,7 @@ function App() {
                 <select
                     value={childId}
                     onChange={(e) => setChildId(parseInt(e.target.value))}
-                    className="p-1 border rounded"
+                    className="p-2 border rounded bg-white text-gray-800 shadow-sm"
                 >
                     {children.map(child => (
                         <option key={child.id} value={child.id}>

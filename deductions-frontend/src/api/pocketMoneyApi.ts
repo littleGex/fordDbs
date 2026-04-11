@@ -1,4 +1,4 @@
-const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:8005/v1/pocket-money";
+const API_BASE = import.meta.env.VITE_API_BASE || "http://192.168.2.51:8005/v1/pocket-money";
 
 export interface DeductionType {
     id: number;
@@ -41,7 +41,7 @@ export const pocketMoneyApi = {
     },
 
     addDeductionType: async (name: string, default_amount: number, password: string) => {
-        const res = await fetch(`${API_BASE}/deductions?password=${password}`, { // Added password here
+        const res = await fetch(`${API_BASE}/deductions?password=${password}`, { // Added password
             method: "POST",
             headers: {"Content-Type": "application/json"},
             body: JSON.stringify({name, default_amount}),

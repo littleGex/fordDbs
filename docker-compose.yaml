@@ -104,6 +104,9 @@ services:
   deductions-ui:
     build:
       context: ./deductions-frontend
+      dockerfile: Dockerfile
+      args:
+        - VITE_API_BASE=https://api-pocket-money.ford-home-apps.com/v1/pocket-money
     image: deductions-frontend:latest
     container_name: deductions-ui
     ports:

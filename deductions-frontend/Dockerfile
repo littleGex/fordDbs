@@ -2,11 +2,13 @@
 FROM node:20-alpine AS build
 WORKDIR /app
 
-# Install dependencies
+# Add this line to accept the variable during build
+ARG VITE_API_BASE
+# Make it available to the shell for npm run build
+ENV VITE_API_BASE=$VITE_API_BASE
+
 COPY package*.json ./
 RUN npm install
-
-# Copy source and build
 COPY . .
 RUN npm run build
 
