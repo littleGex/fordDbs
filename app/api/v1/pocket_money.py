@@ -1,11 +1,17 @@
 import os
 from datetime import datetime
+
 from dotenv import load_dotenv
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func
 from sqlalchemy.orm import Session
+from typing import List
 from app.database.database import get_db
+from app.models.deductions_models import DeductionType
 from app.models.user_models import Child, Transaction, Wish
+from app.schema.deduction_schema import (DeductionItem,
+                                         DeductionTypeUpdate,
+                                         DeductionTypeCreate)
 
 
 load_dotenv()
@@ -323,3 +329,111 @@ def verify_admin(password: str = Query(...)):
         return {"success": "authenticated"}
     raise HTTPException(status_code=401,
                         detail="Invalid admin password")
+
+
+@pocket_money_router.get("/deductions")
+def get_deduction_types(db: Session = Depends(get_db)):
+    """
+    Fetches catalog of available deductions for UI.
+    """
+    return db.query(DeductionType).all()
+
+
+@pocket_money_router.post("/deduct-batch/{child_id}")
+def deduct_batch(child_id: int,
+                 items: List[DeductionItem],
+                 password: str,
+                 db: Session = Depends(get_db)):
+    """
+    Allows batch deduction operations for the selected child.
+
+    :param child_id: The child id
+    :param items: A list of items to be deducted.
+    :param password: Admin/parental password, for protection.
+    :param db: Session
+    """
+    if password != os.getenv("ADMIN_PASSWORD"):
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    summary = ", ".join([f"{i['name']} x {i['count']}" for i in items])
+    total_fine = sum(i['total'] for i in items)
+
+    return withdraw_money(
+        child_id=child_id,
+        amount=total_fine,
+        description=f"Deductions: {summary}",
+        category="Behaviour Deductions",
+        db=db
+    )
+
+
+@pocket_money_router.post("/deductions")
+def create_deduction_type(
+        item: DeductionTypeCreate,
+        password: str,
+        db: Session = Depends(get_db)
+):
+    """Creates a new deduction type for the catalog."""
+    if password != os.getenv("ADMIN_PASSWORD"):
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    # Check if one with the same name already exists
+    existing = db.query(DeductionType).filter(
+        DeductionType.name == item.name).first()
+    if existing:
+        raise HTTPException(status_code=400,
+                            detail="Deduction type already exists")
+
+    new_deduction = DeductionType(name=item.name,
+                                  default_amount=item.default_amount)
+    db.add(new_deduction)
+    db.commit()
+    db.refresh(new_deduction)
+    return new_deduction
+
+
+@pocket_money_router.patch("/deductions/{deduction_id}")
+def update_deduction_type(
+        deduction_id: int,
+        item: DeductionTypeUpdate,
+        password: str,
+        db: Session = Depends(get_db)
+):
+    """Updates an existing deduction type's name or price."""
+    if password != os.getenv("ADMIN_PASSWORD"):
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    deduction = db.query(DeductionType).filter(
+        DeductionType.id == deduction_id).first()
+    if not deduction:
+        raise HTTPException(status_code=404, detail="Deduction type not found")
+
+    if item.name is not None:
+        deduction.name = item.name
+    if item.default_amount is not None:
+        deduction.default_amount = item.default_amount
+
+    db.commit()
+    db.refresh(deduction)
+    return deduction
+
+
+@pocket_money_router.delete("/deductions/{deduction_id}")
+def delete_deduction_type(
+        deduction_id: int,
+        password: str,
+        db: Session = Depends(get_db)
+):
+    """Removes an item from the deduction catalog."""
+    if password != os.getenv("ADMIN_PASSWORD"):
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    deduction = db.query(DeductionType).filter(
+        DeductionType.id == deduction_id).first()
+    if not deduction:
+        raise HTTPException(status_code=404,
+                            detail="Deduction type not found")
+
+    db.delete(deduction)
+    db.commit()
+    return {"detail": f"Deduction '{deduction.name}' deleted successfully"}

@@ -12,3 +12,8 @@ minio
 python-multipart
 python-jose
 passlib
+yfinance
+pandas
+requests
+pytz
+pydantic

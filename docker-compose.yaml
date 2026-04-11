@@ -101,6 +101,18 @@ services:
     networks:
       - default
       - proxy_network
+  deductions-ui:
+    build:
+      context: ./deductions-frontend
+    image: deductions-frontend:latest
+    container_name: deductions-ui
+    ports:
+      - 8086:80
+    environment:
+      - VITE_API_BASE=https://api-pocket-money.ford-home-apps.com/v1/pocket-money
+    networks:
+      - default
+      - proxy_network
   minio:
     image: minio/minio
     container_name: family_photos_storage
