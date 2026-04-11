@@ -31,7 +31,16 @@ function App() {
 
     // Actions
     const handleUpdateCount = (name: string, delta: number) => {
-        setCounts(prev => ({...prev, [name]: Math.max(0, (prev[name] || 0) + delta)}));
+        setCounts(prev => {
+            const currentCount = prev[name] || 0;
+            const newCount = currentCount + delta;
+
+            // Gap Fix: Only allow 0 or higher (no negative integers)
+            return {
+                ...prev,
+                [name]: Math.max(0, Math.floor(newCount))
+            };
+        });
     };
 
     const handleAddRule = async (name: string, amount: number) => {
@@ -73,46 +82,61 @@ function App() {
     if (loading) return <div className="p-8 text-center">Connecting to Ford Home Apps...</div>;
 
     return (
-        <div className="max-w-md mx-auto p-4 bg-gray-50 min-h-screen font-sans">
-            <header className="mb-6 flex justify-between items-center">
-                <h1 className="text-2xl font-bold text-red-600">Deductions</h1>
+        <div className="max-w-md mx-auto min-h-screen bg-[#F8F9FA] font-sans pb-24">
+            {/* Clean Header */}
+            <header className="p-6 pt-10">
+                <div className="flex justify-between items-end mb-8">
+                    <div>
+                        <h1 className="text-3xl font-black text-gray-900 tracking-tight">Deductions</h1>
+                        <p className="text-gray-400 text-sm font-medium">Ford Home Apps</p>
+                    </div>
+                    <select
+                        value={childId}
+                        onChange={(e) => setChildId(parseInt(e.target.value))}
+                        className="bg-white border-none shadow-sm rounded-xl px-4 py-2 text-gray-700 font-bold outline-none ring-1 ring-black/5"
+                    >
+                        {children.map(child => (
+                            <option key={child.id} value={child.id}>{child.name}</option>
+                        ))}
+                    </select>
+                </div>
 
-                {/* 2. Updated Select to use the actual children state */}
-                <select
-                    value={childId}
-                    onChange={(e) => setChildId(parseInt(e.target.value))}
-                    className="p-2 border rounded bg-white text-gray-800 shadow-sm"
-                >
-                    {children.map(child => (
-                        <option key={child.id} value={child.id}>
-                            {child.name}
-                        </option>
+                {/* Catalog List */}
+                <div className="space-y-1">
+                    {catalog.map(item => (
+                        <DeductionItem
+                            key={item.id}
+                            item={item}
+                            count={counts[item.name] || 0}
+                            onUpdate={handleUpdateCount}
+                        />
                     ))}
-                </select>
+                </div>
             </header>
 
-            <div className="space-y-3">
-                {catalog.map(item => (
-                    <DeductionItem key={item.id} item={item} count={counts[item.name] || 0}
-                                   onUpdate={handleUpdateCount}/>
-                ))}
-            </div>
-
-            <footer className="mt-8 p-6 bg-white rounded-xl shadow-lg border-t-4 border-red-500 sticky bottom-4">
-                <div className="flex justify-between items-center mb-4">
-                    <span className="text-2xl font-black text-red-600">${totalFine.toFixed(2)}</span>
-                    <button
-                        disabled={totalFine === 0}
-                        onClick={handleSubmit}
-                        className="bg-red-600 text-white px-6 py-2 rounded-lg font-bold disabled:bg-gray-300"
-                    >
-                        Deduct
-                    </button>
+            {/* Floating Footer Summary */}
+            <footer
+                className="fixed bottom-0 left-0 right-0 p-6 bg-white/90 backdrop-blur-md border-t border-gray-100 flex items-center justify-between z-50">
+                <div className="flex flex-col">
+                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">To Deduct</span>
+                    <span className="text-3xl font-black text-red-600 leading-none">
+      {totalFine.toFixed(2)}€
+    </span>
                 </div>
+
+                <button
+                    disabled={totalFine === 0}
+                    onClick={handleSubmit}
+                    className="bg-gray-900 text-white px-10 py-4 rounded-2xl font-bold shadow-xl shadow-gray-200 disabled:bg-gray-200 disabled:shadow-none transition-all active:scale-95"
+                >
+                    Confirm
+                </button>
             </footer>
 
-            {/* 3. Fixed prop name to match AddRuleForm.tsx */}
-            <AddRuleForm onRuleAdded={handleAddRule}/>
+            {/* Form at bottom of scroll */}
+            <div className="px-6 pb-12">
+                <AddRuleForm onRuleAdded={handleAddRule}/>
+            </div>
         </div>
     );
 }
