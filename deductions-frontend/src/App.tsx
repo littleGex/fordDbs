@@ -81,62 +81,50 @@ function App() {
 
     if (loading) return <div className="p-8 text-center">Connecting to Ford Home Apps...</div>;
 
+    // App.tsx UI Update
     return (
-        <div className="max-w-md mx-auto min-h-screen bg-[#F8F9FA] font-sans pb-24">
-            {/* Clean Header */}
-            <header className="p-6 pt-10">
-                <div className="flex justify-between items-end mb-8">
-                    <div>
-                        <h1 className="text-3xl font-black text-gray-900 tracking-tight">Deductions</h1>
-                        <p className="text-gray-400 text-sm font-medium">Ford Home Apps</p>
-                    </div>
-                    <select
-                        value={childId}
-                        onChange={(e) => setChildId(parseInt(e.target.value))}
-                        className="bg-white border-none shadow-sm rounded-xl px-4 py-2 text-gray-700 font-bold outline-none ring-1 ring-black/5"
-                    >
-                        {children.map(child => (
-                            <option key={child.id} value={child.id}>{child.name}</option>
-                        ))}
-                    </select>
-                </div>
-
-                {/* Catalog List */}
-                <div className="space-y-1">
-                    {catalog.map(item => (
-                        <DeductionItem
-                            key={item.id}
-                            item={item}
-                            count={counts[item.name] || 0}
-                            onUpdate={handleUpdateCount}
-                        />
+        <div className="max-w-md mx-auto min-h-screen bg-[#F8F9FA] pb-32">
+            <header className="p-6 pt-10 flex justify-between items-center">
+                <h1 className="text-3xl font-black text-gray-900 tracking-tight text-red-600">Deductions</h1>
+                <select
+                    value={childId}
+                    onChange={(e) => setChildId(parseInt(e.target.value))}
+                    className="bg-white border-none shadow-sm rounded-xl px-4 py-2 font-bold text-gray-700 outline-none ring-1 ring-black/5"
+                >
+                    {children.map(child => (
+                        <option key={child.id} value={child.id}>{child.name}</option>
                     ))}
-                </div>
+                </select>
             </header>
 
-            {/* Floating Footer Summary */}
-            <footer
-                className="fixed bottom-0 left-0 right-0 p-6 bg-white/90 backdrop-blur-md border-t border-gray-100 flex items-center justify-between z-50">
-                <div className="flex flex-col">
-                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">To Deduct</span>
-                    <span className="text-3xl font-black text-red-600 leading-none">
-      {totalFine.toFixed(2)}€
-    </span>
-                </div>
+            <main className="px-6 space-y-3">
+                {catalog.map(item => (
+                    <DeductionItem
+                        key={item.id}
+                        item={item}
+                        count={counts[item.name] || 0}
+                        onUpdate={handleUpdateCount}
+                    />
+                ))}
+            </main>
+            <div className="px-6 mt-8 mb-12">
+                <AddRuleForm onRuleAdded={handleAddRule}/>
+            </div>
 
+            <footer
+                className="fixed bottom-0 left-0 right-0 p-6 bg-white/80 backdrop-blur-md border-t border-gray-100 flex items-center justify-between z-50">
+                <div className="flex flex-col">
+                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest leading-none mb-1">Total Fine</span>
+                    <span className="text-3xl font-black text-red-600 leading-none">{totalFine.toFixed(2)}€</span>
+                </div>
                 <button
                     disabled={totalFine === 0}
                     onClick={handleSubmit}
-                    className="bg-gray-900 text-white px-10 py-4 rounded-2xl font-bold shadow-xl shadow-gray-200 disabled:bg-gray-200 disabled:shadow-none transition-all active:scale-95"
+                    className="bg-gray-900 text-white px-10 py-4 rounded-2xl font-bold shadow-xl disabled:bg-gray-200 transition-all active:scale-95"
                 >
                     Confirm
                 </button>
             </footer>
-
-            {/* Form at bottom of scroll */}
-            <div className="px-6 pb-12">
-                <AddRuleForm onRuleAdded={handleAddRule}/>
-            </div>
         </div>
     );
 }
