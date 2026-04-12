@@ -111,3 +111,18 @@ code {
   padding: 4px 8px;
   background: var(--code-bg);
 }
+
+/* index.css */
+
+/* Force number arrows to be visible and properly sized */
+input[type='number']::-webkit-inner-spin-button,
+input[type='number']::-webkit-outer-spin-button {
+  opacity: 1 !important;
+  height: 24px;
+  cursor: pointer;
+}
+
+/* Ensure the input doesn't clip its content */
+input {
+  line-height: normal !important;
+}

@@ -96,7 +96,7 @@ function App() {
                 onCancel={() => setModal(prev => ({ ...prev, isOpen: false }))}
             />
 
-            <div className="max-w-md mx-auto pb-40">
+            <div className="max-w-x1 mx-auto pb-40">
                 <header className="p-8 pb-4 flex justify-between items-center">
                     <h1 className="text-4xl font-black text-gray-950 tracking-tight">Deductions</h1>
                     <select
