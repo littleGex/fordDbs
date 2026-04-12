@@ -2,7 +2,7 @@ import {useState, useEffect} from 'react';
 import {pocketMoneyApi, type DeductionType} from './api/pocketMoneyApi';
 import DeductionItem from './components/DeductionItem';
 import AddRuleForm from './components/AddRuleForm';
-import Toast from './components/Toast.tsx'; // Fixed casing to match component
+import Toast from './components/Toast'; // Fixed casing to match component
 import PasswordModal from "./components/PasswordModal";
 
 function App() {
