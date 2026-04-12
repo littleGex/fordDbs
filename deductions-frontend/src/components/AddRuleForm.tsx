@@ -24,21 +24,19 @@ export default function AddRuleForm({onRuleAdded}: Props) {
     return (
         <form onSubmit={handleSubmit} className="mt-12 p-4 border-t border-gray-200 bg-white rounded-t-2xl">
             <h3 className="text-sm font-bold text-gray-400 uppercase tracking-widest mb-4">Add New House Rule</h3>
-            <div className="flex gap-3 mt-2">
+            <div className="flex gap-3 mt-2 items-center"> {/* added items-center */}
                 <input
                     type="text"
                     placeholder="Rule name..."
                     value={name}
                     onChange={(e) => setName(e.target.value)}
-                    className="flex-1 p-4 bg-white rounded-2xl border-none shadow-sm ring-1 ring-black/5 focus:ring-red-500 outline-none transition-all placeholder:text-gray-300"
+                    className="flex-1 h-14 px-4 bg-white rounded-2xl border-none shadow-sm ring-1 ring-black/5 focus:ring-red-500 outline-none transition-all placeholder:text-gray-300"
                 />
-                {/* Notice the w-40 and shrink-0 added here */}
-                <div className="relative w-40 shrink-0">
-                    {/* Euro moved to the left */}
-                    <span
-                        className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold pointer-events-none">
-                        €
-                    </span>
+
+                <div className="relative w-40 shrink-0 h-14">
+        <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold pointer-events-none">
+            €
+        </span>
                     <input
                         type="number"
                         step="0.01"
@@ -46,15 +44,17 @@ export default function AddRuleForm({onRuleAdded}: Props) {
                         placeholder="0.00"
                         value={amount}
                         onChange={(e) => setAmount(e.target.value)}
-                        /* Padding left (pl-10) makes room for Euro, making text larger */
-                        className="w-full pl-10 pr-4 py-4 bg-white rounded-2xl border-none shadow-sm ring-1 ring-black/5 focus:ring-red-500 outline-none transition-all text-lg font-bold text-gray-800"
+                        /* Reduced py-2 to give arrows room, set height to h-full */
+                        className="w-full h-full pl-10 pr-2 py-2 bg-white rounded-2xl border-none shadow-sm ring-1 ring-black/5 focus:ring-red-500 outline-none transition-all text-lg font-bold text-gray-800"
                     />
                 </div>
+
                 <button
                     type="submit"
-                    className="bg-red-500 text-white w-14 rounded-2xl font-bold shadow-lg shadow-red-200 hover:bg-red-600 active:scale-95 transition-all"
+                    /* Changed w-14 to px-6 to make it a rounded square/rectangle instead of a sliver */
+                    className="bg-red-500 text-white h-14 px-6 rounded-2xl font-bold shadow-lg shadow-red-200 hover:bg-red-600 active:scale-95 transition-all flex items-center justify-center shrink-0"
                 >
-                    +
+                    <span className="text-2xl">+</span> {/* Explicit size for the plus */}
                 </button>
             </div>
         </form>
