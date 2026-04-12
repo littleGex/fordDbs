@@ -32,8 +32,9 @@ export default function AddRuleForm({onRuleAdded}: Props) {
                     onChange={(e) => setName(e.target.value)}
                     className="flex-1 p-4 bg-white rounded-2xl border-none shadow-sm ring-1 ring-black/5 focus:ring-red-500 outline-none transition-all placeholder:text-gray-300"
                 />
-                <div className="relative w-48">
-                    {/* 2. Moved Euro to the left side */}
+                {/* Notice the w-40 and shrink-0 added here */}
+                <div className="relative w-40 shrink-0">
+                    {/* Euro moved to the left */}
                     <span
                         className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold pointer-events-none">
                         €
@@ -45,8 +46,8 @@ export default function AddRuleForm({onRuleAdded}: Props) {
                         placeholder="0.00"
                         value={amount}
                         onChange={(e) => setAmount(e.target.value)}
-                        /* 3. Added pl-10 (padding-left) for the Euro, and made text larger/bolder */
-                        className="w-full pl-10 pr-4 py-4 bg-white rounded-2xl border-none shadow-sm ring-1 ring-black/5 focus:ring-red-500 outline-none transition-all text-xl font-black text-gray-800"
+                        /* Padding left (pl-10) makes room for Euro, making text larger */
+                        className="w-full pl-10 pr-4 py-4 bg-white rounded-2xl border-none shadow-sm ring-1 ring-black/5 focus:ring-red-500 outline-none transition-all text-lg font-bold text-gray-800"
                     />
                 </div>
                 <button
