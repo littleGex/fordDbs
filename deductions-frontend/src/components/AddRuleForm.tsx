@@ -34,9 +34,9 @@ export default function AddRuleForm({onRuleAdded}: Props) {
                 />
 
                 <div className="relative w-40 shrink-0 h-14">
-        <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold pointer-events-none">
-            €
-        </span>
+    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 font-bold pointer-events-none">
+        €
+    </span>
                     <input
                         type="number"
                         step="0.01"
@@ -44,8 +44,8 @@ export default function AddRuleForm({onRuleAdded}: Props) {
                         placeholder="0.00"
                         value={amount}
                         onChange={(e) => setAmount(e.target.value)}
-                        /* Reduced py-2 to give arrows room, set height to h-full */
-                        className="w-full h-full pl-10 pr-2 py-2 bg-white rounded-2xl border-none shadow-sm ring-1 ring-black/5 focus:ring-red-500 outline-none transition-all text-lg font-bold text-gray-800"
+                        /* Using h-full with py-0 and leading-none often resolves browser clipping for arrows */
+                        className="w-full h-full pl-10 pr-2 py-0 bg-white rounded-2xl border-none shadow-sm ring-1 ring-black/5 focus:ring-red-500 outline-none transition-all text-base font-black text-gray-900 leading-none"
                     />
                 </div>
 

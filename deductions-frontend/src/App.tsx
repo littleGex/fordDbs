@@ -98,7 +98,7 @@ function App() {
 
             <div className="max-w-md mx-auto pb-40">
                 <header className="p-8 pb-4 flex justify-between items-center">
-                    <h1 className="text-3xl font-black text-gray-900 tracking-tight">Deductions</h1>
+                    <h1 className="text-4xl font-black text-gray-950 tracking-tight">Deductions</h1>
                     <select
                         value={childId}
                         onChange={(e) => setChildId(parseInt(e.target.value))}
