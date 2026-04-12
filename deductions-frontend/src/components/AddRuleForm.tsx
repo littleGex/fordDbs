@@ -32,7 +32,12 @@ export default function AddRuleForm({onRuleAdded}: Props) {
                     onChange={(e) => setName(e.target.value)}
                     className="flex-1 p-4 bg-white rounded-2xl border-none shadow-sm ring-1 ring-black/5 focus:ring-red-500 outline-none transition-all placeholder:text-gray-300"
                 />
-                <div className="relative w-32">
+                <div className="relative w-48">
+                    {/* 2. Moved Euro to the left side */}
+                    <span
+                        className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold pointer-events-none">
+                        €
+                    </span>
                     <input
                         type="number"
                         step="0.01"
@@ -40,10 +45,9 @@ export default function AddRuleForm({onRuleAdded}: Props) {
                         placeholder="0.00"
                         value={amount}
                         onChange={(e) => setAmount(e.target.value)}
-                        className="w-full p-4 bg-white rounded-2xl border-none shadow-sm ring-1 ring-black/5 focus:ring-red-500 outline-none transition-all pr-12 text-lg font-semibold"
+                        /* 3. Added pl-10 (padding-left) for the Euro, and made text larger/bolder */
+                        className="w-full pl-10 pr-4 py-4 bg-white rounded-2xl border-none shadow-sm ring-1 ring-black/5 focus:ring-red-500 outline-none transition-all text-xl font-black text-gray-800"
                     />
-                    <span
-                        className="absolute right-10 top-1/2 -translate-y-1/2 text-gray-400 font-bold pointer-events-none">€</span>
                 </div>
                 <button
                     type="submit"
