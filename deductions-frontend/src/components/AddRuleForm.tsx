@@ -39,15 +39,20 @@ export default function AddRuleForm({onRuleAdded}: Props) {
                 <div className="w-44 shrink-0 flex flex-col gap-1">
                     <label className="text-[10px] font-bold text-gray-400 uppercase ml-2">Amount</label>
                     <div className="relative h-14">
-                        <span
-                            className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 font-bold pointer-events-none">€</span>
+    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 font-bold pointer-events-none">
+        €
+    </span>
                         <input
                             type="number"
                             step="0.01"
                             min="0"
                             value={amount}
                             onChange={(e) => setAmount(e.target.value)}
-                            className="w-full h-full pl-10 pr-2 bg-white rounded-2xl border-none shadow-sm ring-1 ring-black/5 focus:ring-red-500 outline-none text-lg font-bold text-gray-900"
+                            /* Removed py-1 and added py-0.
+                               Changed text-base to text-lg but used font-bold instead of font-black
+                               to keep the text "thinner" vertically.
+                            */
+                            className="w-full h-full pl-10 pr-2 py-0 bg-white rounded-2xl border-none shadow-sm ring-1 ring-black/5 focus:ring-red-500 outline-none text-lg font-bold text-gray-900 leading-none"
                         />
                     </div>
                 </div>

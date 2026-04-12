@@ -114,15 +114,20 @@ code {
 
 /* index.css */
 
-/* Force number arrows to be visible and properly sized */
-input[type='number']::-webkit-inner-spin-button,
-input[type='number']::-webkit-outer-spin-button {
+/* index.css */
+
+/* 1. Make the spinners always visible and give them more vertical room */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
   opacity: 1 !important;
-  height: 24px;
+  height: 32px !important; /* Forces the height so both arrows fit */
+  margin-top: 0;
+  margin-bottom: 0;
   cursor: pointer;
 }
 
-/* Ensure the input doesn't clip its content */
-input {
-  line-height: normal !important;
+/* 2. Fix potential clipping on the container */
+input[type="number"] {
+  -moz-appearance: textfield; /* For Firefox */
+  appearance: auto !important; /* Ensures the browser uses native spinner logic */
 }
