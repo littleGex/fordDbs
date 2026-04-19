@@ -36,12 +36,12 @@ const formatPercentage = (pct) => {
 const renderCharts = () => {
   if (!portfolio.value.shares || portfolio.value.shares.length === 0) return;
 
-  const labels = portfolio.value.shares.map(s => s.ticker)
+  const labels = portfolio.value.shares.map(s => s.ticker);
 
-  // Data derived from the updated investments.py
-  const totalValueData = portfolio.value.shares.map(s => s.total_value)
-  const availableValueData = portfolio.value.shares.map(s => s.available_value)
-  const pendingValueData = portfolio.value.shares.map(s => s.pending_value)
+  // These must match format_shares in investments.py exactly
+  const totalValueData = portfolio.value.shares.map(s => s.total_value);
+  const availableValueData = portfolio.value.shares.map(s => s.available_value);
+  const pendingValueData = portfolio.value.shares.map(s => s.pending_value);
 
   const commonOptions = {
     responsive: true,
