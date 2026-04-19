@@ -93,7 +93,7 @@ services:
     image: utilities-frontend:latest
     container_name: utilities-ui
     ports:
-      - 8085:80
+      - "8085:80"
     env_file:
       - ./utilities-frontend/.env
     environment:
@@ -111,7 +111,7 @@ services:
     image: deductions-frontend:latest
     container_name: deductions-ui
     ports:
-      - 8026:80
+      - "8026:80"
     environment:
       - VITE_API_BASE=https://api-pocket-money.ford-home-apps.com/v1/pocket-money
     networks:
@@ -123,7 +123,7 @@ services:
     image: investments-frontend:latest
     container_name: investments-ui
     ports:
-      - 8086:80
+      - "8086:80"
     environment:
       - VITE_API_BASE=https://api-pocket-money.ford-home-apps.com/v1
     restart: always
