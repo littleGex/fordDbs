@@ -174,3 +174,20 @@ def delete_schedule(schedule_id: int,
     db.delete(schedule)
     db.commit()
     return {"detail": "Schedule removed"}
+
+
+@shares_router.patch("/shares/update-ticker")
+def update_ticker(old_ticker: str,
+                  new_ticker: str,
+                  db: Session = Depends(get_db)):
+    shares = db.query(EmployeeShare).filter(
+        EmployeeShare.ticker_symbol == old_ticker.upper()).all()
+    if not shares:
+        raise HTTPException(status_code=404,
+                            detail="Ticker not found")
+
+    for share in shares:
+        share.ticker_symbol = new_ticker.upper()
+
+    db.commit()
+    return {"message": f"Updated {len(shares)} records to {new_ticker}"}

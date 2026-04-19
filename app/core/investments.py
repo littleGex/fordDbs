@@ -92,16 +92,18 @@ def fetch_live_prices(tickers: Set[str]) -> Dict[str, float]:
 def format_shares(shares_data, live_prices: dict) -> list:
     formatted = []
     for row in shares_data:
-        avail = float(row.available or 0)
-        pending = float(row.pending or 0)
         price = live_prices.get(row.ticker_symbol, 0.0)
+        available = float(row.available or 0)
+        pending = float(row.pending or 0)
 
         formatted.append({
             "ticker": row.ticker_symbol,
-            "available_shares": avail,
+            "available_shares": available,
             "pending_shares": pending,
             "live_price": price,
-            "available_value": round(avail * price, 2)
+            "available_value": round(available * price, 2),
+            "pending_value": round(pending * price, 2),
+            "total_value": round((available + pending) * price, 2)
         })
     return formatted
 
@@ -144,3 +146,44 @@ def get_grouped_etfs(db: Session):
         func.sum(EtfTransaction.shares_acquired).label("total_shares"),
         func.sum(EtfTransaction.fiat_invested).label("total_invested")
     ).group_by(EtfTransaction.ticker_symbol).all()
+
+
+def get_vesting_schedule(db: Session):
+    """
+    Returns a chronological list of vesting events to build a timeline.
+    """
+    # Fetch all share grants ordered by date
+    grants = db.query(EmployeeShare).order_by(EmployeeShare.vest_date).all()
+
+    schedule = []
+    cumulative_shares = 0.0
+
+    for grant in grants:
+        cumulative_shares += float(grant.num_shares)
+        schedule.append({
+            "date": grant.vest_date.strftime("%Y-%m-%d"),
+            "shares_at_date": cumulative_shares
+        })
+
+    return schedule
+
+
+def get_portfolio_summary(db: Session):
+    now = datetime.now()
+    shares_data = get_grouped_shares(db, target_date=now)
+    etf_data = get_grouped_etfs(db)
+
+    # NEW: Get the timeline data
+    vesting_timeline = get_vesting_schedule(db)
+
+    tickers = {row.ticker_symbol for row in shares_data}.union(
+        {row.ticker_symbol for row in etf_data})
+
+    live_prices = fetch_live_prices(tickers)
+
+    return {
+        "shares": format_shares(shares_data, live_prices),
+        "etfs": format_etfs(etf_data, live_prices),
+        "vesting_timeline": vesting_timeline,  # Add this
+        "timestamp": now.isoformat()
+    }
