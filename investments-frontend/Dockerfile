@@ -10,6 +10,9 @@ COPY . .
 
 RUN npm run build
 
+ARG VITE_API_BASE
+ENV VITE_API_BASE=$VITE_API_BASE
+
 # Stage 2: Serve with Nginx
 FROM nginx:stable-alpine as production-stage
 
