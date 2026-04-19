@@ -113,7 +113,7 @@ services:
     ports:
       - "8026:80"
     environment:
-      - VITE_API_BASE=https://api-pocket-money.ford-home-apps.com/v1/pocket-money
+      - VITE_API_BASE=https://api-pocket-money.ford-home-apps.com/v1
     networks:
       - default
       - proxy_network
