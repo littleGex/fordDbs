@@ -113,7 +113,7 @@ def run_monthly_etf_purchases():
 
 def start_scheduler():
     """Initializes and starts the background scheduler."""
-    scheduler = BackgroundScheduler(BERLIN_TZ)
+    scheduler = BackgroundScheduler(timezone=BERLIN_TZ)
     # Runs every Friday at 07:30
     scheduler.add_job(run_weekly_payout,
                       'cron',
