@@ -7,11 +7,14 @@ from app.api.v1.db_manager import db_router
 from app.api.v1.pocket_money import pocket_money_router
 from app.api.v1.family_photos import family_photos_router
 from app.api.v1.utils import utils_router
+from app.api.v1.shares import shares_router
 from app.core.scheduler import start_scheduler
 from app.database.database import engine, Base
 from app.models.user_models import Child, Transaction  # noqa
 from app.models.photo_model import Photo  # noqa
 from app.models.utilities import Utils  # noqa
+from app.models.shares_models import EmployeeShare  # noqa
+from app.models.deductions_models import DeductionType  # noqa
 from app.core.storage import init_storage
 
 
@@ -56,11 +59,11 @@ def create_app():
         return {
             "message": "Pocket Money API is Live",
             "documentation": "/docs",
-            "version": "1.1.0"
+            "version": "1.2.0"
         }
 
     # Create all tables on startup
-    Base.metadata.create_all(bind=engine)
+    # Base.metadata.create_all(bind=engine)
 
     # Plug in our routes
     app.include_router(
@@ -85,6 +88,12 @@ def create_app():
         family_photos_router,
         prefix="/v1/family-photos",
         tags=["Family Photos"]
+    )
+
+    app.include_router(
+        shares_router,
+        prefix="/v1/investments",
+        tags=["Investments"]
     )
 
     return app
