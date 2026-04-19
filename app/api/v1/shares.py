@@ -38,7 +38,8 @@ def add_employee_share(
         db: Session = Depends(get_db)
 ):
     try:
-        parsed_vest_date = datetime.strptime(vest_date, "%Y-%m-%d")
+        parsed_vest_date = datetime.strptime(
+            vest_date.strip(), "%Y-%m-%d")
 
         new_share = EmployeeShare(
             ticker_symbol=ticker.upper(),

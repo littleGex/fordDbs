@@ -170,9 +170,8 @@ onMounted(fetchSchedules)
 
       <div class="form-section">
         <h3>Bulk Import Shares (CSV)</h3>
-        <form @submit.prevent="importShares">
-          <textarea v-model="sharesCsv" placeholder="ticker,num_shares,vest_date,purchase_price&#10;AAPL,100,2024-01-01,150.00&#10;GOOGL,50,2024-02-01,2800.00" rows="5"></textarea>
-          <button @click="uploadSharesCsv">Import Shares</button>
+        <form @submit.prevent="uploadSharesCsv"> <textarea v-model="sharesCsv" placeholder="ticker,num_shares,vest_date,purchase_price" rows="5"></textarea>
+          <button type="submit">Import Shares</button>
         </form>
       </div>
 
