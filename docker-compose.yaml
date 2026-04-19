@@ -120,12 +120,12 @@ services:
   investments-ui:
     build:
       context: ./investments-frontend
+      args:
+        - VITE_API_BASE=https://api-pocket-money.ford-home-apps.com/v1
     image: investments-frontend:latest
     container_name: investments-ui
     ports:
       - "8086:80"
-    environment:
-      - VITE_API_BASE=https://api-pocket-money.ford-home-apps.com/v1
     restart: always
     networks:
       - default
