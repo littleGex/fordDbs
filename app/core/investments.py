@@ -148,11 +148,10 @@ def get_grouped_etfs(db: Session):
     ).group_by(EtfTransaction.ticker_symbol).all()
 
 
-def get_vesting_schedule(db: Session):
+def get_vesting_schedule(db: Session, live_prices: dict):
     """
     Returns a chronological list of vesting events to build a timeline.
     """
-    # Fetch all share grants ordered by date
     grants = db.query(EmployeeShare).order_by(EmployeeShare.vest_date).all()
 
     schedule = []
@@ -160,11 +159,13 @@ def get_vesting_schedule(db: Session):
 
     for grant in grants:
         cumulative_shares += float(grant.num_shares)
+        # Get the price for this specific ticker
+        price = live_prices.get(grant.ticker_symbol, 0.0)
+
         schedule.append({
             "date": grant.vest_date.strftime("%Y-%m-%d"),
-            "shares_at_date": cumulative_shares
+            "value": round(cumulative_shares * price, 2)
         })
-
     return schedule
 
 
@@ -173,17 +174,17 @@ def get_portfolio_summary(db: Session):
     shares_data = get_grouped_shares(db, target_date=now)
     etf_data = get_grouped_etfs(db)
 
-    # NEW: Get the timeline data
-    vesting_timeline = get_vesting_schedule(db)
-
     tickers = {row.ticker_symbol for row in shares_data}.union(
         {row.ticker_symbol for row in etf_data})
 
     live_prices = fetch_live_prices(tickers)
 
+    # Pass live_prices to the schedule generator
+    vesting_timeline = get_vesting_schedule(db, live_prices)
+
     return {
         "shares": format_shares(shares_data, live_prices),
         "etfs": format_etfs(etf_data, live_prices),
-        "vesting_timeline": vesting_timeline,  # Add this
+        "vesting_timeline": vesting_timeline,
         "timestamp": now.isoformat()
     }
