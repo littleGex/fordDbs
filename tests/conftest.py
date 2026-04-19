@@ -11,6 +11,7 @@ def admin_password():
     # This ensures the test matches the environment variable the app expects
     return os.getenv("ADMIN_PASSWORD", "testpassword")
 
+
 @pytest.fixture(scope="function")
 def db_session():
     # Use an in-memory SQLite database for testing

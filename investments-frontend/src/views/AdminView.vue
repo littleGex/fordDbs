@@ -113,6 +113,18 @@ const importEtfTransactions = async () => {
   }
 }
 
+const uploadSharesCsv = async () => {
+  try {
+    await axios.post(`${API_BASE}/investments/shares/bulk-add`, {
+      csv_data: sharesCsv.value
+    });
+    alert('Bulk shares added successfully!');
+    sharesCsv.value = '';
+  } catch (e) {
+    alert('Failed to upload CSV: ' + (e.response?.data?.detail || e.message));
+  }
+}
+
 onMounted(fetchSchedules)
 </script>
 
@@ -160,7 +172,7 @@ onMounted(fetchSchedules)
         <h3>Bulk Import Shares (CSV)</h3>
         <form @submit.prevent="importShares">
           <textarea v-model="sharesCsv" placeholder="ticker,num_shares,vest_date,purchase_price&#10;AAPL,100,2024-01-01,150.00&#10;GOOGL,50,2024-02-01,2800.00" rows="5"></textarea>
-          <button type="submit">Import Shares</button>
+          <button @click="uploadSharesCsv">Import Shares</button>
         </form>
       </div>
 

@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="CopilotDiffPersistence">
+    <option name="pendingDiffs">
+      <map>
+        <entry key="/Dockerfile (snapshot)">
+          <value>
+            <PendingDiffInfo>
+              <option name="filePath" value="/Dockerfile (snapshot)" />
+              <option name="originalContent" value="FROM node:18-alpine&#10;&#10;WORKDIR /app&#10;&#10;COPY package*.json ./&#10;RUN npm install&#10;&#10;COPY . .&#10;&#10;EXPOSE 3003&#10;&#10;CMD [&quot;npm&quot;, &quot;run&quot;, &quot;dev&quot;]&#10;" />
+              <option name="updatedContent" value="# Stage 1: Build the Vue app&#10;FROM node:lts-alpine as build-stage&#10;&#10;WORKDIR /app&#10;&#10;COPY package*.json ./&#10;RUN npm install&#10;&#10;COPY . .&#10;&#10;RUN npm run build&#10;&#10;# Stage 2: Serve with Nginx&#10;FROM nginx:stable-alpine as production-stage&#10;&#10;COPY --from=build-stage /app/dist /usr/share/nginx/html&#10;&#10;EXPOSE 80&#10;&#10;CMD [&quot;nginx&quot;, &quot;-g&quot;, &quot;daemon off;&quot;]" />
+            </PendingDiffInfo>
+          </value>
+        </entry>
+      </map>
+    </option>
+  </component>
+</project>

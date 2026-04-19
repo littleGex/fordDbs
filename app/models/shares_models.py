@@ -24,8 +24,10 @@ class EtfTransaction(Base):
     transaction_date = Column(DateTime, server_default=func.now())
     transaction_type = Column(String, default="buy")  # 'buy' or 'sell'
 
-    fiat_invested = Column(Numeric(10, 2), nullable=False)  # Positive for buy, negative for sell
-    shares_acquired = Column(Numeric(12, 6), nullable=False)  # Positive for buy, negative for sell
+    fiat_invested = Column(Numeric(
+        10, 2), nullable=False)  # Positive for buy, negative for sell
+    shares_acquired = Column(Numeric(
+        12, 6), nullable=False)  # Positive for buy, negative for sell
     fees = Column(Numeric(10, 2), default=0.0)
 
     # Track how the entry was created

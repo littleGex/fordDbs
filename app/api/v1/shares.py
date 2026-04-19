@@ -1,3 +1,5 @@
+import csv
+import io
 import os
 from fastapi import (APIRouter, Depends,
                      HTTPException)
@@ -54,6 +56,40 @@ def add_employee_share(
             detail="Invalid date format. Use YYYY-MM-DD")
 
 
+@shares_router.post("/shares/bulk-add")
+def bulk_add_shares(data: dict, db: Session = Depends(get_db)):
+    csv_text = data.get("csv_data", "")
+    if not csv_text:
+        raise HTTPException(status_code=400,
+                            detail="No CSV data provided")
+
+    f = io.StringIO(csv_text.strip())
+    reader = csv.DictReader(f)
+
+    try:
+        for row in reader:
+            # Handle the empty purchase_price case (e.g., the trailing comma)
+            price_val = row.get('purchase_price')
+            price = float(price_val) if (price_val and
+                                         price_val.strip()) else 0.0
+
+            new_share = EmployeeShare(
+                ticker_symbol=row['ticker'].upper().strip(),
+                num_shares=float(row['num_shares']),
+                vest_date=datetime.strptime(
+                    row['vest_date'].strip(), "%Y-%m-%d"),
+                purchase_price=price
+            )
+            db.add(new_share)
+
+        db.commit()
+        return {"message": "Successfully imported shares"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=400,
+                            detail=f"Error parsing CSV: {str(e)}")
+
+
 # --- ETF TRANSACTIONS (Manual/Ad-hoc) ---
 
 @shares_router.post("/etf/transaction")
@@ -67,16 +103,19 @@ def record_etf_transaction(
 ):
     """Allows manual entry of ETF buy or sell transactions."""
     if transaction_type not in ["buy", "sell"]:
-        raise HTTPException(status_code=400, detail="transaction_type must be 'buy' or 'sell'")
+        raise HTTPException(status_code=400,
+                            detail="transaction_type must be 'buy' or 'sell'")
 
-    # For sells, shares_acquired should be negative and fiat_amount should be positive (proceeds)
+    # For sells, shares_acquired should be negative and
+    # fiat_amount should be positive (proceeds)
     if transaction_type == "sell":
         shares_acquired = -abs(shares_acquired)
         # fiat_amount remains positive for proceeds
 
     new_txn = EtfTransaction(
         ticker_symbol=ticker.upper(),
-        fiat_invested=fiat_amount if transaction_type == "buy" else -fiat_amount,  # Negative for sells
+        fiat_invested=fiat_amount if
+        transaction_type == "buy" else -fiat_amount,
         shares_acquired=shares_acquired,
         transaction_type=transaction_type,
         entry_type=entry_type,
