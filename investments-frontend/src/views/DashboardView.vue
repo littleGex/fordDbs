@@ -105,9 +105,18 @@ onMounted(fetchPortfolio)
       <div class="section" v-if="portfolio.shares.length > 0">
         <h3>Share Analytics</h3>
         <div class="charts-grid">
-          <div class="chart-container"><canvas ref="chartTotal"></canvas></div>
-          <div class="chart-container"><canvas ref="chartAvailable"></canvas></div>
-          <div class="chart-container"><canvas ref="chartPending"></canvas></div>
+          <div class="chart-container">
+            <h4>Total Share Value (Vested + Pending)</h4>
+            <canvas ref="chartTotal"></canvas>
+          </div>
+          <div class="chart-container">
+            <h4>Available Share Value</h4>
+            <canvas ref="chartAvailable"></canvas>
+          </div>
+          <div class="chart-container">
+            <h4>Pending Share Value</h4>
+            <canvas ref="chartPending"></canvas>
+          </div>
         </div>
       </div>
 
@@ -151,7 +160,11 @@ onMounted(fetchPortfolio)
 .empty { text-align: center; color: #999; padding: 20px; }
 
 /* Table Styling */
-.table-container { overflow-x: auto; }
+.table-container {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
 .portfolio-table { width: 100%; border-collapse: collapse; margin-top: 10px; }
 .portfolio-table th, .portfolio-table td { padding: 12px; text-align: left; border-bottom: 1px solid #eee; }
 .portfolio-table th { background-color: #f8f9fa; font-weight: 600; color: #2d3436; }
@@ -175,5 +188,21 @@ canvas {
   min-height: 250px !important;
   width: 100% !important;
   background: #fafafa;
+}
+/* 3. General spacing for smaller screens */
+@media (max-width: 600px) {
+  .dashboard {
+    padding: 10px;
+  }
+
+  .section {
+    padding: 15px;
+    margin-bottom: 20px;
+  }
+
+  .portfolio-table th, .portfolio-table td {
+    padding: 8px;
+    font-size: 0.85rem; /* Smaller text for mobile */
+  }
 }
 </style>
