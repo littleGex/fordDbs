@@ -87,11 +87,10 @@ const renderCharts = () => {
 
 // Watch for data changes to draw/redraw charts
 watch(() => portfolio.value.shares, async (newVal) => {
-  if (newVal.length > 0) {
-    await nextTick(); // Ensure DOM is updated before drawing
-    renderCharts();
-  }
-}, { deep: true })
+  console.log("Shares updated, rendering charts...", newVal);
+  await nextTick();
+  renderCharts();
+}, { deep: true });
 
 onMounted(fetchPortfolio)
 </script>
@@ -171,5 +170,10 @@ onMounted(fetchPortfolio)
   border: 1px solid #eee;
   border-radius: 8px;
   padding: 10px;
+}
+canvas {
+  min-height: 250px !important;
+  width: 100% !important;
+  background: #fafafa;
 }
 </style>
