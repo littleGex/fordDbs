@@ -1,4 +1,5 @@
-FROM node:18-alpine
+# Stage 1: Build the Vue app
+FROM node:lts-alpine as build-stage
 
 WORKDIR /app
 
@@ -7,6 +8,13 @@ RUN npm install
 
 COPY . .
 
-EXPOSE 3003
+RUN npm run build
 
-CMD ["npm", "run", "dev"]
+# Stage 2: Serve with Nginx
+FROM nginx:stable-alpine as production-stage
+
+COPY --from=build-stage /app/dist /usr/share/nginx/html
+
+EXPOSE 80
+
+CMD ["nginx", "-g", "daemon off;"]
