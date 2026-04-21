@@ -30,12 +30,9 @@ def test_fetch_live_prices_integration():
 @patch('yfinance.download')
 def test_fetch_live_prices_logic(mock_download):
     """Test how our function handles a specific DataFrame response."""
-
-    # yfinance with group_by='ticker' puts the Ticker at level 0
-    # and the OHLC data at level 1.
     mock_data = pd.DataFrame({
-        ('AAPL', 'Close'): [150.0, 155.0],
-        ('AIR.PA', 'Close'): [110.0, 112.0]
+        ('Close', 'AAPL'): [150.0, 155.0],
+        ('Close', 'AIR.PA'): [110.0, 112.0]
     }, index=[pd.Timestamp('2024-01-01'), pd.Timestamp('2024-01-02')])
 
     mock_data.columns = pd.MultiIndex.from_tuples(mock_data.columns)
@@ -44,6 +41,5 @@ def test_fetch_live_prices_logic(mock_download):
     tickers = {"AAPL", "AIR.PA"}
     results = fetch_live_prices(tickers)
 
-    # Now these should match the last row of our mock_data
     assert results["AAPL"] == 155.0
     assert results["AIR.PA"] == 112.0
