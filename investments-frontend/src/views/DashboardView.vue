@@ -27,7 +27,10 @@ const fetchPortfolio = async () => {
 }
 
 const formatCurrency = (amount) => {
-  return new Intl.NumberFormat('en-US', {style: 'currency', currency: 'USD'}).format(amount || 0)
+  return new Intl.NumberFormat('de-DE', {
+    style: 'currency',
+    currency: 'EUR'
+  }).format(amount || 0)
 }
 
 const formatPercentage = (pct) => {
@@ -120,7 +123,7 @@ const renderCharts = async () => {
           y: {
             beginAtZero: true,
             ticks: {
-              callback: (value) => '€' + value.toLocaleString()
+              callback: (value) => value.toLocaleString('de-DE') + ' €'
             }
           }
         },
