@@ -125,18 +125,29 @@ def get_vesting_schedule(db: Session, live_prices: dict):
     """
     grants = db.query(EmployeeShare).order_by(EmployeeShare.vest_date).all()
 
+    # 1. Group shares by date
+    daily_shares = {}
+    for grant in grants:
+        date_str = grant.vest_date.strftime("%Y-%m-%d")
+        daily_shares[date_str] = daily_shares.get(date_str, 0.0) + float(grant.num_shares)
+
+    # 2. Sort dates chronologically
+    sorted_dates = sorted(daily_shares.keys())
+
     schedule = []
     cumulative_shares = 0.0
 
-    for grant in grants:
-        cumulative_shares += float(grant.num_shares)
-        # Get the price for this specific ticker
-        price = live_prices.get(grant.ticker_symbol, 0.0)
+    for date_key in sorted_dates:
+        cumulative_shares += daily_shares[date_key]
+
+        first_ticker = grants[0].ticker_symbol if grants else ""
+        price = live_prices.get(first_ticker, 0.0)
 
         schedule.append({
-            "date": grant.vest_date.strftime("%Y-%m-%d"),
+            "date": date_key,
             "value": round(cumulative_shares * price, 2)
         })
+
     return schedule
 
 
