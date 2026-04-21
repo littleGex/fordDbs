@@ -19,10 +19,13 @@ def fetch_live_prices(tickers: Set[str]) -> Dict[str, float]:
     if not tickers:
         return {}
 
+    print(f"DEBUG: Fetching prices for database tickers: {tickers}")
+
     ticker_list = list(tickers)
     prices = {ticker: 0.0 for ticker in tickers}
 
     try:
+        # Download without group_by to keep the structure flat
         data = yf.download(
             tickers=ticker_list,
             period="5d",
@@ -37,26 +40,22 @@ def fetch_live_prices(tickers: Set[str]) -> Dict[str, float]:
 
         for ticker in ticker_list:
             try:
-                if len(ticker_list) > 1:
-                    series = data['Close'][ticker]
-                else:
+                if ('Close', ticker) in data.columns:
+                    series = data[('Close', ticker)]
+                elif 'Close' in data.columns:
                     series = data['Close']
-
-                if not series.dropna().empty:
-                    last_price = series.dropna().iloc[-1]
-                    prices[ticker] = round(float(last_price), 2)
                 else:
-                    logger.info(f"Ticker {ticker} found but no price data available.")
+                    continue
 
-            except KeyError:
-                logger.error(f"Ticker {ticker} not found in Yahoo Finance response.")
-            except (IndexError, ValueError) as e:
-                logger.error(f"Error parsing data for {ticker}: {e}")
+                valid_prices = series.dropna()
+                if not valid_prices.empty:
+                    prices[ticker] = round(float(valid_prices.iloc[-1]), 2)
 
-    except RequestException as e:
-        logger.error(f"Network error while fetching market data: {e}")
+            except Exception as e:
+                logger.error(f"Error parsing {ticker}: {e}")
+
     except Exception as e:
-        logger.error(f"Unexpected error in fetch_live_prices: {e}", exc_info=True)
+        logger.error(f"Yahoo Finance fetch failed: {e}")
 
     return prices
 
