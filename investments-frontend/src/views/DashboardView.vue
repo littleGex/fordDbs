@@ -66,7 +66,7 @@ const renderCharts = async () => {
     data: {
       labels,
       datasets: [{
-        label: 'Vested Value ($)',
+        label: 'Vested Value (€)',
         data: portfolio.value.shares.map(s => s.available_value),
         backgroundColor: '#27ae60'
       }]
@@ -81,7 +81,7 @@ const renderCharts = async () => {
     data: {
       labels,
       datasets: [{
-        label: 'Unvested Value ($)',
+        label: 'Unvested Value (€)',
         data: portfolio.value.shares.map(s => s.pending_value),
         backgroundColor: '#f1c40f'
       }]
@@ -120,7 +120,7 @@ const renderCharts = async () => {
           y: {
             beginAtZero: true,
             ticks: {
-              callback: (value) => '$' + value.toLocaleString()
+              callback: (value) => '€' + value.toLocaleString()
             }
           }
         },
