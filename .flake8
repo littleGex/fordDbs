@@ -4,6 +4,7 @@ exclude =
     __pycache__,
     build,
     dist,
-    .venv
-    venv
+    .venv,
+    venv,
+    ./alembic,
 max-complexity = 14

@@ -5,7 +5,6 @@ from sqlalchemy import func
 from typing import Dict, Set
 from app.models.shares_models import EmployeeShare, EtfTransaction
 from datetime import datetime
-from requests.exceptions import RequestException
 
 
 logger = logging.getLogger(__name__)
@@ -129,7 +128,8 @@ def get_vesting_schedule(db: Session, live_prices: dict):
     daily_shares = {}
     for grant in grants:
         date_str = grant.vest_date.strftime("%Y-%m-%d")
-        daily_shares[date_str] = daily_shares.get(date_str, 0.0) + float(grant.num_shares)
+        daily_shares[date_str] = daily_shares.get(
+            date_str, 0.0) + float(grant.num_shares)
 
     # 2. Sort dates chronologically
     sorted_dates = sorted(daily_shares.keys())

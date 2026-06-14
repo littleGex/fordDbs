@@ -32,7 +32,7 @@ class Transaction(Base):
     __tablename__ = "transactions"
     id = Column(Integer, primary_key=True)
     child_id = Column(Integer, ForeignKey("children.id"))
-    amount = Column(Numeric(10, 2)
+    amount = Column(Numeric(10, 2))
     description = Column(String)
     category = Column(String)
     timestamp = Column(DateTime, default=datetime.utcnow)
