@@ -1,6 +1,6 @@
 import os
 from datetime import datetime
-
+from decimal import Decimal, ROUND_HALF_UP
 from dotenv import load_dotenv
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func
@@ -36,18 +36,28 @@ def adjust_balance(child_id: int,
     if not child:
         raise HTTPException(status_code=404, detail="Child not found")
 
-    # Record why the manual adjustment happened
+    new_balance_dec = Decimal(str(new_balance)).quantize(Decimal("0.01"),
+                                                         rounding=ROUND_HALF_UP)
+    current_balance = Decimal(str(child.balance)).quantize(Decimal("0.01"))
+
+    if new_balance_dec < 0:
+        raise HTTPException(status_code=422,
+                            detail="Balance cannot be negative")
+
     adjustment_entry = Transaction(
         child_id=child.id,
-        amount=new_balance - child.balance,
+        amount=new_balance_dec - current_balance,
         description="Manual Balance Adjustment",
         category="Correction"
     )
 
-    child.balance = new_balance
+    child.balance = new_balance_dec
     db.add(adjustment_entry)
     db.commit()
-    return {"message": "Balance updated", "new_balance": child.balance}
+    db.refresh(child)
+
+    return {"message": "Balance updated",
+            "new_balance": float(child.balance)}
 
 
 @pocket_money_router.post("/add-child/{name}")
@@ -62,7 +72,7 @@ def add_child(name: str,
     if birth_date:
         parsed_date = datetime.strptime(birth_date,
                                         "%Y-%m-%d").date()
-    new_child = Child(name=name, balance=0.0, birth_date=parsed_date)
+    new_child = Child(name=name, balance=0.00, birth_date=parsed_date)
     db.add(new_child)
     db.commit()
     db.refresh(new_child)
@@ -135,18 +145,18 @@ def adjust_money(
     if password != SECRET_PASSWORD:
         raise HTTPException(status_code=403, detail="Forbidden")
 
+    amount_dec = Decimal(str(amount)).quantize(Decimal("0.01"),
+                                               rounding=ROUND_HALF_UP)
+
     # 2. Logic: If amount is positive, use deposit logic.
-    # If negative, use withdrawal logic.
-    if amount > 0:
+    if amount_dec > 0:
         return deposit_money(child_id=child_id,
-                             amount=amount,
+                             amount=float(amount_dec),
                              description=description,
                              db=db)
-    elif amount < 0:
-        # We pass the absolute value to withdraw_money because that
-        # function subtracts it
+    elif amount_dec < 0:
         return withdraw_money(child_id=child_id,
-                              amount=abs(amount),
+                              amount=float(abs(amount_dec)),
                               description=description,
                               category=category, db=db)
     else:
@@ -163,23 +173,31 @@ def deposit_money(child_id: int,
     if not child:
         raise HTTPException(status_code=404, detail="Child not found")
 
-    # 2. Create the Transaction record (Now Transaction is USED!)
+    deposit_amount = Decimal(str(amount)).quantize(Decimal("0.01"),
+                                                   rounding=ROUND_HALF_UP)
+    current_balance = Decimal(str(child.balance)).quantize(Decimal("0.01"))
+
+    if deposit_amount <= 0:
+        raise HTTPException(status_code=422,
+                            detail="Deposit amount must be positive")
+
     new_transaction = Transaction(
         child_id=child.id,
-        amount=amount,
+        amount=deposit_amount,
         description=description,
         category="Deposit"
     )
 
     # 3. Update the Child's balance
-    child.balance += amount
+    child.balance = current_balance + deposit_amount
 
     # 4. Save everything together (Atomic transaction)
     db.add(new_transaction)
     db.commit()
     db.refresh(child)
 
-    return {"message": "Deposit successful", "new_balance": child.balance}
+    return {"message": "Deposit successful",
+            "new_balance": float(child.balance)}
 
 
 @pocket_money_router.get("/history/{child_id}")
@@ -209,22 +227,27 @@ def withdraw_money(child_id: int,
 
     if not child:
         raise HTTPException(status_code=404, detail="Child not found")
+
+    withdraw_amount = Decimal(str(amount)).quantize(Decimal("0.01"),
+                                                    rounding=ROUND_HALF_UP)
+    current_balance = Decimal(str(child.balance)).quantize(Decimal("0.01"))
+
     # Check if sufficient money available
-    if child.balance < amount:
+    if current_balance < withdraw_amount:
         raise HTTPException(
-            status_code=404,
+            status_code=422,
             detail=f"Insufficient funds. {child.name} only has"
-                   f" {child.balance} available.")
+                   f" {current_balance} available.")
     # Create negative transaction record
     new_transaction = Transaction(
         child_id=child.id,
-        amount=-abs(amount),
+        amount=-withdraw_amount,
         description=description,
         category=category
     )
 
     # Update balance of child
-    child.balance -= abs(amount)
+    child.balance = current_balance - withdraw_amount
     db.add(new_transaction)
     db.commit()
     db.refresh(child)
@@ -232,8 +255,8 @@ def withdraw_money(child_id: int,
     return {
         "status": "success",
         "child_name": child.name,
-        "withdrawn": amount,
-        "new_balance": child.balance,
+        "withdrawn": float(withdraw_amount),
+        "new_balance": float(child.balance),
         "transaction_id": new_transaction.id
     }
 
@@ -248,37 +271,43 @@ def add_wish(child_id: int,
              item_name: str,
              cost: float,
              db: Session = Depends(get_db)):
-    new_wish = Wish(child_id=child_id, item_name=item_name, cost=cost)
+    cost_dec = Decimal(str(cost)).quantize(Decimal("0.01"),
+                                           rounding=ROUND_HALF_UP)
+
+    if cost_dec < 0:
+        raise HTTPException(status_code=422,
+                            detail="Cost cannot be negative")
+
+    new_wish = Wish(child_id=child_id,
+                    item_name=item_name,
+                    cost=cost_dec)
     db.add(new_wish)
     db.commit()
+    db.refresh(new_wish)
 
     return new_wish
 
 
 @pocket_money_router.get("/stats/{child_id}")
 def get_combined_stats(child_id: int, db: Session = Depends(get_db)):
-    # 1. Fetch Spending Totals (Category breakdown)
     category_query = db.query(
         Transaction.category,
         func.sum(Transaction.amount).label("total")
-    ).filter(Transaction.child_id == child_id)\
-     .group_by(Transaction.category).all()
+    ).filter(Transaction.child_id == child_id) \
+        .group_by(Transaction.category).all()
 
-    spending_by_category = {category: total for category, total in
+    spending_by_category = {category: float(total) for category, total in
                             category_query}
 
-    # 2. Fetch Trophy Count (Specifically "Goal Met" transactions)
-    # We count how many times the child has achieved a wish list goal
     wishes_bought = db.query(Transaction).filter(
         Transaction.child_id == child_id,
         Transaction.category == "Goal Met"
     ).count()
 
-    # 3. Return everything in one response
     return {
         "wishes_bought": wishes_bought,
         "spending_summary": spending_by_category,
-        "total_spent": sum(spending_by_category.values())
+        "total_spent": sum(v for v in spending_by_category.values() if v < 0)
     }
 
 
@@ -316,7 +345,13 @@ def update_wish(wish_id: int,
     if item_name is not None:
         wish.item_name = item_name
     if cost is not None:
-        wish.cost = cost
+        cost_dec = Decimal(str(cost)).quantize(Decimal("0.01"),
+                                               rounding=ROUND_HALF_UP)
+        if cost_dec < 0:
+            raise HTTPException(status_code=422,
+                                detail="Cost cannot be negative")
+
+        wish.cost = cost_dec
 
     db.commit()
     db.refresh(wish)
@@ -355,12 +390,17 @@ def deduct_batch(child_id: int,
     if password != os.getenv("ADMIN_PASSWORD"):
         raise HTTPException(status_code=403, detail="Forbidden")
 
-    summary = ", ".join([f"{i['name']} x {i['count']}" for i in items])
-    total_fine = sum(i['total'] for i in items)
+    summary = ", ".join([f"{i.name} x {i.count}" for i in items])
+    total_fine = sum(
+        (Decimal(str(i.total)).quantize(Decimal("0.01"),
+                                        rounding=ROUND_HALF_UP)
+         for i in items),
+        start=Decimal("0.00")
+    )
 
     return withdraw_money(
         child_id=child_id,
-        amount=total_fine,
+        amount=float(total_fine),
         description=f"Deductions: {summary}",
         category="Behaviour Deductions",
         db=db
