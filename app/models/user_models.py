@@ -1,5 +1,5 @@
 from sqlalchemy import (Column, Integer, String, Float,
-                        DateTime, ForeignKey, Date)
+                        DateTime, ForeignKey, Date, Numeric)
 from sqlalchemy.orm import relationship
 from datetime import datetime, timezone
 from app.database.database import Base
@@ -9,7 +9,7 @@ class Child(Base):
     __tablename__ = "children"
     id = Column(Integer, primary_key=True)
     name = Column(String, unique=True)
-    balance = Column(Float, default=0.0)
+    balance = Column(Numeric(10, 2), default=0.0)
     birth_date = Column(Date, nullable=True)
 
     # --- ADD THESE TWO LINES ---
@@ -32,7 +32,7 @@ class Transaction(Base):
     __tablename__ = "transactions"
     id = Column(Integer, primary_key=True)
     child_id = Column(Integer, ForeignKey("children.id"))
-    amount = Column(Float)
+    amount = Column(Numeric(10, 2)
     description = Column(String)
     category = Column(String)
     timestamp = Column(DateTime, default=datetime.utcnow)
