@@ -36,8 +36,9 @@ def adjust_balance(child_id: int,
     if not child:
         raise HTTPException(status_code=404, detail="Child not found")
 
-    new_balance_dec = Decimal(str(new_balance)).quantize(Decimal("0.01"),
-                                                         rounding=ROUND_HALF_UP)
+    new_balance_dec = Decimal(str(new_balance)).quantize(
+        Decimal("0.01"),
+        rounding=ROUND_HALF_UP)
     current_balance = Decimal(str(child.balance)).quantize(Decimal("0.01"))
 
     if new_balance_dec < 0:
