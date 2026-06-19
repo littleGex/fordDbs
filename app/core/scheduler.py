@@ -2,6 +2,7 @@
 import logging
 import pytz
 from apscheduler.schedulers.background import BackgroundScheduler
+from decimal import Decimal, ROUND_HALF_UP
 from datetime import date, datetime
 from sqlalchemy.orm import Session
 from app.database.database import SessionLocal
@@ -39,12 +40,17 @@ def run_weekly_payout():
             if not child.birth_date:
                 continue
 
-            # This call is now safe because reference_date defaults to None
             age = calculate_age(child.birth_date)
-            payout_amount = age * 0.5
+            payout_amount = (Decimal(age) * Decimal("0.5")).quantize(
+                Decimal("0.01"), rounding=ROUND_HALF_UP
+            )
 
             if payout_amount > 0:
-                child.balance += payout_amount
+                current_balance = Decimal(str(child.balance)).quantize(
+                    Decimal("0.01")
+                )
+                child.balance = current_balance + payout_amount
+
                 new_trans = Transaction(
                     child_id=child.id,
                     amount=payout_amount,
