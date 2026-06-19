@@ -43,20 +43,22 @@ pip install pytest httpx --break-system-packages
 
 ## Running the tests
 
-From your project root, with `tests/` alongside `app/`:
+From your project root (where `app/` and `pytest.ini` live):
 
 ```bash
-pytest -m "not live_api"
+pytest
 ```
 
-`live_api` tests call the real Yahoo Finance API and are excluded by
-default for determinism. **Always include `-m "not live_api"`** (or a
-more specific marker expression, e.g. `-m "not live_api and not integration"`)
-in your standard run command -- pytest's `-m` flag on the command line
-*replaces* any marker filter rather than combining with one set via
-`addopts`, so there is no fully "automatic" exclusion; it must be
-specified explicitly each time, which is why every example in this
-README includes it.
+`live_api` tests are **always skipped automatically**, with no flag
+needed -- this is enforced in `conftest.py` via a
+`pytest_collection_modifyitems` hook, not via `addopts`. (An earlier
+approach used `pytest -m "not live_api"`, but that has a sharp edge:
+pytest's `-m` flag on the command line *replaces* any marker filter
+set via `addopts` rather than combining with it, so
+`pytest -m "not integration"` would have silently let `live_api` tests
+back in. The hook-based approach avoids that entirely -- `-m` is now
+free to use for `integration`/`unit` filtering with no risk of
+re-including `live_api` tests by accident.)
 
 If you used different ports/credentials for the test container, override
 via environment variables:
@@ -67,26 +69,27 @@ TEST_DB_PORT=5434 \
 TEST_POSTGRES_USER=test \
 TEST_POSTGRES_PASSWORD=test \
 TEST_POSTGRES_DB=forddbs_test \
-pytest -m "not live_api"
+pytest
 ```
 
 Defaults already match the `docker run` command above, so if you used
-it verbatim you can just run `pytest -m "not live_api"` with no env vars.
+it verbatim you can just run `pytest` with no env vars.
 
 ### Running only fast (non-DB) tests
 
 ```bash
-pytest -m "not integration and not live_api"
+pytest -m "not integration"
 ```
 
 This runs `TestCalculateAge`, all of `test_utils.py`, and the mocked
 parts of `test_invest.py` -- useful as a quick pre-commit check
-without needing the test database running.
+without needing the test database running. (`live_api` tests remain
+skipped automatically, as always.)
 
 ### Running the live API smoke test deliberately
 
 ```bash
-pytest -m live_api
+pytest --run-live-api
 ```
 
 Only do this when you want to manually verify Yahoo Finance
@@ -163,7 +166,8 @@ rewritten and folded into this suite:
   Rewritten with full mocking for deterministic logic tests, plus
   several new edge cases (missing ticker, all-NaN series, download
   exception). The real-API check is preserved as an explicitly opt-in
-  `@pytest.mark.live_api` smoke test, excluded from normal runs.
+  `@pytest.mark.live_api` smoke test, excluded from normal runs by
+  default (run deliberately with `pytest --run-live-api`).
 
 ## Known gaps / suggested next steps
 
