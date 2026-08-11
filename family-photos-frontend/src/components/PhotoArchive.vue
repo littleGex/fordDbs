@@ -4,10 +4,8 @@
 
     <div class="photo-grid">
       <div v-for="photo in photos" :key="photo.id" class="photo-card">
-        <img
-          :src="photo.url"
-          :alt="photo.caption"
-          loading="lazy"
+        <MediaDisplay
+          :photo="photo"
           @click="$emit('photo-click', photo)"
         />
         <div class="photo-info">
@@ -30,6 +28,7 @@
 <script setup>
 import { ref, onMounted } from 'vue';
 import api from '../api/axios';
+import MediaDisplay from './MediaDisplay.vue';
 
 const emit = defineEmits(['photo-click']); // Crucial for the zoom to work!
 const photos = ref([]);
@@ -72,7 +71,8 @@ const loadMore = fetchPhotos;
   font-weight: 600;
 }
 
-.photo-card img {
+.photo-card img,
+.photo-card video {
   width: 100%;
   height: 250px;
   object-fit: cover; /* Use 'cover' for the Netflix-grid look, 'contain' if you want no cropping */
@@ -81,7 +81,8 @@ const loadMore = fetchPhotos;
   transition: transform 0.2s;
 }
 
-.photo-card img:hover {
+.photo-card img:hover,
+.photo-card video:hover {
   transform: scale(1.02);
 }
 

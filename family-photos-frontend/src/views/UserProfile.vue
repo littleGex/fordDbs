@@ -26,7 +26,7 @@
           <h3 class="historical-title"><span class="icon">📅</span> On This Day...</h3>
           <div class="historical-scroll">
             <div v-for="photo in historicalPhotos" :key="photo.id" class="historical-card">
-              <img :src="photo.url" loading="lazy"/>
+              <MediaDisplay :photo="photo" />
               <div class="historical-label">{{ getYearAgoText(photo.timestamp) }}</div>
             </div>
           </div>
@@ -42,12 +42,11 @@
 
         <div class="photo-grid">
           <div v-for="photo in photos" :key="photo.id" class="photo-card">
-            <img
-                :src="photo.url"
-                loading="lazy"
-                @load="recordView(photo.id)"
-                @click="openZoom(photo)"
+            <MediaDisplay
+                :photo="photo"
                 style="cursor: zoom-in"
+                @ready="recordView(photo.id)"
+                @click="openZoom(photo)"
             />
 
             <div class="photo-content">
@@ -92,11 +91,10 @@
         </div>
         <div class="photo-grid">
           <div v-for="photo in albumPhotos" :key="photo.id" class="photo-card">
-            <img
-                :src="photo.url"
-                loading="lazy"
-                @click="openZoom(photo)"
+            <MediaDisplay
+                :photo="photo"
                 style="cursor: zoom-in"
+                @click="openZoom(photo)"
             />
           </div>
         </div>
@@ -148,13 +146,15 @@
               <p>Click or Drag to Upload</p>
             </div>
 
+            <video v-else-if="selectedFeedFile?.type?.startsWith('video/')"
+                  :src="uploadPreviewUrl" class="live-preview-img" muted controls/>
             <img v-else :src="uploadPreviewUrl" class="live-preview-img"/>
 
             <input
                 type="file"
                 ref="fileInput"
                 @change="onFeedFileSelected"
-                accept="image/*"
+                accept="image/*,video/*"
                 class="hidden-file-input"
             />
           </div>
@@ -205,7 +205,7 @@
   <div v-if="zoomedPhoto" class="lightbox-overlay" @click.self="closeZoom">
     <div class="lightbox-content">
       <button class="close-zoom" @click="closeZoom">×</button>
-      <img :src="zoomedPhoto.url" class="lightbox-img"/>
+      <MediaDisplay :photo="zoomedPhoto" class="lightbox-img" :controls="true" />
       <p v-if="zoomedPhoto.caption" class="lightbox-caption">
         {{ zoomedPhoto.caption }}
       </p>
@@ -219,6 +219,9 @@ import {useAuthStore} from '../stores/auth';
 import api from '../api/axios';
 import PhotoArchive from "../components/PhotoArchive.vue";
 import LikeAvatars from "../components/LikeAvatars.vue";
+import MediaDisplay from "../components/MediaDisplay.vue";
+
+const MAX_VIDEO_DURATION_SECONDS = 30;
 
 const auth = useAuthStore();
 const currentMode = ref('feed');
@@ -253,6 +256,27 @@ const handleEsc = (e) => {
 const onFeedFileSelected = (e) => {
   const file = e.target.files[0];
   if (!file) return;
+
+  if (file.type.startsWith('video/')) {
+    // Client-side duration check is UX only, to avoid a pointless
+    // upload-then-server-rejection round trip -- the server always
+    // re-checks the real decoded duration regardless (see
+    // app/core/media.py probe_duration_seconds).
+    const probe = document.createElement('video');
+    probe.preload = 'metadata';
+    probe.onloadedmetadata = () => {
+      URL.revokeObjectURL(probe.src);
+      if (probe.duration > MAX_VIDEO_DURATION_SECONDS) {
+        alert(`Clips must be ${MAX_VIDEO_DURATION_SECONDS} seconds or under.`);
+        e.target.value = '';
+        return;
+      }
+      selectedFeedFile.value = file;
+      uploadPreviewUrl.value = URL.createObjectURL(file);
+    };
+    probe.src = URL.createObjectURL(file);
+    return;
+  }
 
   selectedFeedFile.value = file;
 
@@ -304,7 +328,11 @@ const handleUpload = async () => {
   }
 
   try {
-    await api.post('/upload', formData);
+    // Video uploads are transcoded server-side before the response
+    // comes back (see app/core/media.py) -- give this call real
+    // headroom over the global 15s default rather than touching that
+    // default for every other endpoint.
+    await api.post('/upload', formData, {timeout: 120000});
 
     // Reset state only on success
     showUploadModal.value = false;
@@ -315,7 +343,7 @@ const handleUpload = async () => {
     fetchAlbums();
   } catch (err) {
     console.error("Upload failed:", err);
-    alert("Upload failed. Please try again.");
+    alert(err.response?.data?.detail || "Upload failed. Please try again.");
   } finally {
     uploading.value = false;
   }

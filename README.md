@@ -31,6 +31,26 @@ This binds to host port `5434` (not `5433`, which your real `postgres_db`
 container already uses) so the two can run side by side without
 colliding.
 
+Tests that actually upload a file (image or video, in
+`test_family_photos_video_upload.py`) also need a disposable test MinIO
+instance -- same idea as the test Postgres above:
+
+```bash
+docker run --rm -d \
+    --name forddbs-test-minio \
+    -e MINIO_ROOT_USER=testadmin \
+    -e MINIO_ROOT_PASSWORD=testpassword \
+    -p 9002:9000 \
+    minio/minio server /data
+```
+
+Port `9002` (not `9000`, which your real `minio` container already uses)
+so the two can run side by side. Without this, `conftest.py`'s
+`minio_test_bucket` fixture skips those specific tests with a clear
+message rather than failing on a raw `NameResolutionError` three layers
+deep in MinIO's SDK -- that's what you'll see if you run the suite
+without starting this container.
+
 ## Install test dependencies
 
 From your project root (where `requirements.txt` lives):
@@ -40,6 +60,12 @@ pip install pytest httpx --break-system-packages
 ```
 
 (`httpx` is required by FastAPI's `TestClient`.)
+
+Video upload tests also need `ffmpeg`/`ffprobe` on `PATH` — same
+requirement the app itself has in production (see "Video uploads"
+below). On macOS: `brew install ffmpeg`. Like the MinIO container above,
+if it's missing those specific tests are skipped automatically rather
+than failing the run.
 
 ## Running the tests
 
@@ -143,6 +169,7 @@ pytest tests/test_pocket_money_precision.py::TestFloatPrecisionRegression::test_
 | `test_utils.py` | Utility-meter dashboard helpers (rewritten against real `utils_core.py` -- see note below) |
 | `test_invest.py` | `fetch_live_prices` mocked logic + opt-in live-API smoke test (rewritten -- see note below) |
 | `test_family_photos.py` | The `liked_by` avatar feature: empty/single/multiple likers, display-name fallback, avatar URL presence, like/unlike toggling, auth requirement, consistency across `/feed`, `/archive`, `/albums/{id}/photos` |
+| `test_family_photos_video_upload.py` | Video upload support: server-side 30s duration enforcement (real ffprobe check, not client-trusted), H.264/AAC MP4 transcoding, corrupt-input rejection, image-path regression |
 
 ## Notes on rewritten tests
 
@@ -195,6 +222,13 @@ rewritten and folded into this suite:
   guardrails" note above on `make_real_child`. Fixed by switching
   these tests to fixtures that commit through a genuinely separate
   connection.
+- **`alembic/env.py` never actually ran a migration.** It defined
+  `run_migrations_offline()`/`run_migrations_online()` but was missing
+  the final `if context.is_offline_mode(): ... else: ...` dispatch call
+  that invokes either one — so `alembic upgrade head` always exited 0
+  having silently done nothing. Fixed by adding the dispatch call. See
+  "Video uploads & deploying this change" below for the full story,
+  including a second, separate issue found on the deployed Pi.
 
 ## Known gaps / suggested next steps
 
@@ -217,7 +251,67 @@ rewritten and folded into this suite:
   writing) is incompatible with this pinned `passlib` 1.7.4 --
   `bcrypt==4.0.1` is confirmed compatible. Needs a pin added to
   `requirements.txt`.
-- **CI**: none of this runs automatically yet. Once you're happy with
-  local results, a GitHub Actions workflow with a `postgres:15-alpine`
-  service container would let this run on every push with no manual
-  `docker run` step.
+- **CI**: `.github/workflows/tests.yml` now runs the full suite on PRs
+  and pushes to `main`, via a `postgres:15-alpine` service container
+  plus an `ffmpeg` install step for the video upload tests.
+
+## Video uploads & deploying this change
+
+Photos and videos share one `/upload` endpoint and one `Photo` model,
+distinguished by a new `media_type` column (`"image"` or `"video"`).
+Uploaded videos are transcoded server-side to H.264/AAC MP4 (~720p cap)
+via `ffmpeg`, with the 30-second limit enforced from `ffprobe`'s actual
+decoded duration — never trusted from the client. See `app/core/media.py`.
+
+**This needs `ffmpeg`/`ffprobe` on `PATH`** wherever `/upload` runs — now
+included in the root `Dockerfile`. A full `docker compose build api`
+(not just a restart) is required to pick this up.
+
+### Applying the schema change to a live database
+
+`app/main.py`'s startup only runs `Base.metadata.create_all()`, which
+creates *missing* tables but never `ALTER`s an existing one — so a fresh
+deploy alone will **not** add `media_type`/`duration_seconds` to an
+already-existing `photos` table. This needs `alembic upgrade head` run
+once, manually, after deploying.
+
+Two pre-existing issues were found and fixed while getting this working,
+worth knowing before you run it:
+
+1. `alembic/env.py` was missing its dispatch call (see "Bugs found and
+   fixed" above) — without this fix, `alembic upgrade head` always did
+   nothing, silently, and always would have, independent of anything
+   else here.
+2. The Pi's deployed image contains an incomplete migration chain (one
+   file whose parent revision was never included), **and** the live
+   database has no `alembic_version` table at all — Alembic has never
+   actually managed this database; the schema has been driven entirely
+   by `create_all()` plus, apparently, some manual changes along the way.
+
+Given that, upgrading the Pi isn't a plain `alembic upgrade head`. The
+safe sequence, since there's no existing Alembic bookkeeping to protect:
+
+```bash
+# 1. Deploy the new image (has the ffmpeg + env.py fix + new migration file)
+docker compose build api && docker compose up -d api
+
+# 2. One-time only: tell Alembic the DB is already at the pre-video-upload
+#    revision -- this writes one bookkeeping row, it runs no schema SQL.
+docker exec database_manager_api alembic -c /code/alembic.ini stamp 26a815029608
+
+# 3. Now apply the one real migration (adds media_type/duration_seconds):
+docker exec database_manager_api alembic -c /code/alembic.ini upgrade head
+
+# 4. Verify:
+docker exec postgres_db psql -U dad -d postgres -c '\d photos'
+```
+
+(User/db confirmed by inspecting the running containers directly —
+the app actually connects as `dad` to a database literally named
+`postgres`, via `POSTGRES_USER`/`POSTGRES_PASSWORD`/`POSTGRES_DB` from
+`.env`, not the `DB_USER`/`DB_NAME` vars docker-compose.yaml also sets
+on the `api` service — `get_db_url()` in `app/database/database.py`
+only reads the `POSTGRES_*` names.)
+
+After this, `alembic_version` genuinely reflects reality and future
+migrations can just be `alembic upgrade head` as normal.

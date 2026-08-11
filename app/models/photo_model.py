@@ -13,6 +13,8 @@ class Photo(Base):
     timestamp = Column(DateTime,
                        default=func.now())
     uploader_id = Column(Integer, ForeignKey("users.id"))
+    media_type = Column(String, nullable=False, server_default="image")
+    duration_seconds = Column(Integer, nullable=True)
 
     uploader = relationship("User", back_populates="photos")
     likes = relationship("Like",

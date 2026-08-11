@@ -1,9 +1,10 @@
 FROM python:3.12-slim
 
-# Install libpq-dev for Postgres compatibility
+# Install libpq-dev for Postgres compatibility, ffmpeg for video transcoding
 RUN apt-get update && apt-get install -y \
     libpq-dev \
     gcc \
+    ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /code

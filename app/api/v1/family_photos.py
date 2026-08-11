@@ -5,11 +5,17 @@ from sqlalchemy.orm import Session
 from app.database.database import get_db
 from app.core.storage import (upload_image_to_storage, get_image_url,
                               minio_client, BUCKET_NAME)
+from app.core.media import (is_video_upload, probe_duration_seconds,
+                            transcode_to_h264_mp4, VideoProcessingError,
+                            MAX_VIDEO_DURATION_SECONDS,
+                            MAX_VIDEO_UPLOAD_BYTES)
 from app.models.photo_model import Photo, Like, Comment, View, Album
 from app.models.user_models import User
 import uuid
 import logging
 import os
+import shutil
+import tempfile
 from jose import jwt, JWTError
 from passlib.context import CryptContext
 from datetime import datetime, timedelta, timezone
@@ -40,6 +46,8 @@ def format_photo_list(photos):
         data.append({
             "id": p.id,
             "url": get_image_url(p.minio_key),
+            "media_type": p.media_type,
+            "duration_seconds": p.duration_seconds,
             "caption": p.caption,
             "timestamp": p.timestamp,
             "uploader": {
@@ -165,6 +173,48 @@ def set_password(data: dict, db: Session = Depends(get_db)):
         detail="Password already set or user not found")
 
 
+def _upload_video(file: UploadFile) -> tuple[str, int]:
+    """Validates and transcodes an uploaded video, then stores it in
+    MinIO. Returns (minio_key, duration_seconds)."""
+    file_ext = (file.filename or "").rsplit(".", 1)[-1] or "bin"
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        input_path = os.path.join(tmp_dir, f"input.{file_ext}")
+        output_path = os.path.join(tmp_dir, "output.mp4")
+
+        with open(input_path, "wb") as f:
+            shutil.copyfileobj(file.file, f)
+
+        if os.path.getsize(input_path) > MAX_VIDEO_UPLOAD_BYTES:
+            raise HTTPException(
+                status_code=400,
+                detail="Video file is too large")
+
+        try:
+            duration = probe_duration_seconds(input_path)
+            if duration > MAX_VIDEO_DURATION_SECONDS:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Video exceeds the "
+                          f"{MAX_VIDEO_DURATION_SECONDS} second limit")
+
+            transcode_to_h264_mp4(input_path, output_path)
+        except VideoProcessingError as e:
+            logger.error(f"Video processing failed: {e}")
+            raise HTTPException(status_code=400,
+                                detail="Could not process video")
+
+        minio_key = f"{uuid.uuid4()}.mp4"
+        minio_client.fput_object(
+            BUCKET_NAME,
+            minio_key,
+            output_path,
+            content_type="video/mp4",
+        )
+
+        return minio_key, round(duration)
+
+
 @family_photos_router.post("/upload")
 def upload_photo(
         caption: str = Form(None),
@@ -173,19 +223,28 @@ def upload_photo(
         db: Session = Depends(get_db),
         current_user: User = Depends(get_current_user)
 ):
-    file_ext = file.filename.split(".")[-1]
-    minio_key = f"{uuid.uuid4()}.{file_ext}"
+    duration_seconds = None
 
-    minio_client.put_object(
-        "family-photos",
-        minio_key,
-        file.file,
-        length=-1,
-        part_size=10 * 1024 * 1024
-    )
+    if is_video_upload(file):
+        media_type = "video"
+        minio_key, duration_seconds = _upload_video(file)
+    else:
+        media_type = "image"
+        file_ext = file.filename.split(".")[-1]
+        minio_key = f"{uuid.uuid4()}.{file_ext}"
+
+        minio_client.put_object(
+            BUCKET_NAME,
+            minio_key,
+            file.file,
+            length=-1,
+            part_size=10 * 1024 * 1024
+        )
 
     new_photo = Photo(
         minio_key=minio_key,
+        media_type=media_type,
+        duration_seconds=duration_seconds,
         caption=caption,
         uploader_id=current_user.id,
         album_id=album_id,
