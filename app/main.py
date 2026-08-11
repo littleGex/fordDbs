@@ -59,7 +59,7 @@ def create_app():
         return {
             "message": "Pocket Money API is Live",
             "documentation": "/docs",
-            "version": "2.0.0"
+            "version": "2.0.1"
         }
 
     # Create all tables on startup

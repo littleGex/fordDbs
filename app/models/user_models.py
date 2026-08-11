@@ -1,4 +1,4 @@
-from sqlalchemy import (Column, Integer, String, Float,
+from sqlalchemy import (Column, Integer, String,
                         DateTime, ForeignKey, Date, Numeric)
 from sqlalchemy.orm import relationship
 from datetime import datetime, timezone
@@ -46,7 +46,7 @@ class Wish(Base):
     id = Column(Integer, primary_key=True, index=True)
     child_id = Column(Integer, ForeignKey("children.id"))
     item_name = Column(String)
-    cost = Column(Float)
+    cost = Column(Numeric(10, 2))
 
     child = relationship("Child", back_populates="wishes")
 
