@@ -84,6 +84,7 @@ import { ref, onMounted, computed } from 'vue';
 import { useRouter } from 'vue-router';
 import api from '../api/axios.js';
 import { useAuthStore } from '../stores/auth.js';
+import { getAvatar } from '../utils/avatar.js';
 
 const auth = useAuthStore();
 const router = useRouter();
@@ -115,14 +116,6 @@ const fetchUsers = async () => {
 };
 
 onMounted(fetchUsers);
-
-// Helper to ALWAYS show a photo (uploaded or initials)
-const getAvatar = (user) => {
-  if (user.profile_photo_url) return user.profile_photo_url;
-  // Dynamic fallback using their name
-  const safeName = encodeURIComponent(user.display_name || 'User');
-  return `https://ui-avatars.com/api/?name=${safeName}&background=333333&color=fff&size=150`;
-};
 
 const openLoginModal = (user) => {
   selectedUser.value = user;
