@@ -54,8 +54,8 @@
               <p class="caption"><strong>{{ photo.uploader.display_name }}</strong> {{ photo.caption }}</p>
               <div class="interaction-bar">
                 <button @click="handleLike(photo.id)" class="like-btn">❤️ {{ photo.stats.likes }}</button>
-                <span class="view-count">👥 {{ photo.stats.views }}</span>
               </div>
+              <LikeAvatars :likes="photo.liked_by" />
               <div class="comments-preview">
                 <div v-for="comment in photo.recent_comments" :key="comment.text" class="comment">
                   <strong>{{ comment.username }}</strong> {{ comment.text }}
@@ -218,6 +218,7 @@ import {ref, onMounted, onUnmounted} from 'vue';
 import {useAuthStore} from '../stores/auth';
 import api from '../api/axios';
 import PhotoArchive from "../components/PhotoArchive.vue";
+import LikeAvatars from "../components/LikeAvatars.vue";
 
 const auth = useAuthStore();
 const currentMode = ref('feed');

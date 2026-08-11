@@ -51,9 +51,21 @@ def format_photo_list(photos):
             },
             "stats": {
                 "likes": len(p.likes),
-                "comments": len(p.comments),
-                "views": len(p.views)
+                "comments": len(p.comments)
+                # views intentionally omitted from the payload — viewing is
+                # implicit, so we no longer surface a count in the UI.
+                # /view still records visits server-side if needed later.
             },
+            "liked_by": [
+                {
+                    "id": like.user.id,
+                    "display_name": like.user.display_name or like.user.username,
+                    "profile_photo_url": get_image_url(
+                        like.user.profile_photo_key)
+                    if like.user.profile_photo_key else None
+                }
+                for like in p.likes
+            ],
             "recent_comments": [
                 {"username": c.user.username, "text": c.text}
                 for c in p.comments[-3:]

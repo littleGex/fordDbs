@@ -81,13 +81,19 @@ class TestRunWeeklyPayout:
     """
     NOTE: run_weekly_payout() opens its own SessionLocal() rather than
     using FastAPI's dependency-injected session, so it does NOT go
-    through the db_session/app fixtures' transaction rollback. These
-    tests therefore commit directly to the test database and must
-    clean up after themselves explicitly.
+    through the db_session/app fixtures' transaction rollback -- and,
+    under Postgres's READ COMMITTED isolation, it can only ever see
+    rows that were *actually* committed. Children created via
+    make_child/child_age_10 (bound to db_session's externally-managed,
+    never-truly-committed transaction) are invisible to it. These
+    tests use make_real_child/real_child_age_10 instead, which commit
+    through their own independent connection so run_weekly_payout()
+    can actually find and update the rows -- and clean themselves up
+    for real afterward (see make_real_child in conftest.py).
     """
 
     def test_payout_does_not_raise_type_error(
-        self, db_engine, child_age_10, db_session
+        self, db_engine, real_child_age_10
     ):
         """
         REGRESSION: previously raised
@@ -98,104 +104,73 @@ class TestRunWeeklyPayout:
         test calls the real job function end-to-end and would have
         failed loudly against the original code.
         """
-        try:
-            run_weekly_payout()  # must not raise
-        finally:
-            self._cleanup(db_session, child_age_10.id)
+        run_weekly_payout()  # must not raise
 
     def test_payout_amount_is_half_age_in_euros(
-        self, db_engine, child_age_10, db_session
+        self, db_engine, real_child_age_10, db_session
     ):
-        try:
-            run_weekly_payout()
+        run_weekly_payout()
 
-            db_session.expire_all()
-            from app.models.user_models import Child
+        from app.models.user_models import Child
 
-            refreshed = (
-                db_session.query(Child)
-                .filter(Child.id == child_age_10.id)
-                .first()
-            )
-            # age 10 -> 10 * 0.5 = 5.00
-            assert refreshed.balance == Decimal("5.00")
-        finally:
-            self._cleanup(db_session, child_age_10.id)
+        refreshed = (
+            db_session.query(Child)
+            .filter(Child.id == real_child_age_10.id)
+            .first()
+        )
+        # age 10 -> 10 * 0.5 = 5.00
+        assert refreshed.balance == Decimal("5.00")
 
     def test_payout_creates_pocket_money_transaction(
-        self, db_engine, child_age_10, db_session
+        self, db_engine, real_child_age_10, db_session
     ):
-        try:
-            run_weekly_payout()
+        run_weekly_payout()
 
-            from app.models.user_models import Transaction
+        from app.models.user_models import Transaction
 
-            txn = (
-                db_session.query(Transaction)
-                .filter(
-                    Transaction.child_id == child_age_10.id,
-                    Transaction.category == "Pocket Money",
-                )
-                .first()
+        txn = (
+            db_session.query(Transaction)
+            .filter(
+                Transaction.child_id == real_child_age_10.id,
+                Transaction.category == "Pocket Money",
             )
-            assert txn is not None
-            assert txn.amount == Decimal("5.00")
-            assert "Age 10" in txn.description
-        finally:
-            self._cleanup(db_session, child_age_10.id)
+            .first()
+        )
+        assert txn is not None
+        assert txn.amount == Decimal("5.00")
+        assert "Age 10" in txn.description
 
     def test_payout_skips_children_without_birth_date(
-        self, db_engine, make_child, db_session
+        self, db_engine, make_real_child, db_session
     ):
-        child = make_child(name="NoBirthDate", balance="0.00", birth_date=None)
+        child = make_real_child(
+            name="NoBirthDate", balance="0.00", birth_date=None
+        )
 
-        try:
-            run_weekly_payout()
+        run_weekly_payout()
 
-            db_session.expire_all()
-            from app.models.user_models import Child
+        from app.models.user_models import Child
 
-            refreshed = (
-                db_session.query(Child).filter(Child.id == child.id).first()
-            )
-            assert refreshed.balance == Decimal("0.00")
-        finally:
-            self._cleanup(db_session, child.id)
+        refreshed = (
+            db_session.query(Child).filter(Child.id == child.id).first()
+        )
+        assert refreshed.balance == Decimal("0.00")
 
     def test_payout_accumulates_on_top_of_existing_balance(
-        self, db_engine, make_child, db_session
+        self, db_engine, make_real_child, db_session
     ):
         today = date.today()
         birth_date = date(today.year - 8, today.month, today.day)
-        child = make_child(
+        child = make_real_child(
             name="HasSavings", balance="12.34", birth_date=birth_date
         )
 
-        try:
-            run_weekly_payout()
+        run_weekly_payout()
 
-            db_session.expire_all()
-            from app.models.user_models import Child
+        from app.models.user_models import Child
 
-            refreshed = (
-                db_session.query(Child).filter(Child.id == child.id).first()
-            )
-            # 12.34 existing + (8 * 0.5 = 4.00) = 16.34
-            assert refreshed.balance == Decimal("16.34")
-        finally:
-            self._cleanup(db_session, child.id)
-
-    @staticmethod
-    def _cleanup(db_session, child_id):
-        """
-        run_weekly_payout() commits via its own session, bypassing the
-        rollback-on-teardown db_session fixture, so we must delete the
-        committed rows explicitly to avoid leaking state between tests.
-        """
-        from app.models.user_models import Child, Transaction
-
-        db_session.query(Transaction).filter(
-            Transaction.child_id == child_id
-        ).delete()
-        db_session.query(Child).filter(Child.id == child_id).delete()
-        db_session.commit()
+        refreshed = (
+            db_session.query(Child).filter(Child.id == child.id).first()
+        )
+        # 12.34 existing + (8 * 0.5 = 4.00) = 16.34
+        assert refreshed.balance == Decimal("16.34")
