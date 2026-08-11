@@ -13,7 +13,8 @@
     :src="photo.url"
     preload="metadata"
     muted
-    @loadeddata="$emit('ready')"
+    @loadedmetadata="showFirstFrame"
+    @seeked="$emit('ready')"
     @click="$emit('click', $event)"
   />
   <img
@@ -39,4 +40,16 @@ defineProps({
   controls: { type: Boolean, default: false }
 });
 defineEmits(['click', 'ready']);
+
+// preload="metadata" alone often leaves grid-thumbnail videos visually
+// black (especially on iOS Safari) until playback starts -- there's no
+// poster image, and metadata-only preload doesn't guarantee a decoded,
+// painted frame. Seeking to a tiny offset once metadata is known forces
+// the browser to decode and show that frame. Efficient because the
+// transcode sets +faststart, enabling a range request for just that
+// moment instead of downloading the whole file.
+const showFirstFrame = (event) => {
+  const video = event.target;
+  video.currentTime = Math.min(0.1, (video.duration || 1) / 2);
+};
 </script>
