@@ -8,6 +8,7 @@ alembic
 apscheduler
 pytest
 pytest-cov
+httpx
 minio
 python-multipart
 python-jose

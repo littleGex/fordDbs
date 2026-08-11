@@ -1,0 +1,45 @@
+name: Tests
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+
+    # Mapped to host port 5434 (not Postgres's default 5432) to match
+    # the TEST_DB_PORT default documented in README.md / tests/conftest.py,
+    # so this job needs no extra TEST_* env vars to find it.
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: forddbs_test
+        ports:
+          - 5434:5432
+        options: >-
+          --health-cmd "pg_isready -U test -d forddbs_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run test suite
+        run: pytest
