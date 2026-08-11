@@ -154,7 +154,7 @@
                 type="file"
                 ref="fileInput"
                 @change="onFeedFileSelected"
-                accept="image/*,video/*"
+                accept="image/*,video/*,.mov,.mp4,.m4v,.heic,.heif"
                 class="hidden-file-input"
             />
           </div>
