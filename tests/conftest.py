@@ -48,6 +48,18 @@ os.environ["POSTGRES_DB"] = os.getenv("TEST_POSTGRES_DB", "forddbs_test")
 os.environ.setdefault("ADMIN_PASSWORD", "test-admin-password")
 os.environ.setdefault("ALLOWED_ORIGINS", "")
 
+# app/core/storage.py's minio_client is a module-level singleton built
+# from these env vars at import time too -- override before anything
+# imports it (app.api.v1.family_photos does, transitively, a few lines
+# down). Without this, upload tests default to MINIO_ENDPOINT=minio:9000
+# (the docker-compose service name), which doesn't resolve outside that
+# network and fails with a confusing urllib3 NameResolutionError deep in
+# minio's SDK rather than a clear "no test MinIO" message.
+os.environ["MINIO_ENDPOINT"] = os.getenv("TEST_MINIO_ENDPOINT", "localhost:9002")
+os.environ["MINIO_ACCESS_KEY"] = os.getenv("TEST_MINIO_ACCESS_KEY", "testadmin")
+os.environ["MINIO_SECRET_KEY"] = os.getenv("TEST_MINIO_SECRET_KEY", "testpassword")
+os.environ.setdefault("EXTERNAL_URL_HOST", os.environ["MINIO_ENDPOINT"])
+
 from app.database.database import Base, get_db, get_db_url  # noqa: E402
 from app.models.user_models import Child, Transaction, Wish, User  # noqa: E402
 from app.models.deductions_models import DeductionType  # noqa: E402
@@ -100,6 +112,32 @@ def db_engine():
     yield engine
     Base.metadata.drop_all(bind=engine)
     engine.dispose()
+
+
+@pytest.fixture(scope="session")
+def minio_test_bucket():
+    """
+    Session-scoped: verifies a disposable test MinIO instance is
+    reachable and ensures the bucket exists, for the handful of tests
+    that exercise real file uploads (most of the suite never touches
+    storage at all). Unlike db_engine's Postgres check, this skips just
+    the tests that need it rather than aborting the whole session --
+    a missing test MinIO is a much narrower problem than a missing test
+    database. See README.md for how to start one.
+    """
+    from app.core.storage import init_storage, minio_client, BUCKET_NAME
+
+    try:
+        minio_client.bucket_exists(BUCKET_NAME)
+    except Exception as exc:
+        pytest.skip(
+            "Test MinIO instance not reachable at "
+            f"{os.environ['MINIO_ENDPOINT']!r} -- start a disposable "
+            f"test MinIO container (see README.md). Original error: {exc}"
+        )
+
+    init_storage()
+    yield
 
 
 @pytest.fixture
@@ -316,6 +354,46 @@ def auth_headers():
         return {"Authorization": f"Bearer {token}"}
 
     return _auth_headers
+
+
+@pytest.fixture
+def make_video_file(tmp_path):
+    """
+    Factory fixture: make_video_file(duration=2) -> raw mp4 bytes of a
+    tiny synthesized clip of the given duration (seconds), generated via
+    ffmpeg's lavfi testsrc/sine sources -- no binary video fixtures
+    committed to the repo. Requires ffmpeg on PATH; skips at call time
+    if unavailable so a dev machine without it doesn't hard-fail (CI
+    always has it, see .github/workflows/tests.yml).
+    """
+    import shutil
+    import subprocess
+
+    if shutil.which("ffmpeg") is None:
+        pytest.skip("ffmpeg not available on PATH")
+
+    counter = {"n": 0}
+
+    def _make_video_file(duration=2):
+        counter["n"] += 1
+        out_path = tmp_path / f"clip_{counter['n']}.mp4"
+        result = subprocess.run(
+            [
+                "ffmpeg", "-y",
+                "-f", "lavfi",
+                "-i", f"testsrc=duration={duration}:size=320x240:rate=15",
+                "-f", "lavfi",
+                "-i", f"sine=frequency=1000:duration={duration}",
+                "-c:v", "libx264", "-preset", "veryfast",
+                "-c:a", "aac", "-shortest",
+                str(out_path),
+            ],
+            capture_output=True, timeout=60,
+        )
+        assert result.returncode == 0, result.stderr.decode()
+        return out_path.read_bytes()
+
+    return _make_video_file
 
 
 # ---------------------------------------------------------------------
