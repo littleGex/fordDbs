@@ -162,7 +162,7 @@ pytest tests/test_pocket_money_precision.py::TestFloatPrecisionRegression::test_
 | `test_pocket_money_precision.py` | The original bug report (14.63€/15€) + float-drift stress tests |
 | `test_pocket_money_balance.py` | deposit, withdraw, adjust-balance, adjust, balance lookup |
 | `test_pocket_money_admin.py` | child CRUD, password protection |
-| `test_pocket_money_wishes.py` | wish CRUD, negative-cost guards |
+| `test_pocket_money_wishes.py` | wish CRUD, negative-cost guards, `cost` column Numeric-precision regression |
 | `test_pocket_money_deductions.py` | deduction catalog CRUD, deduct-batch (incl. the dict-subscript regression) |
 | `test_pocket_money_stats.py` | history, stats aggregation (incl. total_spent regression) |
 | `test_scheduler.py` | `calculate_age` (pure), `run_weekly_payout` (incl. the Decimal/float TypeError regression) |
@@ -229,6 +229,15 @@ rewritten and folded into this suite:
   having silently done nothing. Fixed by adding the dispatch call. See
   "Video uploads & deploying this change" below for the full story,
   including a second, separate issue found on the deployed Pi.
+- **`Wish.cost`** was still a `Float` column, missed during the earlier
+  `Numeric` migration of `balance`/`amount`/`default_amount`. Unlike
+  that original bug (which only surfaced after repeated float
+  addition), a single stored value often round-trips fine through
+  Postgres, so the regression tests added
+  (`TestWishCostPrecision` in `test_pocket_money_wishes.py`) check the
+  column's actual type and that a fresh read-back is a `Decimal`, not
+  a number that happens to survive one round trip. Migration:
+  `alembic/versions/824ea1ae3c03_convert_wish_cost_to_numeric.py`.
 
 ## Known gaps / suggested next steps
 
@@ -236,11 +245,6 @@ rewritten and folded into this suite:
   authentication on data-mutating endpoints (flagged separately,
   outside this suite's scope) -- not covered by tests here since the
   priority is fixing the auth gap itself before testing around it.
-- **`Wish.cost`** is still a `Float` column in `user_models.py` (it was
-  missed during the earlier `Numeric` migration of `balance`/`amount`/
-  `default_amount`). The wish tests in this suite use round numbers
-  that won't expose drift, but this is worth fixing for consistency --
-  flagging it here rather than silently working around it.
 - **`bcrypt` is missing from `requirements.txt`** entirely, despite
   `passlib`'s `CryptContext(schemes=["bcrypt"], ...)` requiring it as a
   backend. In a clean environment this makes every password hash/verify
