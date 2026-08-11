@@ -114,6 +114,7 @@ def update_child(child_id: int,
         child.birth_date = birth_date
 
     db.commit()
+    db.refresh(child)
 
     return child
 

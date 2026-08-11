@@ -115,11 +115,19 @@ pytest tests/test_pocket_money_precision.py::TestFloatPrecisionRegression::test_
 - **Exception:** `test_scheduler.py`'s `TestRunWeeklyPayout` tests call
   `run_weekly_payout()` directly, which opens its **own** database
   session (`SessionLocal()`) rather than using the injected test
-  session. This means those specific tests commit for real and clean
-  up manually via an explicit `_cleanup()` helper. If a test in that
-  class fails partway through, you may need to manually clear test
-  rows from the `forddbs_test` database — this only affects the
-  disposable test DB, never production.
+  session. Under Postgres's READ COMMITTED isolation, that independent
+  connection can only see rows that were *actually* committed —
+  `db_session`'s "commits" happen inside an externally-managed
+  transaction (`connection.begin()`) that's only ever rolled back, so
+  they're invisible to it. These tests use the `make_real_child` /
+  `real_child_age_10` fixtures instead, which commit through their own
+  independent connection so `run_weekly_payout()` can genuinely find
+  and update the rows, and clean themselves up for real afterward
+  (`make_real_child`'s fixture teardown in `conftest.py`). If a test
+  using these fixtures fails partway through in a way that skips
+  teardown, you may need to manually clear test rows from the
+  `forddbs_test` database — this only affects the disposable test DB,
+  never production.
 
 ## What's covered
 
@@ -134,6 +142,7 @@ pytest tests/test_pocket_money_precision.py::TestFloatPrecisionRegression::test_
 | `test_scheduler.py` | `calculate_age` (pure), `run_weekly_payout` (incl. the Decimal/float TypeError regression) |
 | `test_utils.py` | Utility-meter dashboard helpers (rewritten against real `utils_core.py` -- see note below) |
 | `test_invest.py` | `fetch_live_prices` mocked logic + opt-in live-API smoke test (rewritten -- see note below) |
+| `test_family_photos.py` | The `liked_by` avatar feature: empty/single/multiple likers, display-name fallback, avatar URL presence, like/unlike toggling, auth requirement, consistency across `/feed`, `/archive`, `/albums/{id}/photos` |
 
 ## Notes on rewritten tests
 
@@ -169,6 +178,24 @@ rewritten and folded into this suite:
   `@pytest.mark.live_api` smoke test, excluded from normal runs by
   default (run deliberately with `pytest --run-live-api`).
 
+## Bugs found and fixed while building out this suite
+
+- **`update_child` (`app/api/v1/pocket_money.py`)** committed the
+  updated `Child` but never called `db.refresh(child)` before
+  returning it. SQLAlchemy expires an object's attributes on commit by
+  default, so the JSON response FastAPI serialized back was missing
+  fields entirely (`KeyError: 'name'` in
+  `test_update_child_name`) rather than returning stale data. Fixed by
+  adding the same `db.refresh(child)` call `add_child` and
+  `adjust_balance` already use.
+- **`TestRunWeeklyPayout` (`test_scheduler.py`)** — 3 of its 5 tests
+  were failing, and the other 2 were passing vacuously (not actually
+  exercising `run_weekly_payout` against any data). Root cause was a
+  test-fixture isolation gap, not an app bug: see the "Safety
+  guardrails" note above on `make_real_child`. Fixed by switching
+  these tests to fixtures that commit through a genuinely separate
+  connection.
+
 ## Known gaps / suggested next steps
 
 - **`db_manager.py` and most of `shares.py`** have little to no
@@ -180,6 +207,16 @@ rewritten and folded into this suite:
   `default_amount`). The wish tests in this suite use round numbers
   that won't expose drift, but this is worth fixing for consistency --
   flagging it here rather than silently working around it.
+- **`bcrypt` is missing from `requirements.txt`** entirely, despite
+  `passlib`'s `CryptContext(schemes=["bcrypt"], ...)` requiring it as a
+  backend. In a clean environment this makes every password hash/verify
+  call (user creation, login, password reset) throw an uncaught
+  `passlib.exc.MissingBackendError`, which surfaces to a browser as a
+  confusing CORS failure rather than a clear error. Additionally,
+  whatever the latest `bcrypt` happens to be (5.0.0 as of this
+  writing) is incompatible with this pinned `passlib` 1.7.4 --
+  `bcrypt==4.0.1` is confirmed compatible. Needs a pin added to
+  `requirements.txt`.
 - **CI**: none of this runs automatically yet. Once you're happy with
   local results, a GitHub Actions workflow with a `postgres:15-alpine`
   service container would let this run on every push with no manual

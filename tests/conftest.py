@@ -30,8 +30,9 @@ container command above are used.
 import os
 import pytest
 from decimal import Decimal
-from datetime import date
+from datetime import date, datetime, timedelta, timezone
 
+from jose import jwt
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from fastapi.testclient import TestClient
@@ -48,7 +49,7 @@ os.environ.setdefault("ADMIN_PASSWORD", "test-admin-password")
 os.environ.setdefault("ALLOWED_ORIGINS", "")
 
 from app.database.database import Base, get_db, get_db_url  # noqa: E402
-from app.models.user_models import Child, Transaction, Wish  # noqa: E402
+from app.models.user_models import Child, Transaction, Wish, User  # noqa: E402
 from app.models.deductions_models import DeductionType  # noqa: E402
 # Importing these registers them on Base.metadata / SQLAlchemy's mapper
 # registry, mirroring what app.main does — without this, mapper
@@ -58,6 +59,7 @@ from app.models.shares_models import (  # noqa: E402,F401
     EmployeeShare, EtfTransaction, EtfPurchaseSchedule
 )
 from app.models.utilities import Utils  # noqa: E402,F401
+from app.api.v1.family_photos import hash_pw, SECRET_KEY, ALGORITHM  # noqa: E402
 
 
 TEST_DATABASE_URL = get_db_url()
@@ -193,6 +195,127 @@ def child_age_10(make_child):
     today = date.today()
     birth_date = date(today.year - 10, today.month, today.day)
     return make_child(name="DecadeKid", balance="0.00", birth_date=birth_date)
+
+
+@pytest.fixture
+def make_real_child():
+    """
+    Factory fixture: like make_child, but commits through a genuinely
+    separate SessionLocal() connection instead of the rollback-wrapped
+    db_session.
+
+    db_session is bound to a Connection that already has an external
+    transaction started via connection.begin() (see db_session above).
+    Under Postgres's default READ COMMITTED isolation, rows "committed"
+    through that session are never actually committed at the protocol
+    level -- they're invisible to any other connection until the outer
+    transaction itself commits, which it never does (only rollback, at
+    teardown). Code under test that opens its own independent session
+    -- like run_weekly_payout(), which calls SessionLocal() directly --
+    therefore can't see anything created via make_child/child_age_10,
+    no matter how many times db_session.commit() is called.
+
+    Use this fixture (not make_child/child_age_10) for any test that
+    calls such code and asserts on rows it reads or writes.
+    """
+    from app.database.database import SessionLocal as RealSessionLocal
+    created_ids = []
+
+    def _make_real_child(name="RealChild", balance="0.00", birth_date=None):
+        session = RealSessionLocal()
+        try:
+            child = Child(name=name, balance=Decimal(balance),
+                          birth_date=birth_date)
+            session.add(child)
+            session.commit()
+            session.refresh(child)
+            created_ids.append(child.id)
+            return child
+        finally:
+            session.close()
+
+    yield _make_real_child
+
+    if created_ids:
+        session = RealSessionLocal()
+        try:
+            session.query(Transaction).filter(
+                Transaction.child_id.in_(created_ids)
+            ).delete(synchronize_session=False)
+            session.query(Child).filter(
+                Child.id.in_(created_ids)
+            ).delete(synchronize_session=False)
+            session.commit()
+        finally:
+            session.close()
+
+
+@pytest.fixture
+def real_child_age_10(make_real_child):
+    """A genuinely-committed child, exactly 10 years old today."""
+    today = date.today()
+    birth_date = date(today.year - 10, today.month, today.day)
+    return make_real_child(name="RealDecadeKid", balance="0.00",
+                           birth_date=birth_date)
+
+
+@pytest.fixture
+def make_user(db_session):
+    """Factory fixture: make_user(username="alice", display_name="Alice")"""
+    counter = {"n": 0}
+
+    def _make_user(username=None, display_name=None, role="parent",
+                   profile_photo_key=None, password=None):
+        counter["n"] += 1
+        user = User(
+            username=username or f"user{counter['n']}",
+            display_name=display_name,
+            role=role,
+            profile_photo_key=profile_photo_key,
+            hashed_password=hash_pw(password) if password else None,
+        )
+        db_session.add(user)
+        db_session.commit()
+        db_session.refresh(user)
+        return user
+
+    return _make_user
+
+
+@pytest.fixture
+def make_photo(db_session):
+    """Factory fixture: make_photo(uploader, caption="...")"""
+    counter = {"n": 0}
+
+    def _make_photo(uploader, caption=None, album_id=None):
+        counter["n"] += 1
+        photo = Photo(
+            minio_key=f"test-photo-{counter['n']}.jpg",
+            caption=caption,
+            uploader_id=uploader.id,
+            album_id=album_id,
+        )
+        db_session.add(photo)
+        db_session.commit()
+        db_session.refresh(photo)
+        return photo
+
+    return _make_photo
+
+
+@pytest.fixture
+def auth_headers():
+    """auth_headers(user) -> a valid Bearer-token header dict for that user."""
+    def _auth_headers(user):
+        token = jwt.encode(
+            {"sub": str(user.id),
+             "exp": datetime.now(timezone.utc) + timedelta(hours=1)},
+            SECRET_KEY,
+            algorithm=ALGORITHM,
+        )
+        return {"Authorization": f"Bearer {token}"}
+
+    return _auth_headers
 
 
 # ---------------------------------------------------------------------
