@@ -8,6 +8,7 @@ from app.api.v1.pocket_money import pocket_money_router
 from app.api.v1.family_photos import family_photos_router
 from app.api.v1.utils import utils_router
 from app.api.v1.shares import shares_router
+from app.api.v1.messaging import messaging_router
 from app.core.scheduler import start_scheduler
 from app.database.database import engine, Base
 from app.models.user_models import Child, Transaction  # noqa
@@ -15,6 +16,7 @@ from app.models.photo_model import Photo  # noqa
 from app.models.utilities import Utils  # noqa
 from app.models.shares_models import EmployeeShare  # noqa
 from app.models.deductions_models import DeductionType  # noqa
+from app.models.message_model import Conversation, ConversationMember, Message  # noqa
 from app.core.storage import init_storage
 
 
@@ -94,6 +96,12 @@ def create_app():
         shares_router,
         prefix="/v1/investments",
         tags=["Investments"]
+    )
+
+    app.include_router(
+        messaging_router,
+        prefix="/v1/messaging",
+        tags=["Messaging"]
     )
 
     return app

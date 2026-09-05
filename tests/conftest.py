@@ -71,6 +71,9 @@ from app.models.shares_models import (  # noqa: E402,F401
     EmployeeShare, EtfTransaction, EtfPurchaseSchedule
 )
 from app.models.utilities import Utils  # noqa: E402,F401
+from app.models.message_model import (  # noqa: E402,F401
+    Conversation, ConversationMember, Message
+)
 from app.api.v1.family_photos import hash_pw, SECRET_KEY, ALGORITHM  # noqa: E402
 
 
@@ -339,6 +342,67 @@ def make_photo(db_session):
         return photo
 
     return _make_photo
+
+
+@pytest.fixture
+def make_conversation(db_session):
+    """Factory fixture: make_conversation(alice, bob, is_group=False,
+    title=None) -- creates a Conversation with the given users as
+    members and returns it."""
+    def _make_conversation(*users, is_group=False, title=None,
+                           created_by=None):
+        creator = created_by or users[0]
+        conversation = Conversation(
+            is_group=is_group,
+            title=title,
+            created_by=creator.id,
+        )
+        db_session.add(conversation)
+        db_session.flush()
+
+        for user in users:
+            db_session.add(ConversationMember(
+                conversation_id=conversation.id,
+                user_id=user.id,
+            ))
+
+        db_session.commit()
+        db_session.refresh(conversation)
+        return conversation
+
+    return _make_conversation
+
+
+@pytest.fixture
+def make_message(db_session):
+    """Factory fixture: make_message(conversation, sender, body="hi",
+    client_id=None, created_at=None) -- inserts a Message directly
+    (bypassing the API), useful for controlling created_at to test the
+    24h delete window."""
+    counter = {"n": 0}
+
+    def _make_message(conversation, sender, body="hello", client_id=None,
+                      created_at=None, photo_id=None):
+        counter["n"] += 1
+        message = Message(
+            conversation_id=conversation.id,
+            sender_id=sender.id,
+            body=body,
+            photo_id=photo_id,
+            client_id=client_id or f"test-client-{counter['n']}",
+        )
+        db_session.add(message)
+        db_session.commit()
+        db_session.refresh(message)
+
+        if created_at is not None:
+            message.created_at = created_at
+            db_session.commit()
+            db_session.refresh(message)
+
+        return message
+
+    return _make_message
 
 
 @pytest.fixture
