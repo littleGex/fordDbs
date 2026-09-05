@@ -14,6 +14,8 @@
     </div>
 
     <div class="nav-right">
+      <button class="nav-icon-btn" @click="router.push('/messages')" title="Messages">💬</button>
+
       <div class="nav-user-info" @click="returnToProfiles" title="Switch Profile">
         <span>{{ auth.currentUser.display_name }}</span>
         <img
@@ -74,6 +76,26 @@ const returnToProfiles = () => {
 }
 .nav-logo:active {
   transform: scale(0.95);
+}
+
+.nav-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.nav-icon-btn {
+  background: none;
+  border: none;
+  font-size: 1.3rem;
+  cursor: pointer;
+  padding: 6px 10px;
+  border-radius: 4px;
+  transition: background 0.3s;
+}
+
+.nav-icon-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
 }
 
 .nav-user-info {
