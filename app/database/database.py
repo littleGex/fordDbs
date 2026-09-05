@@ -15,8 +15,8 @@ def get_db_url():
     port = os.getenv("DB_PORT", "5432")
     db_name = os.getenv("POSTGRES_DB", "postgres_db")
 
-    DATABASE_URL = f"postgresql://{user}:{password}@{host}:{port}/{db_name}"
-    print(f"DEBUG: Connecting to {DATABASE_URL}")
+    print(f"DEBUG: Connecting to postgresql://{user}:***@{host}:"
+          f"{port}/{db_name}")
 
     return f"postgresql://{user}:{password}@{host}:{port}/{db_name}"
 
