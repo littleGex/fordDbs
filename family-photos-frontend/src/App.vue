@@ -10,7 +10,7 @@
 
       <main :class="{ 'no-nav': !auth.currentUser }">
         <router-view v-slot="{ Component, route }">
-          <transition name="fade" mode="out-in">
+          <transition name="fade">
             <component :is="Component" :key="route.fullPath"/>
           </transition>
         </router-view>
