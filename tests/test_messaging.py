@@ -349,3 +349,72 @@ class TestLeaveConversationCascade:
             headers=auth_headers(alice))
 
         assert resp.status_code == 403
+
+
+class TestWebSocketDelivery:
+    """format_message()'s dict is returned two ways: as a normal HTTP
+    JSON response (where FastAPI's jsonable_encoder silently converts
+    datetime -> str) and pushed raw over a WebSocket via send_json(),
+    which does NOT run jsonable_encoder and raises TypeError on a bare
+    datetime. A plain HTTP-only test can't catch that divergence --
+    this exercises the actual send_json() wire path via a real
+    WebSocketTestSession, the way manual testing caught it."""
+
+    def test_new_message_is_delivered_live_to_other_member(
+            self, client, make_user, make_conversation, auth_headers):
+        alice = make_user(username="alice")
+        bob = make_user(username="bob")
+        conversation = make_conversation(alice, bob)
+
+        bob_token = auth_headers(bob)["Authorization"].split(" ")[1]
+
+        with client.websocket_connect(
+                f"/v1/messaging/ws?token={bob_token}") as websocket:
+            resp = client.post(
+                f"/v1/messaging/conversations/{conversation.id}/messages",
+                data={"client_id": "ws-1", "body": "hello over the wire"},
+                headers=auth_headers(alice))
+            assert resp.status_code == 200
+
+            event = websocket.receive_json()
+
+        assert event["type"] == "message"
+        assert event["data"]["body"] == "hello over the wire"
+        assert event["data"]["sender_id"] == alice.id
+        # The regression this guards: created_at must already be a
+        # JSON-safe string, not a raw datetime that send_json() can't
+        # encode.
+        assert isinstance(event["data"]["created_at"], str)
+
+    def test_sender_does_not_receive_their_own_message_over_the_socket(
+            self, client, make_user, make_conversation, auth_headers):
+        alice = make_user(username="alice")
+        bob = make_user(username="bob")
+        conversation = make_conversation(alice, bob)
+
+        alice_token = auth_headers(alice)["Authorization"].split(" ")[1]
+
+        with client.websocket_connect(
+                f"/v1/messaging/ws?token={alice_token}") as websocket:
+            resp = client.post(
+                f"/v1/messaging/conversations/{conversation.id}/messages",
+                data={"client_id": "ws-2", "body": "just for bob"},
+                headers=auth_headers(alice))
+            assert resp.status_code == 200
+
+            # A second, unrelated message confirms the socket is alive
+            # and simply was never sent the first one -- not stalled.
+            client.post(
+                f"/v1/messaging/conversations/{conversation.id}/messages",
+                data={"client_id": "ws-3", "body": "from bob"},
+                headers=auth_headers(bob))
+
+            event = websocket.receive_json()
+
+        assert event["data"]["body"] == "from bob"
+
+    def test_invalid_token_closes_the_connection(self, client):
+        with pytest.raises(Exception):
+            with client.websocket_connect(
+                    "/v1/messaging/ws?token=not-a-real-token") as websocket:
+                websocket.receive_json()

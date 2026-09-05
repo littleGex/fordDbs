@@ -2,6 +2,7 @@ import { createRouter, createWebHistory } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
 import ProfilePicker from '../components/ProfilePicker.vue';
 import UserProfile from '../views/UserProfile.vue';
+import Messages from '../views/Messages.vue';
 
 const routes = [
   {
@@ -14,6 +15,12 @@ const routes = [
     name: 'home',
     component: UserProfile,
     meta: { requiresAuth: true } // Mark this as a protected route
+  },
+  {
+    path: '/messages',
+    name: 'messages',
+    component: Messages,
+    meta: { requiresAuth: true }
   }
 ];
 

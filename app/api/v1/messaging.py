@@ -1,3 +1,4 @@
+import asyncio
 from fastapi import (APIRouter, Depends, HTTPException, Form,
                      Query, WebSocket, WebSocketDisconnect)
 from sqlalchemy.orm import Session
@@ -13,6 +14,13 @@ from jose import jwt, JWTError
 messaging_router = APIRouter()
 
 MESSAGE_DELETE_WINDOW = timedelta(hours=24)
+# A client that vanishes without a clean close (phone locks, network
+# drops, browser killed) can leave a socket the server still considers
+# open -- send_json() on it may then hang indefinitely waiting on a
+# peer that's gone, rather than raising. Without a timeout, one such
+# zombie connection would block delivery to every connection after it
+# in the same user's list.
+SEND_TIMEOUT_SECONDS = 5
 
 
 class ConnectionManager:
@@ -39,7 +47,8 @@ class ConnectionManager:
     async def send_to_user(self, user_id: int, payload: dict):
         for websocket in list(self.active_connections.get(user_id, [])):
             try:
-                await websocket.send_json(payload)
+                await asyncio.wait_for(
+                    websocket.send_json(payload), timeout=SEND_TIMEOUT_SECONDS)
             except Exception:
                 self.disconnect(user_id, websocket)
 
@@ -64,7 +73,12 @@ def format_message(message: Message) -> dict:
             get_image_url(message.photo.minio_key)
             if not is_deleted and message.photo else None
         ),
-        "created_at": message.created_at,
+        # Explicit isoformat(), not the raw datetime: FastAPI's normal
+        # response pipeline runs return values through jsonable_encoder
+        # (which handles datetime), but WebSocket.send_json() -- used
+        # to push this same dict over the wire for live delivery --
+        # does not, and raises TypeError on a raw datetime.
+        "created_at": message.created_at.isoformat(),
         "deleted": is_deleted,
     }
 
