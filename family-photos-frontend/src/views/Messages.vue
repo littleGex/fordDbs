@@ -33,7 +33,7 @@
     <div class="thread-panel" :class="{ 'show-mobile': selectedConversation }">
       <template v-if="selectedConversation">
         <div class="thread-header">
-          <button class="back-btn mobile-only" @click="selectedConversation = null">← Back</button>
+          <button class="back-btn mobile-only" @click="deselectConversation">← Back</button>
           <img :src="conversationAvatar(selectedConversation)" class="conv-avatar" />
           <div class="thread-header-info">
             <span class="conv-title">{{ conversationTitle(selectedConversation) }}</span>
@@ -119,16 +119,21 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue';
+import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue';
 import { useAuthStore } from '../stores/auth';
+import { useMessagingStore } from '../stores/messaging';
 import familyPhotosApi from '../api/axios';
-import messagingApi, { MESSAGING_WS_BASE } from '../api/messagingApi';
+import messagingApi from '../api/messagingApi';
 import { getAvatar } from '../utils/avatar';
 
 const auth = useAuthStore();
+const store = useMessagingStore();
 
-const conversations = ref([]);
-const loadingConversations = ref(true);
+// Conversations, unread counts, and the live WebSocket connection all
+// live in the shared store (NavBar's unread badge reads the same data),
+// so this view just reflects it rather than keeping its own copy.
+const conversations = computed(() => store.conversations);
+const loadingConversations = computed(() => store.loadingConversations);
 const selectedConversation = ref(null);
 const messages = ref([]);
 const loadingMessages = ref(false);
@@ -149,8 +154,6 @@ const otherUsers = computed(() =>
 const showNewModal = ref(false);
 const newMembers = ref([]);
 const newGroupTitle = ref('');
-
-let ws = null;
 
 const sortedConversations = computed(() =>
   [...conversations.value].sort((a, b) => {
@@ -204,17 +207,6 @@ const scrollToBottom = () => {
   });
 };
 
-const fetchConversations = async () => {
-  try {
-    const res = await messagingApi.get('/conversations');
-    conversations.value = res.data;
-  } catch (err) {
-    console.error('Failed to fetch conversations', err);
-  } finally {
-    loadingConversations.value = false;
-  }
-};
-
 const fetchFamilyUsers = async () => {
   try {
     const res = await familyPhotosApi.get('/users');
@@ -226,6 +218,7 @@ const fetchFamilyUsers = async () => {
 
 const selectConversation = async (conv) => {
   selectedConversation.value = conv;
+  store.setActiveConversation(conv.id);
   loadingMessages.value = true;
   messages.value = [];
   try {
@@ -240,17 +233,31 @@ const selectConversation = async (conv) => {
   }
 };
 
+const deselectConversation = () => {
+  selectedConversation.value = null;
+  store.setActiveConversation(null);
+};
+
 const markRead = async (conv) => {
   if (messages.value.length === 0) return;
   const lastId = messages.value[messages.value.length - 1].id;
-  try {
-    await messagingApi.post(`/conversations/${conv.id}/read`, toFormData({ message_id: lastId }));
-    const local = conversations.value.find(c => c.id === conv.id);
-    if (local) local.unread_count = 0;
-  } catch (err) {
-    console.error('Failed to mark read', err);
-  }
+  await store.markRead(conv.id, lastId);
 };
+
+// The active conversation's last_message is updated live by the store's
+// WebSocket handler; watch it to append incoming messages to the open
+// thread (the id check also skips the echo of a message we just sent
+// ourselves in handleSend, which already pushed it locally).
+watch(
+  () => conversations.value.find(c => c.id === selectedConversation.value?.id)?.last_message,
+  (msg) => {
+    if (!msg || !selectedConversation.value) return;
+    if (messages.value.some(m => m.id === msg.id)) return;
+    messages.value.push(msg);
+    scrollToBottom();
+    markRead(selectedConversation.value);
+  }
+);
 
 const toFormData = (obj) => {
   const fd = new FormData();
@@ -302,8 +309,8 @@ const handleLeave = async () => {
   const conv = selectedConversation.value;
   try {
     await messagingApi.post(`/conversations/${conv.id}/leave`);
-    conversations.value = conversations.value.filter(c => c.id !== conv.id);
-    selectedConversation.value = null;
+    store.removeConversation(conv.id);
+    deselectConversation();
   } catch (err) {
     alert(err.response?.data?.detail || 'Could not leave conversation');
   }
@@ -338,7 +345,7 @@ const handleStartConversation = async () => {
       member_ids: newMembers.value.join(','),
     }));
     showNewModal.value = false;
-    await fetchConversations();
+    await store.fetchConversations();
     const created = conversations.value.find(c => c.id === res.data.id);
     if (created) selectConversation(created);
   } catch (err) {
@@ -346,43 +353,13 @@ const handleStartConversation = async () => {
   }
 };
 
-const connectWebSocket = () => {
-  const token = localStorage.getItem('token');
-  if (!token) return;
-
-  ws = new WebSocket(`${MESSAGING_WS_BASE}/ws?token=${encodeURIComponent(token)}`);
-
-  ws.onmessage = (event) => {
-    const payload = JSON.parse(event.data);
-    if (payload.type !== 'message') return;
-    const msg = payload.data;
-
-    const local = conversations.value.find(c => c.id === msg.conversation_id);
-    if (local) local.last_message = msg;
-
-    if (selectedConversation.value?.id === msg.conversation_id) {
-      messages.value.push(msg);
-      scrollToBottom();
-      markRead(selectedConversation.value);
-    } else if (local) {
-      local.unread_count = (local.unread_count || 0) + 1;
-    }
-  };
-
-  // No reconnect/backoff for v1 -- a dropped socket just means live
-  // delivery pauses until the page is reloaded; conversations/messages
-  // are always fetchable normally in the meantime.
-  ws.onerror = (err) => console.warn('Messaging socket error', err);
-};
-
 onMounted(async () => {
+  store.init();
   await fetchFamilyUsers();
-  await fetchConversations();
-  connectWebSocket();
 });
 
 onUnmounted(() => {
-  if (ws) ws.close();
+  store.setActiveConversation(null);
 });
 </script>
 

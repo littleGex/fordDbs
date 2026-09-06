@@ -14,7 +14,10 @@
     </div>
 
     <div class="nav-right">
-      <button class="nav-icon-btn" @click="router.push('/messages')" title="Messages">💬</button>
+      <button class="nav-icon-btn" @click="router.push('/messages')" title="Messages">
+        💬
+        <span v-if="messaging.unreadTotal > 0" class="unread-dot">{{ badgeText }}</span>
+      </button>
 
       <div class="nav-user-info" @click="returnToProfiles" title="Switch Profile">
         <span>{{ auth.currentUser.display_name }}</span>
@@ -32,10 +35,16 @@
 import { ref, onMounted, computed } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
+import { useMessagingStore } from '../stores/messaging';
 
 const auth = useAuthStore();
+const messaging = useMessagingStore();
 const router = useRouter();
 const particles = ref([]);
+
+const badgeText = computed(() =>
+  messaging.unreadTotal > 99 ? '99+' : messaging.unreadTotal
+);
 
 const currentTheme = computed(() => {
   const month = new Date().getMonth();
@@ -61,9 +70,15 @@ onMounted(() => {
     animationDuration: `${Math.random() * 3 + 2}s`,
     animationDelay: `${Math.random() * 5}s`
   }));
+
+  // NavBar is mounted for the whole authenticated session, so this is
+  // where the shared conversations/WebSocket state gets started; init()
+  // is a no-op if Messages.vue (or a prior mount) already did it.
+  messaging.init();
 });
 
 const returnToProfiles = () => {
+  messaging.reset();
   auth.logout();
   window.location.href = '/';
 };
@@ -85,6 +100,7 @@ const returnToProfiles = () => {
 }
 
 .nav-icon-btn {
+  position: relative;
   background: none;
   border: none;
   font-size: 1.3rem;
@@ -96,6 +112,25 @@ const returnToProfiles = () => {
 
 .nav-icon-btn:hover {
   background: rgba(255, 255, 255, 0.1);
+}
+
+.unread-dot {
+  position: absolute;
+  top: 0;
+  right: 0;
+  background: var(--accent, #e50914);
+  color: white;
+  font-size: 0.65rem;
+  font-weight: 700;
+  line-height: 1;
+  border-radius: 999px;
+  min-width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 4px;
+  box-shadow: 0 0 0 2px #141414;
 }
 
 .nav-user-info {
