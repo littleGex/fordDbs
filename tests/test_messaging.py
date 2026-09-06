@@ -190,6 +190,22 @@ class TestUnreadCounts:
         summary = next(c for c in convos if c["id"] == conversation.id)
         assert summary["unread_count"] == 2
 
+    def test_sender_does_not_see_their_own_new_message_as_unread(
+            self, client, make_user, make_conversation, auth_headers):
+        alice = make_user(username="alice")
+        bob = make_user(username="bob")
+        conversation = make_conversation(alice, bob)
+
+        client.post(
+            f"/v1/messaging/conversations/{conversation.id}/messages",
+            data={"client_id": "c1", "body": "hi bob"},
+            headers=auth_headers(alice))
+
+        convos = client.get(
+            "/v1/messaging/conversations", headers=auth_headers(alice)).json()
+        summary = next(c for c in convos if c["id"] == conversation.id)
+        assert summary["unread_count"] == 0
+
     def test_mark_read_ignores_older_message_id(
             self, client, make_user, make_conversation, make_message,
             auth_headers):

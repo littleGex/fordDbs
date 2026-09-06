@@ -220,7 +220,7 @@ async def send_message(
         photo_id: int = Form(None),
         db: Session = Depends(get_db),
         current_user: User = Depends(get_current_user)):
-    _get_membership_or_403(db, conversation_id, current_user.id)
+    membership = _get_membership_or_403(db, conversation_id, current_user.id)
 
     existing = db.query(Message).filter_by(
         conversation_id=conversation_id, client_id=client_id).first()
@@ -246,6 +246,12 @@ async def send_message(
             return format_message(existing)
         raise
     db.refresh(message)
+
+    # The sender has, by definition, already seen the message they just
+    # sent -- advance their own read pointer so it doesn't count as
+    # unread to themselves (e.g. in the nav badge) on their next fetch.
+    membership.last_read_message_id = message.id
+    db.commit()
 
     payload = format_message(message)
 
