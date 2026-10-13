@@ -56,7 +56,7 @@
 
 <script setup>
 import { ref, reactive, onMounted } from 'vue';
-import axios from 'axios';
+import api from '../api';
 
 const props = defineProps(['initialData']);
 const emit = defineEmits(['close', 'refresh']);
@@ -93,7 +93,7 @@ const submitReadings = async () => {
       .filter(([_, value]) => value !== null && value !== '');
 
     for (const [key, value] of activeReadings) {
-      await axios.post(`${import.meta.env.VITE_API_BASE}/add-util`, null, {
+      await api.post('/add-util', null, {
         params: { util_date: formData.date, utility: key, util_reading: value }
       });
     }

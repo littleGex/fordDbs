@@ -1,10 +1,9 @@
 <script setup>
 import {ref, onMounted, watch, nextTick} from 'vue'
-import axios from 'axios'
+import api from '../api'
 import Chart from 'chart.js/auto'
 
 const portfolio = ref({shares: [], etfs: [], vesting_timeline: [], timestamp: ''})
-const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8005/v1';
 
 // Chart Refs
 const chartTotal = ref(null)
@@ -19,7 +18,7 @@ let timelineChartInstance = null
 
 const fetchPortfolio = async () => {
   try {
-    const res = await axios.get(`${API_BASE}/investments/dashboard-summary`)
+    const res = await api.get(`/investments/dashboard-summary`)
     portfolio.value = res.data
   } catch (e) {
     console.error("Error fetching portfolio:", e)

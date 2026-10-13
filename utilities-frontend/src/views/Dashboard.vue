@@ -8,10 +8,16 @@
           <h1 class="text-3xl font-extrabold text-gray-900 tracking-tight">Utility Dashboard</h1>
           <p class="text-sm text-gray-500 mt-1">Real-time usage and historical trends.</p>
         </div>
-        <button @click="openAddModal"
-                class="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl font-semibold shadow-sm transition-all">
-          + Add Reading
-        </button>
+        <div class="flex items-center gap-3">
+          <button @click="openAddModal"
+                  class="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl font-semibold shadow-sm transition-all">
+            + Add Reading
+          </button>
+          <button @click="logout"
+                  class="text-gray-500 hover:text-gray-700 px-3 py-2.5 rounded-xl font-semibold transition-all">
+            Log out
+          </button>
+        </div>
       </header>
 
       <div v-if="isLoading" class="flex justify-center py-20">
@@ -86,7 +92,8 @@
 
 <script setup>
 import {ref, onMounted} from 'vue';
-import axios from 'axios';
+import api from '../api';
+import {logout} from '../auth';
 import UtilityCard from '../components/UtilityCard.vue';
 import UsageChart from '../components/UsageChart.vue';
 import AddReadingModal from "../components/AddReadingModal.vue";
@@ -116,7 +123,7 @@ const closeModal = () => {
 const fetchData = async () => {
   isLoading.value = true;
   try {
-    const res = await axios.get(`${import.meta.env.VITE_API_BASE}/dashboard`);
+    const res = await api.get('/dashboard');
     data.value = res.data;
   } catch (err) {
     console.error(err);

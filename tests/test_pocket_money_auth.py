@@ -98,12 +98,12 @@ class TestLoginRequired:
         assert resp.status_code == 404
 
     def test_old_admin_password_no_longer_grants_access(
-        self, client, make_child, admin_password
+        self, client, make_child
     ):
         child = make_child(name="Kid", balance="10.00")
 
         resp = client.delete(f"/v1/pocket-money/child/{child.id}",
-                             params={"password": admin_password})
+                             params={"password": "the-old-password"})
 
         assert resp.status_code == 401
 

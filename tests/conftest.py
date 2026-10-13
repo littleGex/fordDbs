@@ -45,7 +45,6 @@ os.environ["POSTGRES_PASSWORD"] = os.getenv("TEST_POSTGRES_PASSWORD", "test")
 os.environ["DB_HOST"] = os.getenv("TEST_DB_HOST", "localhost")
 os.environ["DB_PORT"] = os.getenv("TEST_DB_PORT", "5434")
 os.environ["POSTGRES_DB"] = os.getenv("TEST_POSTGRES_DB", "forddbs_test")
-os.environ.setdefault("ADMIN_PASSWORD", "test-admin-password")
 os.environ.setdefault("SECRET_KEY", "test-secret-key")
 os.environ.setdefault("ALLOWED_ORIGINS", "")
 
@@ -187,11 +186,6 @@ def app(db_session):
 def client(app):
     """Synchronous TestClient for hitting the API directly."""
     return TestClient(app)
-
-
-@pytest.fixture
-def admin_password():
-    return os.environ["ADMIN_PASSWORD"]
 
 
 @pytest.fixture
