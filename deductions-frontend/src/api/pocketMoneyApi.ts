@@ -47,9 +47,9 @@ const authFetch = async (path: string, init: RequestInit = {}) => {
 };
 
 export const pocketMoneyApi = {
-    // Everyone who has a login; roles are only known after logging in
+    // The parents, who are the only ones this app is for
     getFamily: async (): Promise<FamilyUser[]> => {
-        const res = await fetch(`${AUTH_BASE}/login-options`);
+        const res = await fetch(`${AUTH_BASE}/login-options?audience=parents`);
         if (!res.ok) throw new Error("Failed to load the family list");
         return res.json();
     },

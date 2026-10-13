@@ -39,12 +39,12 @@ export default function Login({ onLogin }: Props) {
                 <h1 className="text-4xl font-black text-gray-950 tracking-tight mb-2">Deductions</h1>
                 <p className="text-gray-500 mb-6 font-medium">Parents only. Who are you?</p>
 
-                <div className="grid grid-cols-2 gap-3 mb-6">
+                <div className="flex gap-3 mb-6">
                     {family.map(member => (
                         <button
                             key={member.id}
                             onClick={() => setUserId(member.id)}
-                            className={`py-3 rounded-2xl font-bold transition-all ${userId === member.id ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-700'}`}
+                            className={`flex-1 py-3 rounded-2xl font-bold transition-all ${userId === member.id ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-700'}`}
                         >
                             {member.display_name}
                         </button>

@@ -44,7 +44,7 @@ const loading = ref(false);
 
 const fetchUsers = async () => {
   try {
-    const res = await axios.get(`${AUTH_BASE}/login-options`);
+    const res = await axios.get(`${AUTH_BASE}/login-options`, {params: {audience: 'parents'}});
     users.value = res.data;
   } catch (e) {
     errorMessage.value = "Could not load the family list. Please try again.";

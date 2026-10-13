@@ -20,7 +20,8 @@ from jose import jwt
 from datetime import datetime, timedelta, timezone
 from app.core.auth import (SECRET_KEY, ALGORITHM, hash_pw, verify_pw,
                            get_current_user, get_current_user_for_refresh,
-                           is_parent, STATUS_ACTIVE, STATUS_PENDING)
+                           is_parent, STATUS_ACTIVE, STATUS_PENDING,
+                           LOGIN_AUDIENCES)
 
 logger = logging.getLogger("app.api.users")
 family_photos_router = APIRouter()
@@ -408,11 +409,20 @@ def update_profile(
 
 
 @family_photos_router.get("/login-options")
-def get_login_options(db: Session = Depends(get_db)):
+def get_login_options(audience: str = None,
+                      db: Session = Depends(get_db)):
     """
     The only user data available without a token: just enough for the
-    login screens to show who can log in.
+    login screens to show who can log in. `audience` narrows the list to
+    the people an app is for: "parents", or "household" (parents and
+    children).
     """
+    query = db.query(User).filter(User.status == STATUS_ACTIVE)
+    if audience is not None:
+        if audience not in LOGIN_AUDIENCES:
+            raise HTTPException(status_code=422, detail="Unknown audience")
+        query = query.filter(User.role.in_(LOGIN_AUDIENCES[audience]))
+
     return [
         {
             "id": user.id,
@@ -420,8 +430,7 @@ def get_login_options(db: Session = Depends(get_db)):
             "profile_photo_url": get_image_url(
                 user.profile_photo_key) if user.profile_photo_key else None
         }
-        for user in db.query(User).filter(
-            User.status == STATUS_ACTIVE).all()
+        for user in query.order_by(User.id).all()
     ]
 
 

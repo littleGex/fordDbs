@@ -227,6 +227,33 @@ class TestPhotoReadsRequireLogin:
         assert resp.json() == [{"id": user.id, "display_name": "Alice",
                                 "profile_photo_url": None}]
 
+    @pytest.mark.parametrize("audience,expected", [
+        (None, {"Dad", "Mum", "Oma", "Kid"}),
+        ("parents", {"Dad", "Mum"}),
+        ("household", {"Dad", "Mum", "Kid"}),
+    ])
+    def test_login_options_can_be_narrowed_to_an_audience(
+            self, client, make_user, audience, expected):
+        for name, role in [("Dad", "admin"), ("Mum", "parent"),
+                           ("Oma", "adult"), ("Kid", "child")]:
+            make_user(username=name.lower(), display_name=name, role=role)
+        make_user(username="waiting", display_name="Waiting",
+                  role="parent", status="pending")
+
+        resp = client.get("/v1/family-photos/login-options",
+                          params={"audience": audience} if audience else {})
+
+        assert resp.status_code == 200
+        assert {u["display_name"] for u in resp.json()} == expected
+        assert set(resp.json()[0]) == {"id", "display_name",
+                                       "profile_photo_url"}
+
+    def test_unknown_audience_rejected(self, client):
+        resp = client.get("/v1/family-photos/login-options",
+                          params={"audience": "everyone-please"})
+
+        assert resp.status_code == 422
+
     def test_login_returns_the_full_profile(self, client, make_user):
         user = make_user(username="alice", display_name="Alice",
                          role="child", password="pw")
