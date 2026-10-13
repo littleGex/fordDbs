@@ -41,7 +41,7 @@ docker run --rm -d \
     -e MINIO_ROOT_USER=testadmin \
     -e MINIO_ROOT_PASSWORD=testpassword \
     -p 9002:9000 \
-    minio/minio server /data
+    pgsty/minio:RELEASE.2026-08-04T00-00-00Z server /data
 ```
 
 Port `9002` (not `9000`, which your real `minio` container already uses)
