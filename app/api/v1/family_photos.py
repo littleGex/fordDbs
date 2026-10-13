@@ -195,7 +195,8 @@ def get_feed(
         user_id: int = None,
         limit: int = 20,
         offset: int = 0,
-        db: Session = Depends(get_db)):
+        db: Session = Depends(get_db),
+        current_user: User = Depends(get_current_user)):
     # 1. Start with the base query
     query = db.query(Photo)
 
@@ -211,7 +212,8 @@ def get_feed(
 
 
 @family_photos_router.get("/historical")
-def on_this_day(db: Session = Depends(get_db)):
+def on_this_day(db: Session = Depends(get_db),
+                current_user: User = Depends(get_current_user)):
     today = datetime.now(timezone.utc).date()
 
     # Filter photos where Month and Day match today, but
@@ -312,7 +314,9 @@ def record_view(
 
 
 @family_photos_router.get("/{photo_id}/stats")
-def get_photo_stats(photo_id: int, db: Session = Depends(get_db)):
+def get_photo_stats(photo_id: int,
+                    db: Session = Depends(get_db),
+                    current_user: User = Depends(get_current_user)):
     photo = db.query(Photo).filter(Photo.id == photo_id).first()
     if not photo:
         raise HTTPException(status_code=404, detail="Photo not found")
@@ -532,7 +536,8 @@ def create_album(
 
 
 @family_photos_router.get("/albums")
-def list_albums(db: Session = Depends(get_db)):
+def list_albums(db: Session = Depends(get_db),
+                current_user: User = Depends(get_current_user)):
     albums = db.query(Album).all()
     result = []
     for a in albums:
@@ -552,7 +557,9 @@ def list_albums(db: Session = Depends(get_db)):
 
 
 @family_photos_router.get("/albums/{album_id}/photos")
-def get_album_photos(album_id: int, db: Session = Depends(get_db)):
+def get_album_photos(album_id: int,
+                     db: Session = Depends(get_db),
+                     current_user: User = Depends(get_current_user)):
     album = db.query(Album).filter(Album.id == album_id).first()
     if not album:
         raise HTTPException(status_code=404, detail="Album not found")
@@ -568,7 +575,8 @@ def get_album_photos(album_id: int, db: Session = Depends(get_db)):
 async def get_photo_archive(
         skip: int = Query(0, description="Skip number of photos to archive"),
         limit: int = Query(20, description="How many photos to return"),
-        db: Session = Depends(get_db)):
+        db: Session = Depends(get_db),
+        current_user: User = Depends(get_current_user)):
     """
     Fetches a paginated list of all photos in the archive.
     """

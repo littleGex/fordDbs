@@ -32,7 +32,8 @@ def _upload_video(client, headers, video_bytes, caption="A clip"):
 class TestVideoUploadSuccess:
 
     def test_short_video_upload_succeeds_and_transcodes(
-            self, client, make_user, auth_headers, make_video_file):
+            self, parent_client,
+            client, make_user, auth_headers, make_video_file):
         uploader = make_user(username="uploader")
         clip = make_video_file(duration=2)
 
@@ -41,7 +42,7 @@ class TestVideoUploadSuccess:
 
         assert resp.status_code == 200
 
-        feed = client.get("/v1/family-photos/feed").json()
+        feed = parent_client.get("/v1/family-photos/feed").json()
         photo = feed[0]
         assert photo["media_type"] == "video"
         assert photo["caption"] == "Short clip"
@@ -50,38 +51,40 @@ class TestVideoUploadSuccess:
         assert 1 <= photo["duration_seconds"] <= 4
 
     def test_video_near_cap_is_accepted(
-            self, client, make_user, auth_headers, make_video_file):
+            self, parent_client,
+            client, make_user, auth_headers, make_video_file):
         uploader = make_user(username="uploader")
         clip = make_video_file(duration=29)
 
         resp = _upload_video(client, auth_headers(uploader), clip)
 
         assert resp.status_code == 200
-        feed = client.get("/v1/family-photos/feed").json()
+        feed = parent_client.get("/v1/family-photos/feed").json()
         assert feed[0]["media_type"] == "video"
 
 
 class TestVideoUploadRejection:
 
     def test_video_over_cap_rejected_no_photo_created(
-            self, client, make_user, auth_headers, make_video_file):
+            self, parent_client,
+            client, make_user, auth_headers, make_video_file):
         uploader = make_user(username="uploader")
         clip = make_video_file(duration=35)
 
         resp = _upload_video(client, auth_headers(uploader), clip)
 
         assert resp.status_code == 400
-        assert client.get("/v1/family-photos/feed").json() == []
+        assert parent_client.get("/v1/family-photos/feed").json() == []
 
     def test_corrupt_video_input_rejected_cleanly(
-            self, client, make_user, auth_headers):
+            self, parent_client, client, make_user, auth_headers):
         uploader = make_user(username="uploader")
         garbage = b"this is not a real video file, just garbage bytes"
 
         resp = _upload_video(client, auth_headers(uploader), garbage)
 
         assert resp.status_code == 400
-        assert client.get("/v1/family-photos/feed").json() == []
+        assert parent_client.get("/v1/family-photos/feed").json() == []
 
     def test_video_upload_requires_authentication(
             self, client, make_video_file):
@@ -98,7 +101,7 @@ class TestVideoUploadRejection:
 class TestImageUploadRegression:
 
     def test_image_upload_still_sets_media_type_image(
-            self, client, make_user, auth_headers):
+            self, parent_client, client, make_user, auth_headers):
         uploader = make_user(username="uploader")
 
         resp = client.post(
@@ -109,7 +112,7 @@ class TestImageUploadRegression:
         )
 
         assert resp.status_code == 200
-        feed = client.get("/v1/family-photos/feed").json()
+        feed = parent_client.get("/v1/family-photos/feed").json()
         photo = feed[0]
         assert photo["media_type"] == "image"
         assert photo["duration_seconds"] is None

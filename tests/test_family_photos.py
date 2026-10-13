@@ -15,12 +15,12 @@ pytestmark = pytest.mark.integration
 
 class TestLikedByFeed:
 
-    def test_no_likes_returns_empty_liked_by(self, client, make_user,
+    def test_no_likes_returns_empty_liked_by(self, parent_client, make_user,
                                              make_photo):
         uploader = make_user(username="uploader")
         photo = make_photo(uploader)
 
-        resp = client.get("/v1/family-photos/feed")
+        resp = parent_client.get("/v1/family-photos/feed")
 
         assert resp.status_code == 200
         body = next(p for p in resp.json() if p["id"] == photo.id)
@@ -28,7 +28,7 @@ class TestLikedByFeed:
         assert body["stats"]["likes"] == 0
 
     def test_single_like_appears_in_liked_by_with_avatar(
-            self, client, make_user, make_photo, auth_headers):
+            self, parent_client, client, make_user, make_photo, auth_headers):
         uploader = make_user(username="uploader")
         liker = make_user(
             username="liker", display_name="Liker Person",
@@ -39,7 +39,7 @@ class TestLikedByFeed:
                                 headers=auth_headers(liker))
         assert like_resp.status_code == 200
 
-        feed = client.get("/v1/family-photos/feed").json()
+        feed = parent_client.get("/v1/family-photos/feed").json()
         body = next(p for p in feed if p["id"] == photo.id)
 
         assert body["liked_by"] == [{
@@ -50,7 +50,7 @@ class TestLikedByFeed:
         assert body["stats"]["likes"] == 1
 
     def test_liked_by_falls_back_to_username_without_display_name(
-            self, client, make_user, make_photo, auth_headers):
+            self, parent_client, client, make_user, make_photo, auth_headers):
         uploader = make_user(username="uploader")
         liker = make_user(username="no_nickname", display_name=None)
         photo = make_photo(uploader)
@@ -58,13 +58,13 @@ class TestLikedByFeed:
         client.post(f"/v1/family-photos/{photo.id}/like",
                     headers=auth_headers(liker))
 
-        feed = client.get("/v1/family-photos/feed").json()
+        feed = parent_client.get("/v1/family-photos/feed").json()
         body = next(p for p in feed if p["id"] == photo.id)
 
         assert body["liked_by"][0]["display_name"] == "no_nickname"
 
     def test_liked_by_profile_photo_url_none_without_photo(
-            self, client, make_user, make_photo, auth_headers):
+            self, parent_client, client, make_user, make_photo, auth_headers):
         uploader = make_user(username="uploader")
         liker = make_user(username="no_avatar", profile_photo_key=None)
         photo = make_photo(uploader)
@@ -72,13 +72,13 @@ class TestLikedByFeed:
         client.post(f"/v1/family-photos/{photo.id}/like",
                     headers=auth_headers(liker))
 
-        feed = client.get("/v1/family-photos/feed").json()
+        feed = parent_client.get("/v1/family-photos/feed").json()
         body = next(p for p in feed if p["id"] == photo.id)
 
         assert body["liked_by"][0]["profile_photo_url"] is None
 
     def test_multiple_likers_all_appear_in_liked_by(
-            self, client, make_user, make_photo, auth_headers):
+            self, parent_client, client, make_user, make_photo, auth_headers):
         uploader = make_user(username="uploader")
         alice = make_user(username="alice", display_name="Alice")
         bob = make_user(username="bob", display_name="Bob")
@@ -89,7 +89,7 @@ class TestLikedByFeed:
             client.post(f"/v1/family-photos/{photo.id}/like",
                        headers=auth_headers(user))
 
-        feed = client.get("/v1/family-photos/feed").json()
+        feed = parent_client.get("/v1/family-photos/feed").json()
         body = next(p for p in feed if p["id"] == photo.id)
 
         assert {u["id"] for u in body["liked_by"]} == {
@@ -99,7 +99,7 @@ class TestLikedByFeed:
         assert len(body["liked_by"]) == body["stats"]["likes"]
 
     def test_unlike_removes_user_from_liked_by(
-            self, client, make_user, make_photo, auth_headers):
+            self, parent_client, client, make_user, make_photo, auth_headers):
         uploader = make_user(username="uploader")
         liker = make_user(username="liker")
         photo = make_photo(uploader)
@@ -111,7 +111,7 @@ class TestLikedByFeed:
                                  headers=headers)
         assert toggle_off.status_code == 200
 
-        feed = client.get("/v1/family-photos/feed").json()
+        feed = parent_client.get("/v1/family-photos/feed").json()
         body = next(p for p in feed if p["id"] == photo.id)
 
         assert body["liked_by"] == []
@@ -126,14 +126,14 @@ class TestLikedByFeed:
 
         assert resp.status_code == 401
 
-    def test_stats_no_longer_include_view_count(self, client, make_user,
-                                                make_photo):
+    def test_stats_no_longer_include_view_count(self, parent_client, client,
+                                                make_user, make_photo):
         """Locks in the intentional removal of `stats.views` from the
         payload -- viewing is implicit and no longer surfaced in the UI."""
         uploader = make_user(username="uploader")
         photo = make_photo(uploader)
 
-        feed = client.get("/v1/family-photos/feed").json()
+        feed = parent_client.get("/v1/family-photos/feed").json()
         body = next(p for p in feed if p["id"] == photo.id)
 
         assert "views" not in body["stats"]
@@ -144,8 +144,8 @@ class TestLikedByAcrossListingEndpoints:
     liked_by shows up consistently everywhere photos are listed, not
     just on /feed."""
 
-    def test_liked_by_present_on_archive(self, client, make_user,
-                                         make_photo, auth_headers):
+    def test_liked_by_present_on_archive(self, parent_client, client,
+                                         make_user, make_photo, auth_headers):
         uploader = make_user(username="uploader")
         liker = make_user(username="liker", display_name="Liker")
         photo = make_photo(uploader)
@@ -153,7 +153,7 @@ class TestLikedByAcrossListingEndpoints:
         client.post(f"/v1/family-photos/{photo.id}/like",
                     headers=auth_headers(liker))
 
-        archive = client.get("/v1/family-photos/archive").json()
+        archive = parent_client.get("/v1/family-photos/archive").json()
         body = next(p for p in archive if p["id"] == photo.id)
 
         assert body["liked_by"] == [{
@@ -162,8 +162,8 @@ class TestLikedByAcrossListingEndpoints:
             "profile_photo_url": None,
         }]
 
-    def test_liked_by_present_on_album_photos(self, client, make_user,
-                                              make_photo, auth_headers):
+    def test_liked_by_present_on_album_photos(self, parent_client, client,
+                                              make_user, make_photo, auth_headers):
         uploader = make_user(username="uploader")
         liker = make_user(username="liker", display_name="Liker")
 
@@ -179,8 +179,38 @@ class TestLikedByAcrossListingEndpoints:
         client.post(f"/v1/family-photos/{photo.id}/like",
                     headers=auth_headers(liker))
 
-        album_photos = client.get(
+        album_photos = parent_client.get(
             f"/v1/family-photos/albums/{album_id}/photos").json()
         body = next(p for p in album_photos if p["id"] == photo.id)
 
         assert body["liked_by"][0]["id"] == liker.id
+
+
+class TestPhotoReadsRequireLogin:
+    """Every route that returns photos, albums or stats needs a token."""
+
+    @pytest.mark.parametrize("path", [
+        "/feed", "/historical", "/archive", "/albums",
+        "/albums/1/photos", "/1/stats",
+    ])
+    def test_no_token_returns_401(self, client, path):
+        assert client.get(f"/v1/family-photos{path}").status_code == 401
+
+    @pytest.mark.parametrize("role", ["parent", "child"])
+    def test_any_logged_in_user_can_read_the_feed(
+            self, client_for, make_user, make_photo, role):
+        photo = make_photo(make_user(username="uploader"))
+
+        reader = client_for(make_user(role=role))
+
+        resp = reader.get("/v1/family-photos/feed")
+
+        assert resp.status_code == 200
+        assert [p["id"] for p in resp.json()] == [photo.id]
+
+    def test_login_screen_can_still_list_users(self, client, make_user):
+        make_user(username="alice")
+
+        resp = client.get("/v1/family-photos/users")
+
+        assert resp.status_code == 200
