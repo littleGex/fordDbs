@@ -31,6 +31,13 @@ ASSIGNABLE_ROLES = ("child", "adult", "parent")
 # What a self-registration can end up as
 SELF_SERVICE_ROLES = ("child", "adult")
 
+# Who a login screen offers: each app only lists the people who can
+# actually use it. None means everyone.
+LOGIN_AUDIENCES = {
+    "parents": PARENT_ROLES,
+    "household": PARENT_ROLES | {"child"},
+}
+
 STATUS_ACTIVE = "active"
 STATUS_PENDING = "pending"
 
