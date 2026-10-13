@@ -68,18 +68,6 @@ services:
       - "8083:80"
     env_file:
       - ./family-photos-frontend/.env
-    environment:
-      - DB_USER=${POSTGRES_USER}
-      - DB_PASSWORD=${POSTGRES_PASSWORD}
-      - DB_NAME=${POSTGRES_DB}
-      - DB_HOST=db      # Use 'db' service name, NOT 'localhost'
-      - DB_PORT=5432
-      # INTERNAL: How the backend finds MinIO inside Docker
-      - MINIO_ENDPOINT=family_photos_storage:9000
-      - MINIO_ACCESS_KEY=admin
-      - MINIO_SECRET_KEY=instaFord
-      # EXTERNAL: How the phone/browser finds MinIO on your Wi-Fi
-      - EXTERNAL_URL_HOST=https://photos-data.ford-home-apps.com
     depends_on:
       - minio
       - db

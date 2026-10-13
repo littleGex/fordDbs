@@ -242,7 +242,7 @@ rewritten and folded into this suite:
 
 ## Known gaps / suggested next steps
 
-- **`db_manager.py` and most of `shares.py`** have little to no
+- **Most of `shares.py`** has little to no
   authentication on data-mutating endpoints (flagged separately,
   outside this suite's scope) -- not covered by tests here since the
   priority is fixing the auth gap itself before testing around it.

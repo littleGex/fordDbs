@@ -20,7 +20,6 @@ export interface BatchItem {
 export interface FamilyUser {
     id: number;
     display_name: string;
-    role: string;
 }
 
 // Thrown when the token is missing, expired or not a parent's
@@ -48,12 +47,11 @@ const authFetch = async (path: string, init: RequestInit = {}) => {
 };
 
 export const pocketMoneyApi = {
-    // Parents who can log in to this app
-    getParents: async (): Promise<FamilyUser[]> => {
-        const res = await fetch(`${AUTH_BASE}/users`);
+    // Everyone who has a login; roles are only known after logging in
+    getFamily: async (): Promise<FamilyUser[]> => {
+        const res = await fetch(`${AUTH_BASE}/login-options`);
         if (!res.ok) throw new Error("Failed to load the family list");
-        const users: FamilyUser[] = await res.json();
-        return users.filter(u => PARENT_ROLES.includes(u.role));
+        return res.json();
     },
 
     login: async (userId: number, password: string) => {

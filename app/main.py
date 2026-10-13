@@ -3,7 +3,6 @@ from dotenv import load_dotenv
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.api.v1.db_manager import db_router
 from app.api.v1.pocket_money import pocket_money_router
 from app.api.v1.family_photos import family_photos_router
 from app.api.v1.utils import utils_router
@@ -68,12 +67,6 @@ def create_app():
     # Base.metadata.create_all(bind=engine)
 
     # Plug in our routes
-    app.include_router(
-        db_router,
-        prefix="/v1",
-        tags=["Database Management"]
-    )
-
     app.include_router(
         pocket_money_router,
         prefix="/v1/pocket-money",
