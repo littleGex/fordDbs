@@ -6,6 +6,12 @@ from decimal import Decimal
 pytestmark = pytest.mark.integration
 
 
+@pytest.fixture
+def client(parent_client):
+    """Every pocket-money route needs a login; default to a parent."""
+    return parent_client
+
+
 class TestWishCostPrecision:
     """
     Regression tests for Wish.cost: it was a Float column even after

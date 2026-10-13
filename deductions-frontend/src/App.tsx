@@ -1,13 +1,15 @@
 import {useState, useEffect} from 'react';
-import {pocketMoneyApi, type DeductionType} from './api/pocketMoneyApi';
+import {pocketMoneyApi, session, AuthError, type DeductionType} from './api/pocketMoneyApi';
 import DeductionItem from './components/DeductionItem';
 import AddRuleForm from './components/AddRuleForm';
 import Toast from './components/Toast'; // Fixed casing to match component
-import PasswordModal from "./components/PasswordModal";
+import ConfirmModal from "./components/ConfirmModal";
+import Login from "./components/Login";
 
 function App() {
     const [catalog, setCatalog] = useState<DeductionType[]>([]);
     const [counts, setCounts] = useState<{ [key: string]: number }>({});
+    const [loggedIn, setLoggedIn] = useState(session.isLoggedIn());
     const [loading, setLoading] = useState(true);
     const [childId, setChildId] = useState(1);
     const [children, setChildren] = useState<{ id: number, name: string }[]>([]);
@@ -19,8 +21,19 @@ function App() {
         type: 'FINES'
     });
 
+    // An expired or non-parent token sends the user back to the login screen
+    const handleAuthError = (err: unknown) => {
+        if (err instanceof AuthError) {
+            setLoggedIn(false);
+            return true;
+        }
+        return false;
+    };
+
     useEffect(() => {
+        if (!loggedIn) return;
         const init = async () => {
+            setLoading(true);
             try {
                 const [catalogData, childrenData] = await Promise.all([
                     pocketMoneyApi.getDeductionTypes(),
@@ -28,14 +41,16 @@ function App() {
                 ]);
                 setCatalog(catalogData);
                 setChildren(childrenData);
+                if (childrenData.length > 0) setChildId(childrenData[0].id);
             } catch (err) {
+                if (handleAuthError(err)) return;
                 console.error("Failed to load initial data:", err);
             } finally {
                 setLoading(false);
             }
         };
         init();
-    }, []);
+    }, [loggedIn]);
 
     const handleUpdateCount = (name: string, delta: number) => {
         setCounts(prev => {
@@ -57,7 +72,7 @@ function App() {
 
     const totalFine = catalog.reduce((sum, item) => sum + ((counts[item.name] || 0) * item.default_amount), 0);
 
-    const onPasswordConfirm = async (password: string) => {
+    const onConfirm = async () => {
         setModal(prev => ({ ...prev, isOpen: false }));
         try {
             if (modal.type === 'FINES') {
@@ -68,19 +83,27 @@ function App() {
                         return { name, count, total: count * (item?.default_amount || 0) };
                     });
 
-                await pocketMoneyApi.submitDeductions(childId, batch, password);
+                await pocketMoneyApi.submitDeductions(childId, batch);
                 setCounts({});
                 showToast("Deductions applied successfully!");
             } else if (modal.type === 'RULE') {
-                await pocketMoneyApi.addDeductionType(modal.data.name, modal.data.amount, password);
+                await pocketMoneyApi.addDeductionType(modal.data.name, modal.data.amount);
                 const updated = await pocketMoneyApi.getDeductionTypes();
                 setCatalog(updated);
                 showToast("New house rule added!");
             }
         } catch (err: any) {
+            if (handleAuthError(err)) return;
             showToast(err.message || "Action failed", "error");
         }
     };
+
+    const logout = () => {
+        session.logout();
+        setLoggedIn(false);
+    };
+
+    if (!loggedIn) return <Login onLogin={() => setLoggedIn(true)} />;
 
     if (loading) return <div className="p-8 text-center font-bold text-gray-500">Connecting to Ford Home Apps...</div>;
 
@@ -88,17 +111,20 @@ function App() {
         <div className="min-h-screen bg-[#F8F9FA]">
             {/* Overlay UI */}
             {toast && <Toast message={toast.msg} type={toast.type} onClose={() => setToast(null)} />}
-            <PasswordModal
+            <ConfirmModal
                 isOpen={modal.isOpen}
                 title={modal.type === 'FINES' ? "Confirm Fines" : "Add New Rule"}
-                description={modal.type === 'FINES' ? `Apply ${totalFine.toFixed(2)}€ to ${children.find(c => c.id === childId)?.name}?` : undefined}
-                onConfirm={onPasswordConfirm}
+                description={modal.type === 'FINES' ? `Apply ${totalFine.toFixed(2)}€ to ${children.find(c => c.id === childId)?.name}?` : `Add "${modal.data?.name}"?`}
+                onConfirm={onConfirm}
                 onCancel={() => setModal(prev => ({ ...prev, isOpen: false }))}
             />
 
             <div className="max-w-x1 mx-auto pb-40">
                 <header className="p-8 pb-4 flex justify-between items-center">
                     <h1 className="text-4xl font-black text-gray-950 tracking-tight">Deductions</h1>
+                    <button onClick={logout} className="ml-auto mr-3 font-bold text-gray-400 hover:text-gray-600">
+                        Log out
+                    </button>
                     <select
                         value={childId}
                         onChange={(e) => setChildId(parseInt(e.target.value))}

@@ -8,6 +8,12 @@ import pytest
 pytestmark = pytest.mark.integration
 
 
+@pytest.fixture
+def client(parent_client):
+    """Every pocket-money route needs a login; default to a parent."""
+    return parent_client
+
+
 class TestDeposit:
 
     def test_deposit_increases_balance(self, client, make_child):
@@ -194,10 +200,10 @@ class TestAdjustBalance:
 
 
 class TestAdjustMoney:
-    """Tests for the /adjust/{child_id} password-protected dispatcher."""
+    """Tests for the /adjust/{child_id} parent-only dispatcher."""
 
     def test_positive_amount_deposits(
-        self, client, make_child, admin_password
+        self, client, make_child
     ):
         child = make_child(balance="10.00")
 
@@ -207,7 +213,6 @@ class TestAdjustMoney:
                 "amount": 5.00,
                 "description": "Bonus",
                 "category": "Deposit",
-                "password": admin_password,
             },
         )
 
@@ -215,7 +220,7 @@ class TestAdjustMoney:
         assert resp.json()["new_balance"] == 15.00
 
     def test_negative_amount_withdraws(
-        self, client, make_child, admin_password
+        self, client, make_child
     ):
         child = make_child(balance="10.00")
 
@@ -225,7 +230,6 @@ class TestAdjustMoney:
                 "amount": -3.00,
                 "description": "Fine",
                 "category": "Behaviour Deductions",
-                "password": admin_password,
             },
         )
 
@@ -233,7 +237,7 @@ class TestAdjustMoney:
         assert resp.json()["new_balance"] == 7.00
 
     def test_zero_amount_makes_no_adjustment(
-        self, client, make_child, admin_password
+        self, client, make_child
     ):
         child = make_child(balance="10.00")
 
@@ -243,27 +247,11 @@ class TestAdjustMoney:
                 "amount": 0,
                 "description": "No-op",
                 "category": "Correction",
-                "password": admin_password,
             },
         )
 
         assert resp.status_code == 200
         assert "No adjustment" in resp.json()["message"]
-
-    def test_wrong_password_rejected(self, client, make_child):
-        child = make_child(balance="10.00")
-
-        resp = client.post(
-            f"/v1/pocket-money/adjust/{child.id}",
-            params={
-                "amount": 5.00,
-                "description": "Bonus",
-                "category": "Deposit",
-                "password": "wrong-password",
-            },
-        )
-
-        assert resp.status_code == 403
 
 
 class TestGetBalance:

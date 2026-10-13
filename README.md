@@ -161,7 +161,8 @@ pytest tests/test_pocket_money_precision.py::TestFloatPrecisionRegression::test_
 |---|---|
 | `test_pocket_money_precision.py` | The original bug report (14.63€/15€) + float-drift stress tests |
 | `test_pocket_money_balance.py` | deposit, withdraw, adjust-balance, adjust, balance lookup |
-| `test_pocket_money_admin.py` | child CRUD, password protection |
+| `test_pocket_money_admin.py` | child CRUD |
+| `test_pocket_money_auth.py` | login required on every pocket-money route (401), parent/child roles (403), chore-tracker service key |
 | `test_pocket_money_wishes.py` | wish CRUD, negative-cost guards, `cost` column Numeric-precision regression |
 | `test_pocket_money_deductions.py` | deduction catalog CRUD, deduct-batch (incl. the dict-subscript regression) |
 | `test_pocket_money_stats.py` | history, stats aggregation (incl. total_spent regression) |

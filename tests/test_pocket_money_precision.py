@@ -23,6 +23,12 @@ import pytest
 pytestmark = pytest.mark.integration
 
 
+@pytest.fixture
+def client(parent_client):
+    """Every pocket-money route needs a login; default to a parent."""
+    return parent_client
+
+
 class TestFloatPrecisionRegression:
 
     def test_deposit_accumulation_produces_exact_balance(

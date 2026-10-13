@@ -1,21 +1,22 @@
 <script setup>
 import {ref, watch, onMounted} from 'vue'
-import axios from 'axios'
+import api from '../api'
+import {isParent} from '../auth'
 
 const children = ref([])
 const selectedChild = ref(null)
 const recentTransactions = ref([])
 const wishes = ref([])
 const withdrawAmount = ref(0)
-const API_BASE = import.meta.env.VITE_API_BASE;
 const showWishForm = ref(false)
 const newWish = ref({name: '', cost: 0})
 const childStats = ref({})
+const loaded = ref(false)
 
 // Fetches the count of "Goal Met" transactions
 const fetchStats = async (childId) => {
   try {
-    const res = await axios.get(`${API_BASE}/stats/${childId}`)
+    const res = await api.get(`/stats/${childId}`)
     childStats.value[childId] = res.data.wishes_bought
   } catch (e) {
     childStats.value[childId] = 0
@@ -24,8 +25,9 @@ const fetchStats = async (childId) => {
 
 const fetchChildren = async () => {
   try {
-    const res = await axios.get(`${API_BASE}/children`)
+    const res = await api.get('/children')
     children.value = res.data
+    loaded.value = true
 
     // Fetch trophies for every child immediately
     children.value.forEach(child => fetchStats(child.id))
@@ -42,8 +44,8 @@ watch(selectedChild, async (newChild) => {
   if (newChild) {
     try {
       const [histRes, wishRes] = await Promise.all([
-        axios.get(`${API_BASE}/history/${newChild.id}?limit=5`),
-        axios.get(`${API_BASE}/wishes/${newChild.id}`)
+        api.get(`/history/${newChild.id}?limit=5`),
+        api.get(`/wishes/${newChild.id}`)
       ])
       recentTransactions.value = histRes.data
       wishes.value = wishRes.data
@@ -62,7 +64,7 @@ const getProgress = (cost) => {
 const confirmWithdraw = async () => {
   if (!selectedChild.value || withdrawAmount.value <= 0) return
   if (confirm(`Confirm withdrawal of €${withdrawAmount.value.toFixed(2)}?`)) {
-    await axios.post(`${API_BASE}/withdraw/${selectedChild.value.id}`, null, {
+    await api.post(`/withdraw/${selectedChild.value.id}`, null, {
       params: {
         amount: withdrawAmount.value,
         description: "Dashboard Withdrawal",
@@ -76,12 +78,12 @@ const confirmWithdraw = async () => {
 
 const submitWish = async () => {
   if (!newWish.value.name || newWish.value.cost <= 0) return
-  await axios.post(`${API_BASE}/wish/${selectedChild.value.id}`, null, {
+  await api.post(`/wish/${selectedChild.value.id}`, null, {
     params: {item_name: newWish.value.name, cost: newWish.value.cost}
   })
   newWish.value = {name: '', cost: 0}
   showWishForm.value = false
-  const wishRes = await axios.get(`${API_BASE}/wishes/${selectedChild.value.id}`)
+  const wishRes = await api.get(`/wishes/${selectedChild.value.id}`)
   wishes.value = wishRes.data
 }
 
@@ -151,12 +153,16 @@ onMounted(fetchChildren)
       </button>
     </nav>
 
+    <div v-if="loaded && !children.length" class="empty-state">
+      No pocket money account is linked to this login yet.
+    </div>
+
     <div v-if="selectedChild" class="dashboard-grid">
       <div class="tile balance-tile">
         <h3>Current Balance</h3>
         <div class="big-money">€{{ selectedChild.balance.toFixed(2) }}</div>
 
-        <div class="withdraw-section">
+        <div class="withdraw-section" v-if="isParent">
           <h4>Withdraw Cash</h4>
           <div class="quick-amounts">
             <button v-for="amt in [0.5, 1, 2, 5]" :key="amt" @click="withdrawAmount = amt">

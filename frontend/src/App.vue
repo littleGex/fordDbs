@@ -1,21 +1,12 @@
 <script setup>
-import { ref, watch } from 'vue'
-import { useRouter, useRoute } from 'vue-router'
+import { useRouter } from 'vue-router'
+import { auth, isLoggedIn, isParent, logout as clearSession } from './auth'
 
 const router = useRouter()
-const route = useRoute()
-const isAdmin = ref(false)
-
-// We watch the "route" object.
-// Every time you move between pages, this code runs.
-watch(() => route.path, () => {
-  isAdmin.value = !!localStorage.getItem('admin_token')
-}, { immediate: true })
 
 const logout = () => {
-  localStorage.removeItem('admin_token')
-  isAdmin.value = false
-  router.push('/')
+  clearSession()
+  router.push('/login')
 }
 </script>
 
@@ -25,10 +16,11 @@ const logout = () => {
       <div class="logo">
         <h1>💰 Pocket Money Bank</h1>
       </div>
-      <nav class="nav-links">
+      <nav class="nav-links" v-if="isLoggedIn">
         <router-link to="/">Dashboard</router-link>
-        <router-link to="/admin">Admin</router-link>
-        <button v-if="isAdmin" @click="logout" class="btn-logout">Logout</button>
+        <router-link v-if="isParent" to="/admin">Admin</router-link>
+        <span class="nav-user">{{ auth.user.display_name }}</span>
+        <button @click="logout" class="btn-logout">Logout</button>
       </nav>
     </header>
 
@@ -55,6 +47,7 @@ body { margin: 0; background: #f4f7f6; font-family: 'Segoe UI', Tahoma, Geneva, 
 .nav-links { display: flex; align-items: center; gap: 20px; }
 .nav-links a { color: #b2bec3; text-decoration: none; font-weight: bold; transition: 0.3s; }
 .nav-links a.router-link-active { color: #4a90e2; }
+.nav-user { color: #dfe6e9; }
 
 .btn-logout {
   background: #ff4757;

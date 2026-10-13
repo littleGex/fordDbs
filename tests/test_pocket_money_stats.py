@@ -5,6 +5,12 @@ import pytest
 pytestmark = pytest.mark.integration
 
 
+@pytest.fixture
+def client(parent_client):
+    """Every pocket-money route needs a login; default to a parent."""
+    return parent_client
+
+
 class TestHistory:
 
     def test_history_returns_transactions_newest_first(
