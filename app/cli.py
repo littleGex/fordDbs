@@ -8,17 +8,26 @@ fresh install has no admin yet. Run inside the API container:
     docker exec -it database_manager_api python -m app.cli activate grandad
     docker exec -it database_manager_api python -m app.cli create-user \
         dad "Dad" admin
+
+Ford House game players (see app/api/v1/game.py):
+
+    docker exec -it database_manager_api python -m app.cli set-game-parent \
+        dad dad 1980-01-31
+    docker exec -it database_manager_api python -m app.cli set-game-child \
+        Penelope girl
 """
 import argparse
 import getpass
 import sys
+from datetime import date
 from app.database.database import SessionLocal
-from app.models.user_models import User
+from app.models.user_models import Child, User
 # Importing these registers them on SQLAlchemy's mapper registry, which
 # User's relationships need (mirrors what app.main does)
 from app.models import (photo_model, message_model, shares_models,  # noqa
                         utilities, deductions_models)
 from app.core.auth import hash_pw, ALL_ROLES, STATUS_ACTIVE
+from app.api.v1.game import CHILD_GAME_KEYS, PARENT_GAME_KEYS
 
 
 def _ask_password() -> str:
@@ -74,6 +83,25 @@ def create_user(db, args):
     print(f"Created {args.username} as {args.role}")
 
 
+def set_game_parent(db, args):
+    user = _find(db, args.username)
+    user.game_key = args.game_key
+    user.birth_date = args.birth_date
+    db.commit()
+    print(f"{user.username} is the game's '{user.game_key}'")
+
+
+def set_game_child(db, args):
+    child = db.query(Child).filter(Child.name == args.name).first()
+    if not child:
+        sys.exit(f"No child named '{args.name}'")
+    child.game_key = args.game_key
+    if args.birth_date:
+        child.birth_date = args.birth_date
+    db.commit()
+    print(f"{child.name} is the game's '{child.game_key}'")
+
+
 def build_parser():
     parser = argparse.ArgumentParser(prog="python -m app.cli",
                                      description=__doc__.split("\n\n")[0])
@@ -101,6 +129,20 @@ def build_parser():
     create.add_argument("role", choices=ALL_ROLES)
     create.add_argument("--password", help="omit to be prompted")
     create.set_defaults(func=create_user)
+
+    parent = commands.add_parser("set-game-parent")
+    parent.add_argument("username")
+    parent.add_argument("game_key", choices=PARENT_GAME_KEYS)
+    parent.add_argument("birth_date", type=date.fromisoformat,
+                        help="YYYY-MM-DD")
+    parent.set_defaults(func=set_game_parent)
+
+    child = commands.add_parser("set-game-child")
+    child.add_argument("name", help="the child's Pocket Money name")
+    child.add_argument("game_key", choices=CHILD_GAME_KEYS)
+    child.add_argument("--birth-date", type=date.fromisoformat,
+                       help="YYYY-MM-DD, only if not already set")
+    child.set_defaults(func=set_game_child)
 
     return parser
 

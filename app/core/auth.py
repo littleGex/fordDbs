@@ -127,6 +127,22 @@ def require_parent_or_service(
     return user
 
 
+def require_user_or_game_token(
+        token: str = Depends(oauth2_scheme),
+        db: Session = Depends(get_db)):
+    """
+    Allows any logged-in family member, or the Ford House game presenting
+    GAME_TOKEN as its bearer token. The game token is not a login: it is
+    only accepted where this dependency is used. Returns the User, or
+    None for the game.
+    """
+    expected = os.getenv("GAME_TOKEN")
+    if token and expected and hmac.compare_digest(token.encode(),
+                                                  expected.encode()):
+        return None
+    return _user_from_token(token, db)
+
+
 def authorize_child_access(child_id: int, user: User, db: Session):
     """Parents may access any child; a child only their own profile."""
     if is_parent(user):
