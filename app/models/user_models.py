@@ -11,6 +11,8 @@ class Child(Base):
     name = Column(String, unique=True)
     balance = Column(Numeric(10, 2), default=0.0)
     birth_date = Column(Date, nullable=True)
+    # Which Ford House game player this child is ('girl' or 'boy')
+    game_key = Column(String, unique=True, nullable=True)
 
     # --- ADD THESE TWO LINES ---
     # This matches the database column we added manually
@@ -65,6 +67,9 @@ class User(Base):
     profile_photo_key = Column(String, nullable=True)
     bio = Column(String(160), nullable=True)
     display_name = Column(String, nullable=True)
+    # Only needed for the Ford House game ('mum' or 'dad' and a birthday)
+    game_key = Column(String, unique=True, nullable=True)
+    birth_date = Column(Date, nullable=True)
 
     created_at = Column(DateTime,
                         default=lambda: datetime.now(timezone.utc))

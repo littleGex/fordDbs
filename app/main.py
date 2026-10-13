@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.v1.pocket_money import pocket_money_router
 from app.api.v1.family_photos import family_photos_router
 from app.api.v1.accounts import accounts_router
+from app.api.v1.game import game_router
 from app.core.auth import require_parent
 from app.api.v1.utils import utils_router
 from app.api.v1.shares import shares_router
@@ -100,6 +101,12 @@ def create_app():
         prefix="/v1/investments",
         tags=["Investments"],
         dependencies=[Depends(require_parent)]
+    )
+
+    app.include_router(
+        game_router,
+        prefix="/v1/game",
+        tags=["Game"]
     )
 
     app.include_router(

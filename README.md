@@ -165,6 +165,7 @@ pytest tests/test_pocket_money_precision.py::TestFloatPrecisionRegression::test_
 | `test_pocket_money_auth.py` | login required on every pocket-money route (401), parent/child roles (403), chore-tracker service key |
 | `test_accounts.py` | self-registration (pending, birth-year role, limits), admin approval/reject/role/reset routes, role abilities, the recovery CLI |
 | `test_household_auth.py` | investments and utilities routes are parents-and-admin only (401 without a token, 403 for adult and child) |
+| `test_game.py` | `GET /v1/game/family`: game token or any login, response limited to key and birthday, game token rejected on other routes, CLI data entry |
 | `test_pocket_money_wishes.py` | wish CRUD, negative-cost guards, `cost` column Numeric-precision regression |
 | `test_pocket_money_deductions.py` | deduction catalog CRUD, deduct-batch (incl. the dict-subscript regression) |
 | `test_pocket_money_stats.py` | history, stats aggregation (incl. total_spent regression) |
@@ -359,3 +360,27 @@ docker exec -it database_manager_api python -m app.cli create-user dad "Dad" adm
 ```
 
 `reset-password` and `create-user` prompt for the password.
+
+## Ford House game: family birthdays
+
+`GET /v1/game/family` gives the Ford House game (`littleGex/ford_games`)
+the four players' birthdays and nothing else:
+
+```json
+{ "players": [ { "key": "girl", "birthday": "YYYY-MM-DD" }, ... ] }
+```
+
+It accepts any family login, or `GAME_TOKEN` from `.env` as the bearer
+token. The game token is rejected on every other route. The game is a
+public static site, so the token must never be committed to it: enter it
+in the game once per device and keep it in that browser.
+
+Who is which player, and the parents' birthdays, are entered on the
+server so they never pass through git:
+
+```bash
+docker exec -it database_manager_api python -m app.cli set-game-child Penelope girl
+docker exec -it database_manager_api python -m app.cli set-game-parent dad dad YYYY-MM-DD
+```
+
+The game's origin has to be in `ALLOWED_ORIGINS`.
