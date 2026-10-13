@@ -21,8 +21,18 @@ ALGORITHM = "HS256"
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login", auto_error=False)
 
+# Each role includes the abilities of the ones after it
+ADMIN_ROLE = "admin"
+ALL_ROLES = ("admin", "parent", "adult", "child")
 # Roles allowed to manage every child's money
 PARENT_ROLES = {"parent", "admin"}
+# What the admin may hand out from the UI; admins are made on the server
+ASSIGNABLE_ROLES = ("child", "adult", "parent")
+# What a self-registration can end up as
+SELF_SERVICE_ROLES = ("child", "adult")
+
+STATUS_ACTIVE = "active"
+STATUS_PENDING = "pending"
 
 
 # Utilities
@@ -53,6 +63,8 @@ def _user_from_token(token: str, db: Session, verify_exp: bool = True):
 
     if user is None:
         raise HTTPException(status_code=401, detail="User not found")
+    if user.status != STATUS_ACTIVE:
+        raise HTTPException(status_code=401, detail="Account is not active")
 
     return user
 
@@ -72,6 +84,12 @@ def get_current_user_for_refresh(
 
 def is_parent(user: User) -> bool:
     return user.role in PARENT_ROLES
+
+
+def require_admin(current_user: User = Depends(get_current_user)):
+    if current_user.role != ADMIN_ROLE:
+        raise HTTPException(status_code=403, detail="Admin only")
+    return current_user
 
 
 def require_parent(current_user: User = Depends(get_current_user)):

@@ -322,12 +322,14 @@ def make_user(db_session):
     counter = {"n": 0}
 
     def _make_user(username=None, display_name=None, role="parent",
-                   profile_photo_key=None, password=None):
+                   profile_photo_key=None, password=None,
+                   status="active"):
         counter["n"] += 1
         user = User(
             username=username or f"user{counter['n']}",
             display_name=display_name,
             role=role,
+            status=status,
             profile_photo_key=profile_photo_key,
             hashed_password=hash_pw(password) if password else None,
         )

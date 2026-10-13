@@ -19,10 +19,17 @@ import tempfile
 from jose import jwt
 from datetime import datetime, timedelta, timezone
 from app.core.auth import (SECRET_KEY, ALGORITHM, hash_pw, verify_pw,
-                           get_current_user, get_current_user_for_refresh)
+                           get_current_user, get_current_user_for_refresh,
+                           is_parent, STATUS_ACTIVE, STATUS_PENDING)
 
 logger = logging.getLogger("app.api.users")
 family_photos_router = APIRouter()
+
+# Limits on the open registration form, so it can't be used to fill the
+# database or the photo storage
+MAX_PENDING_ACCOUNTS = 10
+MAX_AVATAR_BYTES = 5 * 1024 * 1024
+ADULT_AGE = 18
 
 
 # Utilities
@@ -86,9 +93,14 @@ def login(data: dict, db: Session = Depends(get_db)):
     if not user:
         raise HTTPException(status_code=404)
 
-    # 1. Check if user needs to set a password (Null check)
+    # 1. Self-registered accounts can't log in until the admin approves
+    if user.status != STATUS_ACTIVE:
+        raise HTTPException(status_code=403,
+                            detail="This account is waiting for approval")
     if user.hashed_password is None:
-        return {"status": "needs_initial_password"}
+        raise HTTPException(
+            status_code=403,
+            detail="No password set. Ask the admin to reset it.")
 
     # 2. Verify password
     if not verify_pw(data.get('password'), user.hashed_password):
@@ -104,18 +116,6 @@ def login(data: dict, db: Session = Depends(get_db)):
     return {"access_token": token,
             "token_type": "bearer",
             "user": user_profile(user)}
-
-
-@family_photos_router.post("/users/set-password")
-def set_password(data: dict, db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.id == data.get('user_id')).first()
-    if user and user.hashed_password is None:
-        user.hashed_password = hash_pw(data.get('password'))
-        db.commit()
-        return {"status": "success"}
-    raise HTTPException(
-        status_code=400,
-        detail="Password already set or user not found")
 
 
 def _upload_video(file: UploadFile) -> tuple[str, int]:
@@ -270,7 +270,7 @@ def delete_photo(
 
     # Permission Check: Only the uploader or a 'parent' can delete
     # We now trust current_user.id from the token
-    if photo.uploader_id != current_user.id and current_user.role != "parent":
+    if photo.uploader_id != current_user.id and not is_parent(current_user):
         raise HTTPException(
             status_code=403,
             detail="Not authorized to delete this photo"
@@ -420,14 +420,16 @@ def get_login_options(db: Session = Depends(get_db)):
             "profile_photo_url": get_image_url(
                 user.profile_photo_key) if user.profile_photo_key else None
         }
-        for user in db.query(User).all()
+        for user in db.query(User).filter(
+            User.status == STATUS_ACTIVE).all()
     ]
 
 
 @family_photos_router.get("/users")
 def get_all_users(db: Session = Depends(get_db),
                   current_user: User = Depends(get_current_user)):
-    return [user_profile(user) for user in db.query(User).all()]
+    return [user_profile(user) for user in db.query(User).filter(
+        User.status == STATUS_ACTIVE).all()]
 
 
 @family_photos_router.post("/users")
@@ -435,13 +437,36 @@ def create_user(
         username: str = Form(...),
         display_name: str = Form(...),
         password: str = Form(...),
+        birth_year: int = Form(...),
         file: UploadFile = File(None),
         db: Session = Depends(get_db)
 ):
+    """
+    Open registration from the login screen. The account is created
+    'pending': it can't log in and isn't listed until the admin approves
+    it. The birth year only picks child or adult and is not stored.
+    """
+    username = username.strip()
+    display_name = display_name.strip()
+    if not username or not display_name or not password:
+        raise HTTPException(status_code=422,
+                            detail="Name and password are required")
+
+    this_year = datetime.now(timezone.utc).year
+    if not 1900 <= birth_year <= this_year:
+        raise HTTPException(status_code=422, detail="Invalid birth year")
+
     # 1. Check for existing user
     existing_user = db.query(User).filter(User.username == username).first()
     if existing_user:
         raise HTTPException(status_code=400, detail="Username already taken")
+
+    pending_count = db.query(User).filter(
+        User.status == STATUS_PENDING).count()
+    if pending_count >= MAX_PENDING_ACCOUNTS:
+        raise HTTPException(
+            status_code=429,
+            detail="Too many requests are waiting for approval")
 
     # 2. Initialize new user
     # Note: We use hashed_password to match your User model column name
@@ -449,7 +474,8 @@ def create_user(
         username=username,
         display_name=display_name,
         hashed_password=hash_pw(password),
-        role="parent"  # Default role
+        role="adult" if this_year - birth_year >= ADULT_AGE else "child",
+        status=STATUS_PENDING
     )
 
     db.add(new_user)
@@ -465,12 +491,18 @@ def create_user(
                 f"avatars/user_{new_user.id}_{uuid.uuid4().hex[:6]}{ext}"
 
             # Read file content and upload
-            contents = file.file.read()
+            contents = file.file.read(MAX_AVATAR_BYTES + 1)
+            if len(contents) > MAX_AVATAR_BYTES:
+                raise HTTPException(status_code=413,
+                                    detail="Profile photo is too large")
             upload_image_to_storage(contents, unique_key)
 
             # Save the KEY to the database (not the full URL)
             new_user.profile_photo_key = unique_key
 
+        except HTTPException:
+            db.rollback()
+            raise
         except Exception as e:
             logger.error(f"Failed to upload avatar: {e}")
             # If upload fails, we don't want to create the user
@@ -487,24 +519,10 @@ def create_user(
         "id": new_user.id,
         "username": new_user.username,
         "display_name": new_user.display_name,
+        "status": new_user.status,
         "profile_photo_url": get_image_url(
             new_user.profile_photo_key) if new_user.profile_photo_key else None
     }
-
-
-# Admin Reset Override
-@family_photos_router.post("/admin/reset-password")
-def admin_reset(target_id: int,
-                new_pass: str,
-                current_user: User = Depends(get_current_user),
-                db: Session = Depends(get_db)):
-    if current_user.role != "parent":
-        raise HTTPException(status_code=403,
-                            detail="Only parents can reset passwords")
-    target = db.query(User).filter(User.id == target_id).first()
-    target.hashed_password = hash_pw(new_pass)
-    db.commit()
-    return {"status": "reset successful"}
 
 
 @family_photos_router.post("/refresh")

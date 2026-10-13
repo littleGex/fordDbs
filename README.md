@@ -163,6 +163,7 @@ pytest tests/test_pocket_money_precision.py::TestFloatPrecisionRegression::test_
 | `test_pocket_money_balance.py` | deposit, withdraw, adjust-balance, adjust, balance lookup |
 | `test_pocket_money_admin.py` | child CRUD |
 | `test_pocket_money_auth.py` | login required on every pocket-money route (401), parent/child roles (403), chore-tracker service key |
+| `test_accounts.py` | self-registration (pending, birth-year role, limits), admin approval/reject/role/reset routes, role abilities, the recovery CLI |
 | `test_pocket_money_wishes.py` | wish CRUD, negative-cost guards, `cost` column Numeric-precision regression |
 | `test_pocket_money_deductions.py` | deduction catalog CRUD, deduct-batch (incl. the dict-subscript regression) |
 | `test_pocket_money_stats.py` | history, stats aggregation (incl. total_spent regression) |
@@ -320,3 +321,42 @@ only reads the `POSTGRES_*` names.)
 
 After this, `alembic_version` genuinely reflects reality and future
 migrations can just be `alembic upgrade head` as normal.
+
+## Accounts, roles & approval
+
+Each role includes the abilities of the ones below it:
+
+| Role | Can do |
+|---|---|
+| `admin` | Everything a parent can, plus approve or reject account requests, set roles, reset passwords |
+| `parent` | Manage pocket money and deductions, remove anyone's photos and messages |
+| `adult` | Fordstagram and messaging |
+| `child` | Fordstagram, messaging, and their own pocket-money account |
+
+"Add Profile" on the Fordstagram login screen is open to anyone, but it
+only creates a **pending** account: it can't log in and isn't listed
+until the admin approves it (👥 in the nav bar). The birth year entered
+on the form only picks `child` or `adult` (18 and over) and is not
+stored. `parent` is handed out by the admin afterwards; `admin` can only
+be set from the server.
+
+Deploying this for the first time needs the `status` column:
+
+```bash
+docker exec database_manager_api alembic -c /code/alembic.ini upgrade head
+```
+
+### Recovery from the server
+
+If the admin is locked out, or on a fresh install with no admin yet,
+`app/cli.py` works directly on the database:
+
+```bash
+docker exec -it database_manager_api python -m app.cli list
+docker exec -it database_manager_api python -m app.cli reset-password dad
+docker exec -it database_manager_api python -m app.cli set-role dad admin
+docker exec -it database_manager_api python -m app.cli activate grandad
+docker exec -it database_manager_api python -m app.cli create-user dad "Dad" admin
+```
+
+`reset-password` and `create-user` prompt for the password.
