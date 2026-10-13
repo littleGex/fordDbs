@@ -1,6 +1,5 @@
 import csv
 import io
-import os
 from fastapi import (APIRouter, Depends,
                      HTTPException)
 from sqlalchemy.orm import Session
@@ -14,7 +13,6 @@ from datetime import datetime
 
 
 logger = logging.getLogger("app.api.investments")
-SECRET_PASSWORD = os.getenv("ADMIN_PASSWORD")
 shares_router = APIRouter()
 
 
@@ -160,11 +158,7 @@ def create_schedule(
 
 @shares_router.delete("/etf/schedule/{schedule_id}")
 def delete_schedule(schedule_id: int,
-                    password: str,
                     db: Session = Depends(get_db)):
-    if password != SECRET_PASSWORD:
-        raise HTTPException(status_code=403, detail="Forbidden")
-
     schedule = db.query(EtfPurchaseSchedule).filter(
         EtfPurchaseSchedule.schedule_id == schedule_id).first()
     if not schedule:

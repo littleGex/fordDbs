@@ -1,45 +1,25 @@
 import {createRouter, createWebHistory} from 'vue-router'
 import DashboardView from '../views/DashboardView.vue'
 import AdminView from '../views/AdminView.vue'
-import axios from 'axios'
-
-const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8005/v1';
+import LoginView from '../views/LoginView.vue'
+import {isLoggedIn} from '../auth'
 
 const router = createRouter({
     history: createWebHistory(),
     routes: [
+        {path: '/login', component: LoginView, meta: {public: true}},
         {path: '/', component: DashboardView},
-        {
-            path: '/admin',
-            component: AdminView,
-            meta: {requiresAuth: true}
-        }
+        {path: '/admin', component: AdminView}
     ]
 })
 
-// This is the "Bouncer" that checks every page change
-router.beforeEach(async (to, from, next) => {
-    if (to.meta.requiresAuth) {
-        let password = localStorage.getItem('admin_token');
-
-        if (!password) {
-            password = prompt("Enter Admin Password:");
-        }
-
-        try {
-            await axios.post(`${API_BASE}/pocket-money/verify-admin`, null, {
-                params: {password: password}
-            });
-            localStorage.setItem('admin_token', password);
-            next();
-        } catch (error) {
-            alert("Wrong password!");
-            localStorage.removeItem('admin_token');
-            next('/');
-        }
-    } else {
-        next();
+// This is the "Bouncer" that checks every page change: the whole app
+// is for logged-in parents
+router.beforeEach((to) => {
+    if (to.meta.public) {
+        return isLoggedIn.value ? '/' : true
     }
+    return isLoggedIn.value ? true : '/login'
 })
 
 export default router

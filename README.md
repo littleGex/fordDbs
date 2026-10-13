@@ -164,6 +164,7 @@ pytest tests/test_pocket_money_precision.py::TestFloatPrecisionRegression::test_
 | `test_pocket_money_admin.py` | child CRUD |
 | `test_pocket_money_auth.py` | login required on every pocket-money route (401), parent/child roles (403), chore-tracker service key |
 | `test_accounts.py` | self-registration (pending, birth-year role, limits), admin approval/reject/role/reset routes, role abilities, the recovery CLI |
+| `test_household_auth.py` | investments and utilities routes are parents-and-admin only (401 without a token, 403 for adult and child) |
 | `test_pocket_money_wishes.py` | wish CRUD, negative-cost guards, `cost` column Numeric-precision regression |
 | `test_pocket_money_deductions.py` | deduction catalog CRUD, deduct-batch (incl. the dict-subscript regression) |
 | `test_pocket_money_stats.py` | history, stats aggregation (incl. total_spent regression) |
@@ -243,10 +244,8 @@ rewritten and folded into this suite:
 
 ## Known gaps / suggested next steps
 
-- **Most of `shares.py`** has little to no
-  authentication on data-mutating endpoints (flagged separately,
-  outside this suite's scope) -- not covered by tests here since the
-  priority is fixing the auth gap itself before testing around it.
+- **Most of `shares.py`** has no functional tests beyond the auth
+  checks in `test_household_auth.py` and the price-fetching unit tests.
 - **`bcrypt` is missing from `requirements.txt`** entirely, despite
   `passlib`'s `CryptContext(schemes=["bcrypt"], ...)` requiring it as a
   backend. In a clean environment this makes every password hash/verify

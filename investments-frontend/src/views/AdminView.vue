@@ -1,9 +1,8 @@
 <script setup>
 import { ref, onMounted } from 'vue'
-import axios from 'axios'
+import api from '../api'
 
 const schedules = ref([])
-const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8005/v1';
 
 // Forms
 const shareForm = ref({ ticker: '', num_shares: 0, vest_date: '', purchase_price: 0 })
@@ -14,7 +13,7 @@ const etfCsv = ref('')
 
 const fetchSchedules = async () => {
   try {
-    const res = await axios.get(`${API_BASE}/investments/etf/schedules`)
+    const res = await api.get(`/investments/etf/schedules`)
     schedules.value = res.data
   } catch (e) {
     console.error("Error fetching schedules:", e)
@@ -23,7 +22,7 @@ const fetchSchedules = async () => {
 
 const addShare = async () => {
   try {
-    await axios.post(`${API_BASE}/investments/shares/add`, null, {
+    await api.post(`/investments/shares/add`, null, {
       params: shareForm.value
     })
     alert('Share added successfully!')
@@ -35,7 +34,7 @@ const addShare = async () => {
 
 const addEtfTransaction = async () => {
   try {
-    await axios.post(`${API_BASE}/investments/etf/transaction`, null, {
+    await api.post(`/investments/etf/transaction`, null, {
       params: etfForm.value
     })
     alert('ETF transaction recorded!')
@@ -47,7 +46,7 @@ const addEtfTransaction = async () => {
 
 const createSchedule = async () => {
   try {
-    await axios.post(`${API_BASE}/investments/etf/schedule`, null, {
+    await api.post(`/investments/etf/schedule`, null, {
       params: scheduleForm.value
     })
     alert('Schedule created!')
@@ -59,13 +58,10 @@ const createSchedule = async () => {
 }
 
 const deleteSchedule = async (id) => {
-  const password = prompt('Enter admin password to delete:')
-  if (!password) return
+  if (!confirm('Delete this schedule?')) return
 
   try {
-    await axios.delete(`${API_BASE}/investments/etf/schedule/${id}`, {
-      params: { password }
-    })
+    await api.delete(`/investments/etf/schedule/${id}`)
     alert('Schedule deleted!')
     fetchSchedules()
   } catch (e) {
@@ -74,14 +70,11 @@ const deleteSchedule = async (id) => {
 }
 
 const importShares = async () => {
-  const password = prompt('Enter admin password to import shares:')
-  if (!password) return
-
   try {
     const lines = sharesCsv.value.split('\n').filter(line => line.trim() !== '')
     for (const line of lines) {
       const [ticker, num_shares, vest_date, purchase_price] = line.split(',').map(item => item.trim())
-      await axios.post(`${API_BASE}/investments/shares/add`, null, {
+      await api.post(`/investments/shares/add`, null, {
         params: { ticker, num_shares: Number(num_shares), vest_date, purchase_price: Number(purchase_price) }
       })
     }
@@ -94,14 +87,11 @@ const importShares = async () => {
 }
 
 const importEtfTransactions = async () => {
-  const password = prompt('Enter admin password to import ETF transactions:')
-  if (!password) return
-
   try {
     const lines = etfCsv.value.split('\n').filter(line => line.trim() !== '')
     for (const line of lines) {
       const [ticker, fiat_amount, shares_acquired, transaction_date, fees, transaction_type] = line.split(',').map(item => item.trim())
-      await axios.post(`${API_BASE}/investments/etf/transaction`, null, {
+      await api.post(`/investments/etf/transaction`, null, {
         params: { ticker, fiat_amount: Number(fiat_amount), shares_acquired: Number(shares_acquired), transaction_date, fees: Number(fees), transaction_type: transaction_type || 'buy' }
       })
     }
@@ -115,7 +105,7 @@ const importEtfTransactions = async () => {
 
 const uploadSharesCsv = async () => {
   try {
-    await axios.post(`${API_BASE}/investments/shares/bulk-add`, {
+    await api.post(`/investments/shares/bulk-add`, {
       csv_data: sharesCsv.value
     });
     alert('Bulk shares added successfully!');

@@ -1,11 +1,12 @@
 import os
 from dotenv import load_dotenv
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.api.v1.pocket_money import pocket_money_router
 from app.api.v1.family_photos import family_photos_router
 from app.api.v1.accounts import accounts_router
+from app.core.auth import require_parent
 from app.api.v1.utils import utils_router
 from app.api.v1.shares import shares_router
 from app.api.v1.messaging import messaging_router
@@ -74,10 +75,12 @@ def create_app():
         tags=["Pocket Money"]
     )
 
+    # Household data: every route is parents (and admin) only
     app.include_router(
         utils_router,
         prefix="/v1/utilities",
-        tags=["Utilities"]
+        tags=["Utilities"],
+        dependencies=[Depends(require_parent)]
     )
 
     app.include_router(
@@ -95,7 +98,8 @@ def create_app():
     app.include_router(
         shares_router,
         prefix="/v1/investments",
-        tags=["Investments"]
+        tags=["Investments"],
+        dependencies=[Depends(require_parent)]
     )
 
     app.include_router(
