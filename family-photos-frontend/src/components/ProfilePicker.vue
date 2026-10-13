@@ -72,7 +72,7 @@
         <input
           v-model="newUserPassword"
           type="password"
-          placeholder="Password"
+          placeholder="Password (8 or more characters)"
           class="styled-input"
         />
         <input
@@ -86,7 +86,7 @@
 
         <div class="modal-btns">
           <button @click="closeModals" class="btn-secondary">Cancel</button>
-          <button @click="createUser" class="btn-primary" :disabled="!newUserName || !newUserPassword || !newUserBirthYear">Send Request</button>
+          <button @click="createUser" class="btn-primary" :disabled="!newUserName || newUserPassword.length < 8 || !newUserBirthYear">Send Request</button>
         </div>
       </div>
     </div>

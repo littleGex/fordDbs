@@ -26,7 +26,8 @@ from app.models.user_models import Child, User
 # User's relationships need (mirrors what app.main does)
 from app.models import (photo_model, message_model, shares_models,  # noqa
                         utilities, deductions_models)
-from app.core.auth import hash_pw, ALL_ROLES, STATUS_ACTIVE
+from app.core.auth import (hash_pw, ALL_ROLES, STATUS_ACTIVE,
+                           MIN_PASSWORD_LENGTH)
 from app.api.v1.game import CHILD_GAME_KEYS, PARENT_GAME_KEYS
 
 
@@ -34,6 +35,14 @@ def _ask_password() -> str:
     password = getpass.getpass("New password: ")
     if not password or password != getpass.getpass("Repeat password: "):
         sys.exit("Passwords were empty or did not match")
+    return password
+
+
+def _password(args) -> str:
+    password = args.password or _ask_password()
+    if len(password) < MIN_PASSWORD_LENGTH:
+        sys.exit(f"Password must be at least {MIN_PASSWORD_LENGTH} "
+                 "characters")
     return password
 
 
@@ -52,7 +61,10 @@ def list_users(db, args):
 
 def reset_password(db, args):
     user = _find(db, args.username)
-    user.hashed_password = hash_pw(args.password or _ask_password())
+    user.hashed_password = hash_pw(_password(args))
+    # Logs the account out everywhere. A lock-out from wrong passwords
+    # lives in the API process; restart the api container to clear it.
+    user.token_version += 1
     db.commit()
     print(f"Password reset for {user.username}")
 
@@ -78,7 +90,7 @@ def create_user(db, args):
                 display_name=args.display_name,
                 role=args.role,
                 status=STATUS_ACTIVE,
-                hashed_password=hash_pw(args.password or _ask_password())))
+                hashed_password=hash_pw(_password(args))))
     db.commit()
     print(f"Created {args.username} as {args.role}")
 

@@ -40,10 +40,11 @@ const submit = async () => {
     })
     router.push('/')
   } catch (e) {
-    // 403 carries the reason, e.g. an account still waiting for approval
+    // 403 and 429 carry the reason, e.g. an account still waiting for
+    // approval, or too many wrong passwords
     if (e.response?.status === 401) {
       errorMessage.value = "Wrong password!"
-    } else if (e.response?.status === 403) {
+    } else if ([403, 429].includes(e.response?.status)) {
       errorMessage.value = e.response.data.detail
     } else {
       errorMessage.value = "Login failed. Please try again."

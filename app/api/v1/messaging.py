@@ -7,10 +7,9 @@ from app.database.database import get_db
 from app.core.storage import get_image_url
 from app.models.message_model import Conversation, ConversationMember, Message
 from app.models.user_models import User
-from app.core.auth import (get_current_user, SECRET_KEY, ALGORITHM,
+from app.core.auth import (get_current_user, user_for_token,
                            is_parent as has_parent_role)
 from datetime import datetime, timedelta
-from jose import jwt, JWTError
 
 messaging_router = APIRouter()
 
@@ -411,16 +410,9 @@ def delete_conversation(
 
 
 def _authenticate_websocket(token: str, db: Session):
-    if not token:
-        return None
-    try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        user_id = payload.get("sub")
-        if not user_id:
-            return None
-    except JWTError:
-        return None
-    return db.query(User).filter(User.id == int(user_id)).first()
+    # Same checks as every other route: signature, expiry, an active
+    # account and a current token version
+    return user_for_token(token, db)
 
 
 @messaging_router.websocket("/ws")

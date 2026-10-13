@@ -61,8 +61,9 @@ export const pocketMoneyApi = {
             body: JSON.stringify({user_id: userId, password}),
         });
         if (res.status === 401) throw new Error("Wrong password");
-        // 403 carries the reason, e.g. an account still waiting for approval
-        if (res.status === 403) throw new Error((await res.json()).detail);
+        // 403 and 429 carry the reason, e.g. an account still waiting for
+        // approval, or too many wrong passwords
+        if (res.status === 403 || res.status === 429) throw new Error((await res.json()).detail);
         if (!res.ok) throw new Error("Login failed");
         const data = await res.json();
         if (!PARENT_ROLES.includes(data.user.role)) {

@@ -182,6 +182,14 @@ def app(db_session):
     return test_app
 
 
+@pytest.fixture(autouse=True)
+def fresh_rate_limits():
+    """The attempt limiters are process-wide; start every test clean."""
+    from app.core.rate_limit import ALL_LIMITERS
+    for limiter in ALL_LIMITERS:
+        limiter.clear()
+
+
 @pytest.fixture
 def client(app):
     """Synchronous TestClient for hitting the API directly."""

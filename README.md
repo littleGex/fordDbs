@@ -165,6 +165,7 @@ pytest tests/test_pocket_money_precision.py::TestFloatPrecisionRegression::test_
 | `test_pocket_money_auth.py` | login required on every pocket-money route (401), parent/child roles (403), chore-tracker service key |
 | `test_accounts.py` | self-registration (pending, birth-year role, limits), admin approval/reject/role/reset routes, role abilities, the recovery CLI |
 | `test_household_auth.py` | investments and utilities routes are parents-and-admin only (401 without a token, 403 for adult and child) |
+| `test_login_hardening.py` | wrong-password lock-out per device and per account, registration limit, minimum password length, refresh time limit, logging a user out everywhere on a password reset |
 | `test_game.py` | `GET /v1/game/family`: game token or any login, response limited to key and birthday, game token rejected on other routes, CLI data entry |
 | `test_pocket_money_wishes.py` | wish CRUD, negative-cost guards, `cost` column Numeric-precision regression |
 | `test_pocket_money_deductions.py` | deduction catalog CRUD, deduct-batch (incl. the dict-subscript regression) |
@@ -345,6 +346,23 @@ Deploying this for the first time needs the `status` column:
 ```bash
 docker exec database_manager_api alembic -c /code/alembic.ini upgrade head
 ```
+
+### Login limits and sessions
+
+- Five wrong passwords for an account from one device lock that device
+  out of the account for 15 minutes; 25 from anywhere lock the account
+  for everyone for 15 minutes. An admin password reset lifts the lock.
+- At most five account requests an hour from one device.
+- New and reset passwords need at least 8 characters. Existing shorter
+  passwords keep working.
+- A login lasts as long as the app is opened at least every 30 days;
+  after that the token can no longer be refreshed.
+- Resetting a password (in the app or with `app.cli`) logs that account
+  out everywhere.
+
+The lock-out counters are kept in the API process (`app/core/rate_limit.py`),
+so they reset when the `api` container restarts, and they rely on the
+API running as a single process.
 
 ### Recovery from the server
 

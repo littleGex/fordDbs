@@ -1,5 +1,6 @@
 import hmac
 import os
+from datetime import datetime, timedelta, timezone
 from dotenv import load_dotenv
 from fastapi import Depends, Header, HTTPException
 from fastapi.security import OAuth2PasswordBearer
@@ -41,6 +42,11 @@ LOGIN_AUDIENCES = {
 STATUS_ACTIVE = "active"
 STATUS_PENDING = "pending"
 
+MIN_PASSWORD_LENGTH = 8
+# How long after a token expires it can still be swapped for a new one.
+# An app left unopened for longer than this has to log in again.
+REFRESH_GRACE = timedelta(days=30)
+
 
 # Utilities
 def hash_pw(pw):
@@ -49,6 +55,23 @@ def hash_pw(pw):
 
 def verify_pw(pw, hashed):
     return pwd_context.verify(pw, hashed)
+
+
+def validate_password(password):
+    if not password or len(password) < MIN_PASSWORD_LENGTH:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Password must be at least {MIN_PASSWORD_LENGTH} "
+                   "characters")
+
+
+def create_access_token(user: User, lifetime: timedelta) -> str:
+    return jwt.encode(
+        {"sub": str(user.id),
+         "ver": user.token_version,
+         "exp": datetime.now(timezone.utc) + lifetime},
+        SECRET_KEY,
+        algorithm=ALGORITHM)
 
 
 def _user_from_token(token: str, db: Session, verify_exp: bool = True):
@@ -66,14 +89,35 @@ def _user_from_token(token: str, db: Session, verify_exp: bool = True):
         raise HTTPException(status_code=401,
                             detail="Could not validate credentials")
 
+    if not verify_exp:
+        # Refresh: an expired token is fine, but only for so long
+        expired_at = datetime.fromtimestamp(payload.get("exp", 0),
+                                            tz=timezone.utc)
+        if datetime.now(timezone.utc) - expired_at > REFRESH_GRACE:
+            raise HTTPException(status_code=401,
+                                detail="Session expired, log in again")
+
     user = db.query(User).filter(User.id == int(user_id)).first()
 
     if user is None:
         raise HTTPException(status_code=401, detail="User not found")
     if user.status != STATUS_ACTIVE:
         raise HTTPException(status_code=401, detail="Account is not active")
+    # Tokens from before token_version existed carry none and count as 0
+    if payload.get("ver", 0) != user.token_version:
+        raise HTTPException(status_code=401,
+                            detail="Session expired, log in again")
 
     return user
+
+
+def user_for_token(token: str, db: Session):
+    """The user a token belongs to, or None. For callers that can't use
+    the dependencies below, such as a WebSocket handshake."""
+    try:
+        return _user_from_token(token, db)
+    except HTTPException:
+        return None
 
 
 # JWT Dependency to protect routes

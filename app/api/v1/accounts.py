@@ -2,9 +2,11 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.api.v1.family_photos import user_profile
-from app.core.auth import (require_admin, hash_pw, ADMIN_ROLE,
+from app.core.auth import (require_admin, hash_pw, validate_password,
+                           ADMIN_ROLE,
                            ASSIGNABLE_ROLES, SELF_SERVICE_ROLES,
                            STATUS_ACTIVE, STATUS_PENDING)
+from app.core.rate_limit import forget_login_failures
 from app.core.storage import minio_client, BUCKET_NAME
 from app.database.database import get_db
 from app.models.user_models import User
@@ -110,10 +112,13 @@ def reset_password(user_id: int,
                    data: PasswordReset,
                    db: Session = Depends(get_db),
                    admin: User = Depends(require_admin)):
-    if not data.password:
-        raise HTTPException(status_code=422, detail="Password is required")
+    validate_password(data.password)
 
     user = _get_user(user_id, db)
     user.hashed_password = hash_pw(data.password)
+    # Log the account out everywhere, and lift any lock-out so the new
+    # password can be used straight away
+    user.token_version += 1
     db.commit()
+    forget_login_failures(user.id)
     return {"status": "reset successful"}

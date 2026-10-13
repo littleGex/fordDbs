@@ -43,13 +43,13 @@
         <input
           v-model="newPassword"
           type="password"
-          placeholder="New password"
+          placeholder="New password (8 or more characters)"
           @keyup.enter="resetPassword"
           class="styled-input"
         />
         <div class="modal-btns">
           <button @click="closeReset" class="btn-secondary">Cancel</button>
-          <button @click="resetPassword" class="btn-primary" :disabled="!newPassword">Save</button>
+          <button @click="resetPassword" class="btn-primary" :disabled="newPassword.length < 8">Save</button>
         </div>
       </div>
     </div>
@@ -115,7 +115,7 @@ const closeReset = () => {
 };
 
 const resetPassword = async () => {
-  if (!newPassword.value) return;
+  if (newPassword.value.length < 8) return;
   try {
     await api.post(`/admin/users/${resetTarget.value.id}/reset-password`, {
       password: newPassword.value
