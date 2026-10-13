@@ -7,7 +7,8 @@ from app.database.database import get_db
 from app.core.storage import get_image_url
 from app.models.message_model import Conversation, ConversationMember, Message
 from app.models.user_models import User
-from app.core.auth import get_current_user, SECRET_KEY, ALGORITHM
+from app.core.auth import (get_current_user, SECRET_KEY, ALGORITHM,
+                           is_parent as has_parent_role)
 from datetime import datetime, timedelta
 from jose import jwt, JWTError
 
@@ -319,7 +320,7 @@ def delete_message(
     if not message:
         raise HTTPException(status_code=404, detail="Message not found")
 
-    is_parent = current_user.role == "parent"
+    is_parent = has_parent_role(current_user)
     is_sender = message.sender_id == current_user.id
 
     if not is_parent:
@@ -366,7 +367,7 @@ def remove_member(
         raise HTTPException(status_code=404, detail="Conversation not found")
 
     is_creator = conversation.created_by == current_user.id
-    is_parent = current_user.role == "parent"
+    is_parent = has_parent_role(current_user)
     if not (is_creator or is_parent):
         raise HTTPException(
             status_code=403,
@@ -396,7 +397,7 @@ def delete_conversation(
         raise HTTPException(status_code=404, detail="Conversation not found")
 
     is_creator = conversation.created_by == current_user.id
-    is_parent = current_user.role == "parent"
+    is_parent = has_parent_role(current_user)
     if not (is_creator or is_parent):
         raise HTTPException(
             status_code=403,

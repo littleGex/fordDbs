@@ -14,6 +14,11 @@
     </div>
 
     <div class="nav-right">
+      <button v-if="isAdmin" class="nav-icon-btn" @click="router.push('/admin')" title="Accounts">
+        👥
+        <span v-if="accounts.pendingCount > 0" class="unread-dot">{{ accounts.pendingCount }}</span>
+      </button>
+
       <button class="nav-icon-btn" @click="router.push('/messages')" title="Messages">
         💬
         <span v-if="messaging.unreadTotal > 0" class="unread-dot">{{ badgeText }}</span>
@@ -32,15 +37,20 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed } from 'vue';
+import { ref, onMounted, onUnmounted, computed } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
 import { useMessagingStore } from '../stores/messaging';
+import { useAccountsStore } from '../stores/accounts';
 
 const auth = useAuthStore();
 const messaging = useMessagingStore();
+const accounts = useAccountsStore();
 const router = useRouter();
 const particles = ref([]);
+let pendingTimer = null;
+
+const isAdmin = computed(() => auth.currentUser?.role === 'admin');
 
 const badgeText = computed(() =>
   messaging.unreadTotal > 99 ? '99+' : messaging.unreadTotal
@@ -75,10 +85,19 @@ onMounted(() => {
   // where the shared conversations/WebSocket state gets started; init()
   // is a no-op if Messages.vue (or a prior mount) already did it.
   messaging.init();
+
+  // Account requests have no push channel, so the admin's badge polls
+  if (isAdmin.value) {
+    accounts.fetchPending();
+    pendingTimer = setInterval(() => accounts.fetchPending(), 60000);
+  }
 });
+
+onUnmounted(() => clearInterval(pendingTimer));
 
 const returnToProfiles = () => {
   messaging.reset();
+  accounts.reset();
   auth.logout();
   window.location.href = '/';
 };

@@ -56,7 +56,10 @@ class User(Base):
 
     id = Column(Integer, primary_key=True)
     username = Column(String, unique=True, nullable=False)
-    role = Column(String, default="parent")
+    role = Column(String, default="adult")
+    # 'pending' until the admin approves a self-registered account
+    status = Column(String, nullable=False, default="active",
+                    server_default="active")
     hashed_password = Column(String, nullable=True)
 
     profile_photo_key = Column(String, nullable=True)

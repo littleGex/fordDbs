@@ -29,10 +29,6 @@ const submit = async () => {
       user_id: selectedUserId.value,
       password: password.value
     })
-    if (res.data.status === 'needs_initial_password') {
-      errorMessage.value = "No password set yet. Set one in Fordstagram first."
-      return
-    }
     const picked = users.value.find(u => u.id === selectedUserId.value)
     setSession(res.data.access_token, {
       ...res.data.user,
@@ -40,9 +36,14 @@ const submit = async () => {
     })
     router.push('/')
   } catch (e) {
-    errorMessage.value = e.response?.status === 401
-        ? "Wrong password!"
-        : "Login failed. Please try again."
+    // 403 carries the reason, e.g. an account still waiting for approval
+    if (e.response?.status === 401) {
+      errorMessage.value = "Wrong password!"
+    } else if (e.response?.status === 403) {
+      errorMessage.value = e.response.data.detail
+    } else {
+      errorMessage.value = "Login failed. Please try again."
+    }
   } finally {
     password.value = ''
     loading.value = false

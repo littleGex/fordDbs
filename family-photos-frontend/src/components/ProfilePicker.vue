@@ -18,25 +18,33 @@
 
     <div v-if="showPassModal" class="modal-overlay" @click.self="closeModals">
       <div class="modal-content">
-        <h2>{{ needsInitialSetup ? 'Set Your Password' : 'Enter Password' }}</h2>
+        <h2>Enter Password</h2>
         <p>Profile: {{ selectedUser?.display_name }}</p>
         <input
           v-model="passInput"
           type="password"
-          :placeholder="needsInitialSetup ? 'Create a password' : 'Enter password'"
+          placeholder="Enter password"
           @keyup.enter="submitAuth"
           autofocus
           class="styled-input"
         />
         <div class="modal-btns">
           <button @click="closeModals" class="btn-secondary">Cancel</button>
-          <button @click="submitAuth" class="btn-primary">{{ needsInitialSetup ? 'Save & Login' : 'Unlock' }}</button>
+          <button @click="submitAuth" class="btn-primary">Unlock</button>
         </div>
       </div>
     </div>
 
     <div v-if="showCreateModal" class="modal-overlay" @click.self="closeModals">
-      <div class="modal-content">
+      <div v-if="requestSent" class="modal-content">
+        <h2>Request Sent</h2>
+        <p>Your profile is waiting for approval. You can log in once Dad has approved it.</p>
+        <div class="modal-btns">
+          <button @click="closeModals" class="btn-primary">OK</button>
+        </div>
+      </div>
+
+      <div v-else class="modal-content">
         <h2>Add Profile</h2>
 
         <div class="avatar-setup">
@@ -65,13 +73,20 @@
           v-model="newUserPassword"
           type="password"
           placeholder="Password"
+          class="styled-input"
+        />
+        <input
+          v-model.number="newUserBirthYear"
+          type="number"
+          inputmode="numeric"
+          placeholder="Year you were born"
           @keyup.enter="createUser"
           class="styled-input"
         />
 
         <div class="modal-btns">
           <button @click="closeModals" class="btn-secondary">Cancel</button>
-          <button @click="createUser" class="btn-primary" :disabled="!newUserName">Create User</button>
+          <button @click="createUser" class="btn-primary" :disabled="!newUserName || !newUserPassword || !newUserBirthYear">Send Request</button>
         </div>
       </div>
     </div>
@@ -94,13 +109,14 @@ const loading = ref(true);
 // Modal States
 const showPassModal = ref(false);
 const showCreateModal = ref(false);
-const needsInitialSetup = ref(false);
 
 // Form States
 const selectedUser = ref(null);
 const passInput = ref('');
 const newUserName = ref('');
 const newUserPassword = ref('');
+const newUserBirthYear = ref(null);
+const requestSent = ref(false);
 const newProfileFile = ref(null);
 const uploadedPreviewUrl = ref(null);
 
@@ -121,7 +137,6 @@ const openLoginModal = (user) => {
   selectedUser.value = user;
   passInput.value = '';
   showPassModal.value = true;
-  needsInitialSetup.value = false;
 };
 
 const closeModals = () => {
@@ -131,6 +146,8 @@ const closeModals = () => {
   // Reset create form if closed
   newUserName.value = '';
   newUserPassword.value = '';
+  newUserBirthYear.value = null;
+  requestSent.value = false;
   newProfileFile.value = null;
   uploadedPreviewUrl.value = null;
 };
@@ -142,35 +159,12 @@ const submitAuth = async () => {
   }
 
   try {
-    let res;
-
-    if (needsInitialSetup.value) {
-      await api.post('/users/set-password', {
-        user_id: selectedUser.value.id,
-        password: passInput.value
-      }, {
-        headers: { 'Content-Type': 'application/json' }
-      });
-
-      res = await api.post('/login', {
-        user_id: selectedUser.value.id,
-        password: passInput.value
-      }, {
-        headers: { 'Content-Type': 'application/json' }
-      });
-    } else {
-      res = await api.post('/login', {
-        user_id: selectedUser.value.id,
-        password: passInput.value
-      }, {
-        headers: { 'Content-Type': 'application/json' }
-      });
-    }
-
-    if (res.data.status === 'needs_initial_password') {
-      needsInitialSetup.value = true;
-      return;
-    }
+    const res = await api.post('/login', {
+      user_id: selectedUser.value.id,
+      password: passInput.value
+    }, {
+      headers: { 'Content-Type': 'application/json' }
+    });
 
     localStorage.setItem('token', res.data.access_token);
     // The picker only knows a name and avatar; the full profile (role,
@@ -210,6 +204,8 @@ const createUser = async () => {
     formData.append('username', generatedUsername);
     formData.append('display_name', newUserName.value);
     formData.append('password', newUserPassword.value);
+    // Only used to suggest child or adult; the server doesn't keep it
+    formData.append('birth_year', newUserBirthYear.value);
 
     if (newProfileFile.value) {
       formData.append('file', newProfileFile.value);
@@ -217,9 +213,8 @@ const createUser = async () => {
 
     await api.post('/users', formData);
 
-    // Reset form after success
-    closeModals();
-    fetchUsers();
+    // The new profile stays hidden until the admin approves it
+    requestSent.value = true;
   } catch (error) {
     alert("Creation failed: " + (error.response?.data?.detail || "Check console"));
   }

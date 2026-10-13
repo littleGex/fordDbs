@@ -61,11 +61,10 @@ export const pocketMoneyApi = {
             body: JSON.stringify({user_id: userId, password}),
         });
         if (res.status === 401) throw new Error("Wrong password");
+        // 403 carries the reason, e.g. an account still waiting for approval
+        if (res.status === 403) throw new Error((await res.json()).detail);
         if (!res.ok) throw new Error("Login failed");
         const data = await res.json();
-        if (data.status === "needs_initial_password") {
-            throw new Error("No password set yet. Set one in Fordstagram first.");
-        }
         if (!PARENT_ROLES.includes(data.user.role)) {
             throw new Error("Parents only");
         }

@@ -5,6 +5,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.api.v1.pocket_money import pocket_money_router
 from app.api.v1.family_photos import family_photos_router
+from app.api.v1.accounts import accounts_router
 from app.api.v1.utils import utils_router
 from app.api.v1.shares import shares_router
 from app.api.v1.messaging import messaging_router
@@ -83,6 +84,12 @@ def create_app():
         family_photos_router,
         prefix="/v1/family-photos",
         tags=["Family Photos"]
+    )
+
+    app.include_router(
+        accounts_router,
+        prefix="/v1/family-photos",
+        tags=["Accounts"]
     )
 
     app.include_router(
