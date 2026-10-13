@@ -12,8 +12,11 @@ from app.models.user_models import Child, User
 
 load_dotenv()
 
-# Load from your .env
-SECRET_KEY = os.getenv("SECRET_KEY", "your-default-secret")
+# Load from your .env. There is deliberately no fallback: a default
+# signing key would let anyone forge a login token.
+SECRET_KEY = os.getenv("SECRET_KEY")
+if not SECRET_KEY:
+    raise RuntimeError("SECRET_KEY is not set; refusing to start")
 ALGORITHM = "HS256"
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login", auto_error=False)

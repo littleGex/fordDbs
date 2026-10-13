@@ -106,7 +106,7 @@ const uploadedPreviewUrl = ref(null);
 
 const fetchUsers = async () => {
   try {
-    const response = await api.get('/users');
+    const response = await api.get('/login-options');
     users.value = response.data;
   } catch (error) {
     console.error("Fetch error", error);
@@ -173,7 +173,9 @@ const submitAuth = async () => {
     }
 
     localStorage.setItem('token', res.data.access_token);
-    auth.login(selectedUser.value);
+    // The picker only knows a name and avatar; the full profile (role,
+    // bio) comes back with the token
+    auth.login({ ...selectedUser.value, ...res.data.user });
     router.push("/home");
     showPassModal.value = false;
 

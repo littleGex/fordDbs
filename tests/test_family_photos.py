@@ -208,9 +208,48 @@ class TestPhotoReadsRequireLogin:
         assert resp.status_code == 200
         assert [p["id"] for p in resp.json()] == [photo.id]
 
-    def test_login_screen_can_still_list_users(self, client, make_user):
+    def test_user_list_requires_login(self, client, parent_client,
+                                      make_user):
         make_user(username="alice")
 
-        resp = client.get("/v1/family-photos/users")
+        assert client.get("/v1/family-photos/users").status_code == 401
+        listed = parent_client.get("/v1/family-photos/users")
+        assert "alice" in [u["username"] for u in listed.json()]
+
+    def test_login_options_expose_only_what_the_picker_needs(
+            self, client, make_user):
+        user = make_user(username="alice", display_name="Alice",
+                         role="child")
+
+        resp = client.get("/v1/family-photos/login-options")
 
         assert resp.status_code == 200
+        assert resp.json() == [{"id": user.id, "display_name": "Alice",
+                                "profile_photo_url": None}]
+
+    def test_login_returns_the_full_profile(self, client, make_user):
+        user = make_user(username="alice", display_name="Alice",
+                         role="child", password="pw")
+
+        resp = client.post("/v1/family-photos/login",
+                           json={"user_id": user.id, "password": "pw"})
+
+        assert resp.status_code == 200
+        assert resp.json()["user"] == {
+            "id": user.id, "username": "alice", "display_name": "Alice",
+            "role": "child", "profile_photo_url": None, "bio": None}
+
+
+class TestDbManagerRemoved:
+
+    @pytest.mark.parametrize("method,path", [
+        ("get", "/v1/list-tables"),
+        ("get", "/v1/tables/users"),
+        ("post", "/v1/tables/users/records"),
+        ("post", "/v1/create-table/anything"),
+    ])
+    def test_generic_table_routes_are_gone(self, parent_client, method,
+                                           path):
+        resp = getattr(parent_client, method)(path)
+
+        assert resp.status_code == 404

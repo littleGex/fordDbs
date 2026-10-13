@@ -6,15 +6,15 @@ interface Props {
 }
 
 export default function Login({ onLogin }: Props) {
-    const [parents, setParents] = useState<FamilyUser[]>([]);
+    const [family, setFamily] = useState<FamilyUser[]>([]);
     const [userId, setUserId] = useState<number | null>(null);
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
     const [busy, setBusy] = useState(false);
 
     useEffect(() => {
-        pocketMoneyApi.getParents()
-            .then(setParents)
+        pocketMoneyApi.getFamily()
+            .then(setFamily)
             .catch((err: Error) => setError(err.message));
     }, []);
 
@@ -39,14 +39,14 @@ export default function Login({ onLogin }: Props) {
                 <h1 className="text-4xl font-black text-gray-950 tracking-tight mb-2">Deductions</h1>
                 <p className="text-gray-500 mb-6 font-medium">Parents only. Who are you?</p>
 
-                <div className="flex gap-3 mb-6">
-                    {parents.map(parent => (
+                <div className="grid grid-cols-2 gap-3 mb-6">
+                    {family.map(member => (
                         <button
-                            key={parent.id}
-                            onClick={() => setUserId(parent.id)}
-                            className={`flex-1 py-3 rounded-2xl font-bold transition-all ${userId === parent.id ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-700'}`}
+                            key={member.id}
+                            onClick={() => setUserId(member.id)}
+                            className={`py-3 rounded-2xl font-bold transition-all ${userId === member.id ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-700'}`}
                         >
-                            {parent.display_name}
+                            {member.display_name}
                         </button>
                     ))}
                 </div>

@@ -26,6 +26,18 @@ family_photos_router = APIRouter()
 
 
 # Utilities
+def user_profile(user):
+    return {
+        "id": user.id,
+        "username": user.username,
+        "display_name": user.display_name or user.username,
+        "role": user.role,
+        "profile_photo_url": get_image_url(
+            user.profile_photo_key) if user.profile_photo_key else None,
+        "bio": user.bio
+    }
+
+
 def format_photo_list(photos):
     data = []
     for p in photos:
@@ -91,8 +103,7 @@ def login(data: dict, db: Session = Depends(get_db)):
         algorithm=ALGORITHM)
     return {"access_token": token,
             "token_type": "bearer",
-            "user": {"id": user.id,
-                     "role": user.role}}
+            "user": user_profile(user)}
 
 
 @family_photos_router.post("/users/set-password")
@@ -396,23 +407,27 @@ def update_profile(
     }
 
 
-@family_photos_router.get("/users")
-def get_all_users(db: Session = Depends(get_db)):
-    users = db.query(User).all()
-    user_list = []
-
-    for user in users:
-        user_list.append({
+@family_photos_router.get("/login-options")
+def get_login_options(db: Session = Depends(get_db)):
+    """
+    The only user data available without a token: just enough for the
+    login screens to show who can log in.
+    """
+    return [
+        {
             "id": user.id,
-            "username": user.username,
             "display_name": user.display_name or user.username,
-            "role": user.role,
             "profile_photo_url": get_image_url(
-                user.profile_photo_key) if user.profile_photo_key else None,
-            "bio": user.bio
-        })
+                user.profile_photo_key) if user.profile_photo_key else None
+        }
+        for user in db.query(User).all()
+    ]
 
-    return user_list
+
+@family_photos_router.get("/users")
+def get_all_users(db: Session = Depends(get_db),
+                  current_user: User = Depends(get_current_user)):
+    return [user_profile(user) for user in db.query(User).all()]
 
 
 @family_photos_router.post("/users")

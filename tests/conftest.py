@@ -46,6 +46,7 @@ os.environ["DB_HOST"] = os.getenv("TEST_DB_HOST", "localhost")
 os.environ["DB_PORT"] = os.getenv("TEST_DB_PORT", "5434")
 os.environ["POSTGRES_DB"] = os.getenv("TEST_POSTGRES_DB", "forddbs_test")
 os.environ.setdefault("ADMIN_PASSWORD", "test-admin-password")
+os.environ.setdefault("SECRET_KEY", "test-secret-key")
 os.environ.setdefault("ALLOWED_ORIGINS", "")
 
 # app/core/storage.py's minio_client is a module-level singleton built
