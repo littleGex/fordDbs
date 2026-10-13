@@ -7,7 +7,7 @@ from app.database.database import get_db
 from app.core.storage import get_image_url
 from app.models.message_model import Conversation, ConversationMember, Message
 from app.models.user_models import User
-from app.api.v1.family_photos import get_current_user, SECRET_KEY, ALGORITHM
+from app.core.auth import get_current_user, SECRET_KEY, ALGORITHM
 from datetime import datetime, timedelta
 from jose import jwt, JWTError
 

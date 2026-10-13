@@ -1,9 +1,6 @@
 <script setup>
 import {ref, onMounted, computed, watch} from 'vue'
-import axios from 'axios'
-
-const API_BASE = import.meta.env.VITE_API_BASE;
-const token = localStorage.getItem('admin_token')
+import api from '../api'
 
 const children = ref([])
 const newChildName = ref('')
@@ -38,7 +35,7 @@ const previewBalance = computed(() => {
 
 const fetchChildren = async () => {
   try {
-    const res = await axios.get(`${API_BASE}/children`)
+    const res = await api.get(`/children`)
     children.value = res.data
     if (children.value.length > 0 && !selectedChildForWishes.value) {
       selectedChildForWishes.value = children.value[0].id
@@ -51,7 +48,7 @@ const fetchChildren = async () => {
 const fetchWishes = async () => {
   if (!selectedChildForWishes.value) return
   try {
-    const res = await axios.get(`${API_BASE}/wishes/${selectedChildForWishes.value}`)
+    const res = await api.get(`/wishes/${selectedChildForWishes.value}`)
     childWishes.value = res.data
   } catch (e) {
     childWishes.value = []
@@ -70,7 +67,7 @@ const buyWish = async (wish) => {
 
   if (confirm(`Buy "${wish.item_name}" for €${wish.cost.toFixed(2)}?`)) {
     try {
-      await axios.post(`${API_BASE}/withdraw/${child.id}`, null, {
+      await api.post(`/withdraw/${child.id}`, null, {
         params: {
           amount: wish.cost,
           description: `Goal Achieved: ${wish.item_name}`,
@@ -78,7 +75,7 @@ const buyWish = async (wish) => {
         }
       })
 
-      await axios.delete(`${API_BASE}/wish/${wish.id}`)
+      await api.delete(`/wish/${wish.id}`)
       await fetchChildren()
       await fetchWishes()
     } catch (err) {
@@ -89,7 +86,7 @@ const buyWish = async (wish) => {
 
 const handleUpdateWish = async (id) => {
   try {
-    await axios.patch(`${API_BASE}/wish/${id}`, null, {
+    await api.patch(`/wish/${id}`, null, {
       params: {
         item_name: editWishName.value,
         cost: editWishCost.value
@@ -104,9 +101,8 @@ const handleUpdateWish = async (id) => {
 
 const addChild = async () => {
   if (!newChildName.value) return
-  await axios.post(`${API_BASE}/add-child/${newChildName.value}`, null, {
+  await api.post(`/add-child/${newChildName.value}`, null, {
     params: {
-      password: token,
       birth_date: newChildBirthDate.value
     }
   })
@@ -116,11 +112,10 @@ const addChild = async () => {
 }
 
 const handleRename = async (id) => {
-  await axios.patch(`${API_BASE}/child/${id}`, null, {
+  await api.patch(`/child/${id}`, null, {
     params: {
       name: newNameValue.value,
-      birth_date: newBirthDateValue.value || null, // Fix: send null if empty
-      password: token
+      birth_date: newBirthDateValue.value || null // Fix: send null if empty
     }
   })
   editingId.value = null;
@@ -129,14 +124,14 @@ const handleRename = async (id) => {
 
 const deleteChild = async (id) => {
   if (confirm("Permanently delete child and history?")) {
-    await axios.delete(`${API_BASE}/child/${id}`, {params: {password: token}})
+    await api.delete(`/child/${id}`)
     fetchChildren()
   }
 }
 
 const addWish = async () => {
   if (!newWish.value.item_name || newWish.value.cost <= 0) return
-  await axios.post(`${API_BASE}/wish/${selectedChildForWishes.value}`, null, {
+  await api.post(`/wish/${selectedChildForWishes.value}`, null, {
     params: {item_name: newWish.value.item_name, cost: newWish.value.cost}
   })
   newWish.value = {item_name: '', cost: 0}
@@ -144,18 +139,17 @@ const addWish = async () => {
 }
 
 const deleteWish = async (wishId) => {
-  await axios.delete(`${API_BASE}/wish/${wishId}`)
+  await api.delete(`/wish/${wishId}`)
   fetchWishes()
 }
 
 const handleAdjustment = async (type) => {
   const finalAmount = type === 'add' ? Math.abs(adjustAmount.value) : -Math.abs(adjustAmount.value)
-  await axios.post(`${API_BASE}/adjust/${activeAdjustId.value}`, null, {
+  await api.post(`/adjust/${activeAdjustId.value}`, null, {
     params: {
       amount: finalAmount,
       description: adjustReason.value || "Admin Adjustment",
-      category: adjustCategory.value,
-      password: token
+      category: adjustCategory.value
     }
   })
   closeModal();

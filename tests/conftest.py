@@ -74,7 +74,7 @@ from app.models.utilities import Utils  # noqa: E402,F401
 from app.models.message_model import (  # noqa: E402,F401
     Conversation, ConversationMember, Message
 )
-from app.api.v1.family_photos import hash_pw, SECRET_KEY, ALGORITHM  # noqa: E402
+from app.core.auth import hash_pw, SECRET_KEY, ALGORITHM  # noqa: E402
 
 
 TEST_DATABASE_URL = get_db_url()
@@ -191,6 +191,21 @@ def client(app):
 @pytest.fixture
 def admin_password():
     return os.environ["ADMIN_PASSWORD"]
+
+
+@pytest.fixture
+def client_for(app, auth_headers):
+    """client_for(user) -> a TestClient that sends that user's token."""
+    def _client_for(user):
+        return TestClient(app, headers=auth_headers(user))
+
+    return _client_for
+
+
+@pytest.fixture
+def parent_client(client_for, make_user):
+    """TestClient logged in as a parent."""
+    return client_for(make_user(role="parent"))
 
 
 # ---------------------------------------------------------------------

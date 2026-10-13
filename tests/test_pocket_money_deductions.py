@@ -14,12 +14,17 @@ import pytest
 pytestmark = pytest.mark.integration
 
 
+@pytest.fixture
+def client(parent_client):
+    """Every pocket-money route needs a login; default to a parent."""
+    return parent_client
+
+
 class TestDeductionTypeCRUD:
 
-    def test_create_deduction_type(self, client, admin_password):
+    def test_create_deduction_type(self, client):
         resp = client.post(
             "/v1/pocket-money/deductions",
-            params={"password": admin_password},
             json={"name": "Unmade Bed", "default_amount": 0.50},
         )
 
@@ -29,26 +34,16 @@ class TestDeductionTypeCRUD:
         assert float(body["default_amount"]) == 0.50
 
     def test_create_duplicate_deduction_type_rejected(
-        self, client, admin_password, make_deduction_type
+        self, client, make_deduction_type
     ):
         make_deduction_type(name="Unmade Bed")
 
         resp = client.post(
             "/v1/pocket-money/deductions",
-            params={"password": admin_password},
             json={"name": "Unmade Bed", "default_amount": 1.00},
         )
 
         assert resp.status_code == 400
-
-    def test_create_deduction_type_wrong_password_rejected(self, client):
-        resp = client.post(
-            "/v1/pocket-money/deductions",
-            params={"password": "wrong"},
-            json={"name": "Unmade Bed", "default_amount": 0.50},
-        )
-
-        assert resp.status_code == 403
 
     def test_get_deduction_types(self, client, make_deduction_type):
         make_deduction_type(name="Unmade Bed", default_amount="0.50")
@@ -61,13 +56,12 @@ class TestDeductionTypeCRUD:
         assert {"Unmade Bed", "Dirty Dishes"}.issubset(names)
 
     def test_update_deduction_type(
-        self, client, admin_password, make_deduction_type
+        self, client, make_deduction_type
     ):
         dtype = make_deduction_type(name="Unmade Bed", default_amount="0.50")
 
         resp = client.patch(
             f"/v1/pocket-money/deductions/{dtype.id}",
-            params={"password": admin_password},
             json={"default_amount": 0.75},
         )
 
@@ -75,13 +69,12 @@ class TestDeductionTypeCRUD:
         assert float(resp.json()["default_amount"]) == 0.75
 
     def test_delete_deduction_type(
-        self, client, admin_password, make_deduction_type
+        self, client, make_deduction_type
     ):
         dtype = make_deduction_type(name="Unmade Bed")
 
         resp = client.delete(
             f"/v1/pocket-money/deductions/{dtype.id}",
-            params={"password": admin_password},
         )
 
         assert resp.status_code == 200
@@ -93,7 +86,7 @@ class TestDeductBatchRegression:
     """
 
     def test_deduct_batch_does_not_raise_type_error(
-        self, client, admin_password, make_child
+        self, client, make_child
     ):
         """
         REGRESSION: previously raised
@@ -106,7 +99,6 @@ class TestDeductBatchRegression:
 
         resp = client.post(
             f"/v1/pocket-money/deduct-batch/{child.id}",
-            params={"password": admin_password},
             json=[
                 {"name": "Unmade Bed", "count": 1, "total": 0.50},
                 {"name": "Dirty Dishes", "count": 2, "total": 0.50},
@@ -116,13 +108,12 @@ class TestDeductBatchRegression:
         assert resp.status_code == 200, resp.text
 
     def test_deduct_batch_withdraws_sum_of_totals(
-        self, client, admin_password, make_child
+        self, client, make_child
     ):
         child = make_child(balance="10.00")
 
         resp = client.post(
             f"/v1/pocket-money/deduct-batch/{child.id}",
-            params={"password": admin_password},
             json=[
                 {"name": "Unmade Bed", "count": 1, "total": 0.50},
                 {"name": "Dirty Dishes", "count": 2, "total": 0.50},
@@ -134,14 +125,13 @@ class TestDeductBatchRegression:
         assert resp.json()["new_balance"] == 9.00
 
     def test_deduct_batch_description_includes_item_names(
-        self, client, admin_password, make_child, db_session
+        self, client, make_child, db_session
     ):
         from app.models.user_models import Transaction
 
         child = make_child(balance="10.00")
         client.post(
             f"/v1/pocket-money/deduct-batch/{child.id}",
-            params={"password": admin_password},
             json=[{"name": "Unmade Bed", "count": 1, "total": 0.50}],
         )
 
@@ -157,25 +147,13 @@ class TestDeductBatchRegression:
         assert "Unmade Bed" in txn.description
 
     def test_deduct_batch_insufficient_funds_rejected(
-        self, client, admin_password, make_child
+        self, client, make_child
     ):
         child = make_child(balance="0.50")
 
         resp = client.post(
             f"/v1/pocket-money/deduct-batch/{child.id}",
-            params={"password": admin_password},
             json=[{"name": "Big Fine", "count": 1, "total": 5.00}],
         )
 
         assert resp.status_code == 422
-
-    def test_deduct_batch_wrong_password_rejected(self, client, make_child):
-        child = make_child(balance="10.00")
-
-        resp = client.post(
-            f"/v1/pocket-money/deduct-batch/{child.id}",
-            params={"password": "wrong"},
-            json=[{"name": "Unmade Bed", "count": 1, "total": 0.50}],
-        )
-
-        assert resp.status_code == 403

@@ -1,28 +1,31 @@
-import os
 from datetime import datetime
 from decimal import Decimal, ROUND_HALF_UP
-from dotenv import load_dotenv
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 from typing import List
+from app.core.auth import (get_current_user, require_parent,
+                           require_parent_or_service, is_parent,
+                           authorize_child_access)
 from app.database.database import get_db
 from app.models.deductions_models import DeductionType
-from app.models.user_models import Child, Transaction, Wish
+from app.models.user_models import Child, Transaction, Wish, User
 from app.schema.deduction_schema import (DeductionItem,
                                          DeductionTypeUpdate,
                                          DeductionTypeCreate)
 
 
-load_dotenv()
-SECRET_PASSWORD = os.getenv("ADMIN_PASSWORD")
 pocket_money_router = APIRouter()
 
 
 @pocket_money_router.get("/balance/{child_name}")
 def get_balance(child_name: str,
-                db: Session = Depends(get_db)):
+                db: Session = Depends(get_db),
+                current_user: User = Depends(get_current_user)):
     child = db.query(Child).filter(Child.name == child_name).first()
+    if not is_parent(current_user) and (
+            child is None or child.user_id != current_user.id):
+        raise HTTPException(status_code=403, detail="Forbidden")
     if not child:
         raise HTTPException(status_code=404, detail="Child not found")
     return {"name": child.name, "balance": child.balance}
@@ -31,7 +34,8 @@ def get_balance(child_name: str,
 @pocket_money_router.patch("/adjust-balance/{child_id}")
 def adjust_balance(child_id: int,
                    new_balance: float,
-                   db: Session = Depends(get_db)):
+                   db: Session = Depends(get_db),
+                   current_user: User = Depends(require_parent)):
     child = db.query(Child).filter(Child.id == child_id).first()
     if not child:
         raise HTTPException(status_code=404, detail="Child not found")
@@ -63,12 +67,9 @@ def adjust_balance(child_id: int,
 
 @pocket_money_router.post("/add-child/{name}")
 def add_child(name: str,
-              password: str,
               birth_date: str = None,
-              db: Session = Depends(get_db)):
-    if password != SECRET_PASSWORD:
-        raise HTTPException(status_code=403, detail="Forbidden")
-
+              db: Session = Depends(get_db),
+              current_user: User = Depends(require_parent)):
     parsed_date = None
     if birth_date:
         parsed_date = datetime.strptime(birth_date,
@@ -81,13 +82,19 @@ def add_child(name: str,
 
 
 @pocket_money_router.get("/children")
-def get_all_children(db: Session = Depends(get_db)):
-    children = db.query(Child).all()
-    return children
+def get_all_children(db: Session = Depends(get_db),
+                     current_user: User = Depends(get_current_user)):
+    # Parents see everyone; a child only sees their own profile
+    query = db.query(Child)
+    if not is_parent(current_user):
+        query = query.filter(Child.user_id == current_user.id)
+    return query.all()
 
 
 @pocket_money_router.get("/child-id/{name}")
-def get_child_id_by_name(name: str, db: Session = Depends(get_db)):
+def get_child_id_by_name(name: str,
+                         db: Session = Depends(get_db),
+                         caller=Depends(require_parent_or_service)):
     child = db.query(Child).filter(Child.name == name).first()
     if not child:
         raise HTTPException(status_code=404, detail="Child not found")
@@ -97,13 +104,9 @@ def get_child_id_by_name(name: str, db: Session = Depends(get_db)):
 @pocket_money_router.patch("/child/{child_id}")
 def update_child(child_id: int,
                  name: str,
-                 password: str,
                  birth_date: str = None,
-                 db: Session = Depends(get_db)):
-    if password != SECRET_PASSWORD:
-        raise HTTPException(status_code=403,
-                            detail="Forbidden")
-
+                 db: Session = Depends(get_db),
+                 current_user: User = Depends(require_parent)):
     child = db.query(Child).filter(Child.id == child_id).first()
     if not child:
         raise HTTPException(status_code=404,
@@ -121,10 +124,8 @@ def update_child(child_id: int,
 
 @pocket_money_router.delete("/child/{child_id}")
 def delete_child(child_id: int,
-                 password: str,
-                 db: Session = Depends(get_db)):
-    if password != SECRET_PASSWORD:
-        raise HTTPException(status_code=403, detail="Forbidden")
+                 db: Session = Depends(get_db),
+                 current_user: User = Depends(require_parent)):
     child = db.query(Child).filter(Child.id == child_id).first()
 
     if not child:
@@ -140,27 +141,23 @@ def adjust_money(
     amount: float,
     description: str,
     category: str,
-    password: str,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_parent)
 ):
-    # 1. Security Check
-    if password != SECRET_PASSWORD:
-        raise HTTPException(status_code=403, detail="Forbidden")
-
     amount_dec = Decimal(str(amount)).quantize(Decimal("0.01"),
                                                rounding=ROUND_HALF_UP)
 
-    # 2. Logic: If amount is positive, use deposit logic.
+    # Logic: If amount is positive, use deposit logic.
     if amount_dec > 0:
-        return deposit_money(child_id=child_id,
-                             amount=float(amount_dec),
-                             description=description,
-                             db=db)
+        return _deposit(child_id=child_id,
+                        amount=float(amount_dec),
+                        description=description,
+                        db=db)
     elif amount_dec < 0:
-        return withdraw_money(child_id=child_id,
-                              amount=float(abs(amount_dec)),
-                              description=description,
-                              category=category, db=db)
+        return _withdraw(child_id=child_id,
+                         amount=float(abs(amount_dec)),
+                         description=description,
+                         category=category, db=db)
     else:
         return {"message": "No adjustment made (amount was 0)"}
 
@@ -169,7 +166,13 @@ def adjust_money(
 def deposit_money(child_id: int,
                   amount: float,
                   description: str,
-                  db: Session = Depends(get_db)):
+                  db: Session = Depends(get_db),
+                  caller=Depends(require_parent_or_service)):
+    return _deposit(child_id=child_id, amount=amount,
+                    description=description, db=db)
+
+
+def _deposit(child_id: int, amount: float, description: str, db: Session):
     # 1. Find the child
     child = db.query(Child).filter(Child.id == child_id).first()
     if not child:
@@ -207,8 +210,10 @@ def get_transaction_history(
         child_id: int,
         skip: int = 0,
         limit: int = 20,
-        db: Session = Depends(get_db)
+        db: Session = Depends(get_db),
+        current_user: User = Depends(get_current_user)
 ):
+    authorize_child_access(child_id, current_user, db)
     transactions = db.query(Transaction) \
         .filter(Transaction.child_id == child_id) \
         .order_by(Transaction.timestamp.desc()) \
@@ -224,7 +229,14 @@ def withdraw_money(child_id: int,
                    amount: float,
                    description: str,
                    category: str = "Spend",
-                   db: Session = Depends(get_db)):
+                   db: Session = Depends(get_db),
+                   current_user: User = Depends(require_parent)):
+    return _withdraw(child_id=child_id, amount=amount,
+                     description=description, category=category, db=db)
+
+
+def _withdraw(child_id: int, amount: float, description: str,
+              category: str, db: Session):
     child = db.query(Child).filter(Child.id == child_id).first()
 
     if not child:
@@ -264,7 +276,10 @@ def withdraw_money(child_id: int,
 
 
 @pocket_money_router.get("/wishes/{child_id}")
-def get_wishes(child_id: int, db: Session = Depends(get_db)):
+def get_wishes(child_id: int,
+               db: Session = Depends(get_db),
+               current_user: User = Depends(get_current_user)):
+    authorize_child_access(child_id, current_user, db)
     return db.query(Wish).filter(Wish.child_id == child_id).all()
 
 
@@ -272,7 +287,9 @@ def get_wishes(child_id: int, db: Session = Depends(get_db)):
 def add_wish(child_id: int,
              item_name: str,
              cost: float,
-             db: Session = Depends(get_db)):
+             db: Session = Depends(get_db),
+             current_user: User = Depends(get_current_user)):
+    authorize_child_access(child_id, current_user, db)
     cost_dec = Decimal(str(cost)).quantize(Decimal("0.01"),
                                            rounding=ROUND_HALF_UP)
 
@@ -291,7 +308,10 @@ def add_wish(child_id: int,
 
 
 @pocket_money_router.get("/stats/{child_id}")
-def get_combined_stats(child_id: int, db: Session = Depends(get_db)):
+def get_combined_stats(child_id: int,
+                       db: Session = Depends(get_db),
+                       current_user: User = Depends(get_current_user)):
+    authorize_child_access(child_id, current_user, db)
     category_query = db.query(
         Transaction.category,
         func.sum(Transaction.amount).label("total")
@@ -315,7 +335,8 @@ def get_combined_stats(child_id: int, db: Session = Depends(get_db)):
 
 @pocket_money_router.delete("/wish/{wish_id}")
 def delete_wish(wish_id: int,
-                db: Session = Depends(get_db)):
+                db: Session = Depends(get_db),
+                current_user: User = Depends(get_current_user)):
     # 1. Query for the wish first
     wish = db.query(Wish).filter(Wish.id == wish_id).first()
 
@@ -326,6 +347,8 @@ def delete_wish(wish_id: int,
             status_code=404,
             detail=f"Wish with ID {wish_id} not found."
         )
+
+    authorize_child_access(wish.child_id, current_user, db)
 
     # 3. Proceed with deletion only if found
     db.delete(wish)
@@ -338,11 +361,14 @@ def delete_wish(wish_id: int,
 def update_wish(wish_id: int,
                 item_name: str = None,
                 cost: float = None,
-                db: Session = Depends(get_db)):
+                db: Session = Depends(get_db),
+                current_user: User = Depends(get_current_user)):
     wish = db.query(Wish).filter(Wish.id == wish_id).first()
 
     if not wish:
         raise HTTPException(status_code=404, detail="Wish not found")
+
+    authorize_child_access(wish.child_id, current_user, db)
 
     if item_name is not None:
         wish.item_name = item_name
@@ -360,16 +386,9 @@ def update_wish(wish_id: int,
     return wish
 
 
-@pocket_money_router.post("/verify-admin")
-def verify_admin(password: str = Query(...)):
-    if password == os.getenv("ADMIN_PASSWORD"):
-        return {"success": "authenticated"}
-    raise HTTPException(status_code=401,
-                        detail="Invalid admin password")
-
-
 @pocket_money_router.get("/deductions")
-def get_deduction_types(db: Session = Depends(get_db)):
+def get_deduction_types(db: Session = Depends(get_db),
+                        current_user: User = Depends(require_parent)):
     """
     Fetches catalog of available deductions for UI.
     """
@@ -379,19 +398,16 @@ def get_deduction_types(db: Session = Depends(get_db)):
 @pocket_money_router.post("/deduct-batch/{child_id}")
 def deduct_batch(child_id: int,
                  items: List[DeductionItem],
-                 password: str,
-                 db: Session = Depends(get_db)):
+                 db: Session = Depends(get_db),
+                 current_user: User = Depends(require_parent)):
     """
     Allows batch deduction operations for the selected child.
 
     :param child_id: The child id
     :param items: A list of items to be deducted.
-    :param password: Admin/parental password, for protection.
     :param db: Session
+    :param current_user: The logged-in parent.
     """
-    if password != os.getenv("ADMIN_PASSWORD"):
-        raise HTTPException(status_code=403, detail="Forbidden")
-
     summary = ", ".join([f"{i.name} x {i.count}" for i in items])
     total_fine = sum(
         (Decimal(str(i.total)).quantize(Decimal("0.01"),
@@ -400,7 +416,7 @@ def deduct_batch(child_id: int,
         start=Decimal("0.00")
     )
 
-    return withdraw_money(
+    return _withdraw(
         child_id=child_id,
         amount=float(total_fine),
         description=f"Deductions: {summary}",
@@ -412,13 +428,10 @@ def deduct_batch(child_id: int,
 @pocket_money_router.post("/deductions")
 def create_deduction_type(
         item: DeductionTypeCreate,
-        password: str,
-        db: Session = Depends(get_db)
+        db: Session = Depends(get_db),
+        current_user: User = Depends(require_parent)
 ):
     """Creates a new deduction type for the catalog."""
-    if password != os.getenv("ADMIN_PASSWORD"):
-        raise HTTPException(status_code=403, detail="Forbidden")
-
     # Check if one with the same name already exists
     existing = db.query(DeductionType).filter(
         DeductionType.name == item.name).first()
@@ -438,13 +451,10 @@ def create_deduction_type(
 def update_deduction_type(
         deduction_id: int,
         item: DeductionTypeUpdate,
-        password: str,
-        db: Session = Depends(get_db)
+        db: Session = Depends(get_db),
+        current_user: User = Depends(require_parent)
 ):
     """Updates an existing deduction type's name or price."""
-    if password != os.getenv("ADMIN_PASSWORD"):
-        raise HTTPException(status_code=403, detail="Forbidden")
-
     deduction = db.query(DeductionType).filter(
         DeductionType.id == deduction_id).first()
     if not deduction:
@@ -463,13 +473,10 @@ def update_deduction_type(
 @pocket_money_router.delete("/deductions/{deduction_id}")
 def delete_deduction_type(
         deduction_id: int,
-        password: str,
-        db: Session = Depends(get_db)
+        db: Session = Depends(get_db),
+        current_user: User = Depends(require_parent)
 ):
     """Removes an item from the deduction catalog."""
-    if password != os.getenv("ADMIN_PASSWORD"):
-        raise HTTPException(status_code=403, detail="Forbidden")
-
     deduction = db.query(DeductionType).filter(
         DeductionType.id == deduction_id).first()
     if not deduction:
