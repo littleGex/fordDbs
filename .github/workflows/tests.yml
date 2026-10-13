@@ -44,7 +44,9 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      # minio/minio requires a "server /data" command argument with no
+      # The official minio/minio image was removed from Docker Hub, so
+      # this uses the community-maintained pgsty/minio fork, pinned to a
+      # release. It requires a "server /data" command argument with no
       # built-in default, which the `services:` block above has no way
       # to pass (it only supports docker-run flags via `options`, not a
       # trailing command) -- so it's started as a plain step instead,
@@ -56,7 +58,7 @@ jobs:
             -e MINIO_ROOT_USER=testadmin \
             -e MINIO_ROOT_PASSWORD=testpassword \
             -p 9002:9000 \
-            minio/minio server /data
+            pgsty/minio:RELEASE.2026-08-04T00-00-00Z server /data
           for i in $(seq 1 30); do
             curl -sf http://localhost:9002/minio/health/live && break
             sleep 1
