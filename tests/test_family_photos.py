@@ -271,13 +271,14 @@ class TestPhotoReadsRequireLogin:
         assert resp.json() == {
             "id": user.id, "username": "penny", "display_name": "Penny",
             "role": "child", "profile_photo_url": None, "bio": None,
-            "child_name": "Penelope"}
+            "child_id": child.id, "child_name": "Penelope"}
 
     def test_me_without_a_linked_child(self, client_for, make_user):
         resp = client_for(make_user(role="parent")).get(
             "/v1/family-photos/me")
 
         assert resp.json()["child_name"] is None
+        assert resp.json()["child_id"] is None
 
     def test_me_rejects_a_deactivated_account(self, client_for, make_user,
                                               db_session):
