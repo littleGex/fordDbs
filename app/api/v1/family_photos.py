@@ -443,6 +443,8 @@ def get_me(current_user: User = Depends(get_current_user)):
     """
     child = current_user.child_profile
     return {**user_profile(current_user),
+            # The id is the stable link; the name is only a label
+            "child_id": child.id if child else None,
             "child_name": child.name if child else None}
 
 
