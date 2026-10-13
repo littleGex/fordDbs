@@ -434,6 +434,18 @@ def get_login_options(audience: str = None,
     ]
 
 
+@family_photos_router.get("/me")
+def get_me(current_user: User = Depends(get_current_user)):
+    """
+    Who the token belongs to. Other family backends (the chore tracker)
+    call this with a caller's token instead of sharing SECRET_KEY, so
+    role and account status are always checked here.
+    """
+    child = current_user.child_profile
+    return {**user_profile(current_user),
+            "child_name": child.name if child else None}
+
+
 @family_photos_router.get("/users")
 def get_all_users(db: Session = Depends(get_db),
                   current_user: User = Depends(get_current_user)):

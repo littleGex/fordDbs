@@ -254,6 +254,40 @@ class TestPhotoReadsRequireLogin:
 
         assert resp.status_code == 422
 
+    def test_me_requires_a_token(self, client):
+        assert client.get("/v1/family-photos/me").status_code == 401
+
+    def test_me_returns_the_profile_and_linked_child(
+            self, client_for, make_user, make_child, db_session):
+        user = make_user(username="penny", display_name="Penny",
+                         role="child")
+        child = make_child(name="Penelope")
+        child.user_id = user.id
+        db_session.commit()
+
+        resp = client_for(user).get("/v1/family-photos/me")
+
+        assert resp.status_code == 200
+        assert resp.json() == {
+            "id": user.id, "username": "penny", "display_name": "Penny",
+            "role": "child", "profile_photo_url": None, "bio": None,
+            "child_name": "Penelope"}
+
+    def test_me_without_a_linked_child(self, client_for, make_user):
+        resp = client_for(make_user(role="parent")).get(
+            "/v1/family-photos/me")
+
+        assert resp.json()["child_name"] is None
+
+    def test_me_rejects_a_deactivated_account(self, client_for, make_user,
+                                              db_session):
+        user = make_user(role="adult")
+        client = client_for(user)
+        user.status = "pending"
+        db_session.commit()
+
+        assert client.get("/v1/family-photos/me").status_code == 401
+
     def test_login_returns_the_full_profile(self, client, make_user):
         user = make_user(username="alice", display_name="Alice",
                          role="child", password="pw")
