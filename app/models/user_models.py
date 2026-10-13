@@ -62,6 +62,9 @@ class User(Base):
     # 'pending' until the admin approves a self-registered account
     status = Column(String, nullable=False, default="active",
                     server_default="active")
+    # Bumped to log this user out everywhere (e.g. on a password reset)
+    token_version = Column(Integer, nullable=False, default=0,
+                           server_default="0")
     hashed_password = Column(String, nullable=True)
 
     profile_photo_key = Column(String, nullable=True)

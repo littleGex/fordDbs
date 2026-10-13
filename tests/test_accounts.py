@@ -19,7 +19,7 @@ THIS_YEAR = datetime.now(timezone.utc).year
 def register(client, name="Newbie", birth_year=1980, **extra):
     return client.post(f"{BASE}/users", data={
         "username": name.lower(), "display_name": name,
-        "password": "pw", "birth_year": birth_year, **extra})
+        "password": "password1", "birth_year": birth_year, **extra})
 
 
 @pytest.fixture
@@ -55,7 +55,8 @@ class TestRegistration:
 
     def test_birth_year_is_required(self, client):
         resp = client.post(f"{BASE}/users", data={
-            "username": "x", "display_name": "X", "password": "pw"})
+            "username": "x", "display_name": "X",
+            "password": "password1"})
 
         assert resp.status_code == 422
 
@@ -79,7 +80,7 @@ class TestRegistration:
         user = db_session.query(User).filter_by(username="newbie").one()
 
         resp = client.post(f"{BASE}/login",
-                           json={"user_id": user.id, "password": "pw"})
+                           json={"user_id": user.id, "password": "password1"})
 
         assert resp.status_code == 403
         assert "waiting for approval" in resp.json()["detail"]
@@ -140,7 +141,7 @@ class TestApproval:
         approved = admin_client.post(
             f"{BASE}/admin/users/{user.id}/approve")
         login = client.post(f"{BASE}/login",
-                            json={"user_id": user.id, "password": "pw"})
+                            json={"user_id": user.id, "password": "password1"})
 
         assert approved.status_code == 200
         assert login.status_code == 200
@@ -230,9 +231,10 @@ class TestRoleChange:
 
         reset = admin_client.post(
             f"{BASE}/admin/users/{user.id}/reset-password",
-            json={"password": "new"})
+            json={"password": "newpassword"})
         login = client.post(f"{BASE}/login",
-                            json={"user_id": user.id, "password": "new"})
+                            json={"user_id": user.id,
+                                  "password": "newpassword"})
 
         assert reset.status_code == 200
         assert login.status_code == 200
@@ -243,7 +245,8 @@ ADMIN_ROUTES = [
     ("post", "/admin/users/{id}/approve", None),
     ("post", "/admin/users/{id}/reject", None),
     ("post", "/admin/users/{id}/role", {"role": "adult"}),
-    ("post", "/admin/users/{id}/reset-password", {"password": "x"}),
+    ("post", "/admin/users/{id}/reset-password",
+     {"password": "password1"}),
 ]
 
 
@@ -327,10 +330,10 @@ class TestRecoveryCli:
     def test_reset_password(self, make_user, db_session):
         user = make_user(username="dad", password="forgotten")
 
-        cli.main(["reset-password", "dad", "--password", "fresh"])
+        cli.main(["reset-password", "dad", "--password", "freshpassword"])
 
         db_session.refresh(user)
-        assert verify_pw("fresh", user.hashed_password)
+        assert verify_pw("freshpassword", user.hashed_password)
 
     def test_set_role_can_make_an_admin(self, make_user, db_session):
         user = make_user(username="dad", role="parent")
@@ -350,11 +353,11 @@ class TestRecoveryCli:
 
     def test_create_user_for_a_fresh_install(self, db_session):
         cli.main(["create-user", "dad", "Dad", "admin",
-                  "--password", "first"])
+                  "--password", "firstpassword"])
 
         user = db_session.query(User).filter_by(username="dad").one()
         assert (user.role, user.status) == ("admin", "active")
-        assert verify_pw("first", user.hashed_password)
+        assert verify_pw("firstpassword", user.hashed_password)
 
     def test_unknown_user_exits_with_a_message(self):
         with pytest.raises(SystemExit) as exc:

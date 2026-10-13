@@ -1,5 +1,5 @@
 from fastapi import (APIRouter, UploadFile, File, Depends,
-                     HTTPException, Form, Query)
+                     HTTPException, Form, Query, Request)
 from sqlalchemy import extract
 from sqlalchemy.orm import Session
 from app.database.database import get_db
@@ -16,12 +16,16 @@ import logging
 import os
 import shutil
 import tempfile
-from jose import jwt
 from datetime import datetime, timedelta, timezone
-from app.core.auth import (SECRET_KEY, ALGORITHM, hash_pw, verify_pw,
+from app.core.auth import (hash_pw, verify_pw, validate_password,
+                           create_access_token,
                            get_current_user, get_current_user_for_refresh,
                            is_parent, STATUS_ACTIVE, STATUS_PENDING,
                            LOGIN_AUDIENCES)
+from app.core.rate_limit import (client_address, refuse_if_blocked,
+                                 login_failures_per_client,
+                                 login_failures_per_account,
+                                 registrations_per_client)
 
 logger = logging.getLogger("app.api.users")
 family_photos_router = APIRouter()
@@ -89,10 +93,17 @@ def format_photo_list(photos):
 
 
 @family_photos_router.post("/login")
-def login(data: dict, db: Session = Depends(get_db)):
+def login(data: dict, request: Request, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.id == data.get('user_id')).first()
     if not user:
         raise HTTPException(status_code=404)
+
+    # Locked out after too many wrong passwords, even with the right one
+    client_key = (client_address(request), user.id)
+    refuse_if_blocked(login_failures_per_client, client_key,
+                      "wrong passwords")
+    refuse_if_blocked(login_failures_per_account, user.id,
+                      "wrong passwords")
 
     # 1. Self-registered accounts can't log in until the admin approves
     if user.status != STATUS_ACTIVE:
@@ -104,16 +115,15 @@ def login(data: dict, db: Session = Depends(get_db)):
             detail="No password set. Ask the admin to reset it.")
 
     # 2. Verify password
-    if not verify_pw(data.get('password'), user.hashed_password):
+    if not verify_pw(data.get('password') or "", user.hashed_password):
+        login_failures_per_client.record(client_key)
+        login_failures_per_account.record(user.id)
         raise HTTPException(status_code=401,
                             detail="Invalid password")
+    login_failures_per_client.clear(lambda key: key == client_key)
 
     # 3. Create Token
-    token = jwt.encode(
-        {"sub": str(user.id),
-         "exp": datetime.now(timezone.utc) + timedelta(hours=24)},
-        SECRET_KEY,
-        algorithm=ALGORITHM)
+    token = create_access_token(user, timedelta(hours=24))
     return {"access_token": token,
             "token_type": "bearer",
             "user": user_profile(user)}
@@ -457,6 +467,7 @@ def get_all_users(db: Session = Depends(get_db),
 
 @family_photos_router.post("/users")
 def create_user(
+        request: Request,
         username: str = Form(...),
         display_name: str = Form(...),
         password: str = Form(...),
@@ -474,6 +485,10 @@ def create_user(
     if not username or not display_name or not password:
         raise HTTPException(status_code=422,
                             detail="Name and password are required")
+    validate_password(password)
+
+    client = client_address(request)
+    refuse_if_blocked(registrations_per_client, client, "requests")
 
     this_year = datetime.now(timezone.utc).year
     if not 1900 <= birth_year <= this_year:
@@ -535,6 +550,7 @@ def create_user(
 
     db.commit()
     db.refresh(new_user)
+    registrations_per_client.record(client)
 
     # 4. Return the new user data
     # We use get_image_url to convert the key back to a URL for the frontend
@@ -554,14 +570,7 @@ def refresh_token(
     db: Session = Depends(get_db)
 ):
     # Generate a new token with a fresh expiration (e.g., another 24 hours)
-    access_token_expires = timedelta(minutes=60)
-
-    new_token = jwt.encode(
-        {"sub": str(current_user.id),
-         "exp": datetime.now(timezone.utc) + access_token_expires},
-        SECRET_KEY,
-        algorithm=ALGORITHM
-    )
+    new_token = create_access_token(current_user, timedelta(minutes=60))
 
     return {"access_token": new_token}
 
