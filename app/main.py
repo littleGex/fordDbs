@@ -19,6 +19,7 @@ from app.models.utilities import Utils  # noqa
 from app.models.shares_models import EmployeeShare  # noqa
 from app.models.deductions_models import DeductionType  # noqa
 from app.models.message_model import Conversation, ConversationMember, Message  # noqa
+from app.models.game_settings_model import GameSettings  # noqa
 from app.core.storage import init_storage
 
 

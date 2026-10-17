@@ -1,8 +1,9 @@
 """
 Small in-memory attempt limiter for the open routes (login and
-registration). State lives in this process: it is lost on restart, and
-it assumes the API runs as a single process, which it does (see the
-Dockerfile). Move it to the database if that ever changes.
+registration) and the game's settings saves. State lives in this
+process: it is lost on restart, and it assumes the API runs as a single
+process, which it does (see the Dockerfile). Move it to the database if
+that ever changes.
 """
 import math
 import time
@@ -62,9 +63,11 @@ login_failures_per_client = AttemptLimiter(5, FIFTEEN_MINUTES)
 login_failures_per_account = AttemptLimiter(25, FIFTEEN_MINUTES)
 # Account requests from one device
 registrations_per_client = AttemptLimiter(5, 60 * 60)
+# Game settings saves from one device, so a stuck game can't hammer the Pi
+game_settings_saves_per_client = AttemptLimiter(30, 60)
 
 ALL_LIMITERS = (login_failures_per_client, login_failures_per_account,
-                registrations_per_client)
+                registrations_per_client, game_settings_saves_per_client)
 
 
 def client_address(request: Request) -> str:

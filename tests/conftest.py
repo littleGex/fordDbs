@@ -74,6 +74,7 @@ from app.models.utilities import Utils  # noqa: E402,F401
 from app.models.message_model import (  # noqa: E402,F401
     Conversation, ConversationMember, Message
 )
+from app.models.game_settings_model import GameSettings  # noqa: E402,F401
 from app.core.auth import hash_pw, SECRET_KEY, ALGORITHM  # noqa: E402
 
 

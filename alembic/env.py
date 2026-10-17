@@ -7,6 +7,7 @@ from app.database.database import Base
 from app.models.user_models import User, Child, Transaction, Wish # noqa
 from app.models.photo_model import Photo, Like, Comment, View    # noqa
 from app.models.message_model import Conversation, ConversationMember, Message  # noqa
+from app.models.game_settings_model import GameSettings  # noqa
 
 
 load_dotenv()  # Load your variables from .env
