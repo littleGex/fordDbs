@@ -120,6 +120,15 @@ class TestLoginAttemptLimit:
 
         assert resp.status_code == 401
 
+    @pytest.mark.parametrize("user_id", [
+        "admin' --", "1", 1.5, True, None, [1]])
+    def test_non_numeric_user_id_is_rejected_not_a_crash(self, client,
+                                                         user_id):
+        resp = client.post(f"{BASE}/login",
+                           json={"user_id": user_id, "password": GOOD})
+
+        assert resp.status_code == 422
+
 
 class TestRegistrationLimit:
 

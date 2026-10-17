@@ -94,7 +94,12 @@ def format_photo_list(photos):
 
 @family_photos_router.post("/login")
 def login(data: dict, request: Request, db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.id == data.get('user_id')).first()
+    # bool is a subclass of int, so True would otherwise mean user 1
+    user_id = data.get('user_id')
+    if not isinstance(user_id, int) or isinstance(user_id, bool):
+        raise HTTPException(status_code=422,
+                            detail="user_id must be a whole number")
+    user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404)
 
