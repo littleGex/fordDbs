@@ -13,6 +13,8 @@ minio
 python-multipart
 python-jose
 passlib
+# passlib 1.7.4 breaks with bcrypt 5 and warns from 4.1 on
+bcrypt==4.0.1
 yfinance
 pandas
 requests

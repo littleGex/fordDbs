@@ -248,16 +248,6 @@ rewritten and folded into this suite:
 
 - **Most of `shares.py`** has no functional tests beyond the auth
   checks in `test_household_auth.py` and the price-fetching unit tests.
-- **`bcrypt` is missing from `requirements.txt`** entirely, despite
-  `passlib`'s `CryptContext(schemes=["bcrypt"], ...)` requiring it as a
-  backend. In a clean environment this makes every password hash/verify
-  call (user creation, login, password reset) throw an uncaught
-  `passlib.exc.MissingBackendError`, which surfaces to a browser as a
-  confusing CORS failure rather than a clear error. Additionally,
-  whatever the latest `bcrypt` happens to be (5.0.0 as of this
-  writing) is incompatible with this pinned `passlib` 1.7.4 --
-  `bcrypt==4.0.1` is confirmed compatible. Needs a pin added to
-  `requirements.txt`.
 - **CI**: `.github/workflows/tests.yml` now runs the full suite on PRs
   and pushes to `main`, via a `postgres:15-alpine` service container
   plus an `ffmpeg` install step for the video upload tests.
