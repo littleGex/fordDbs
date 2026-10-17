@@ -250,6 +250,16 @@ class TestGameSettings:
         assert resp.status_code == 200
         assert resp.json()["settings"] == settings
 
+    def test_swapped_rooms_are_kept(self, client, game_token):
+        settings = with_change(lambda s: s.update(swapRooms=True))
+
+        resp = self.save(client, game_token, settings)
+
+        assert resp.status_code == 200
+        assert resp.json()["settings"]["swapRooms"] is True
+        got = client.get(SETTINGS_URL, headers=game_token).json()
+        assert got["settings"] == settings
+
     @pytest.mark.parametrize("change", [
         lambda s: s["players"]["girl"].update(name="<b>Pia</b>"),
         lambda s: s["players"]["girl"].update(name="A" * 17),
@@ -268,12 +278,15 @@ class TestGameSettings:
         lambda s: s.update(off=["dragon", "dragon"]),
         lambda s: s.update(birthdays={"girl": "2016-03-15"}),
         lambda s: s.pop("players"),
+        lambda s: s.update(swapRooms="yes"),
+        lambda s: s.update(swapRooms=None),
     ], ids=["markup in a name", "name over 16", "underscore in a name",
             "blank name", "name not text", "unknown player",
             "unknown look field", "bad colour", "null colour",
             "bad top colour", "unknown hair", "glasses not a bool",
             "extra player field", "unknown job group",
-            "repeated job group", "extra top-level key", "no players"])
+            "repeated job group", "extra top-level key", "no players",
+            "swapRooms not a bool", "null swapRooms"])
     def test_invalid_settings_return_422_and_save_nothing(
             self, client, game_token, change):
         resp = self.save(client, game_token, with_change(change))

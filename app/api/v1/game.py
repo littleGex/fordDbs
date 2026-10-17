@@ -45,7 +45,8 @@ def get_family(db: Session = Depends(get_db),
     ]}
 
 
-# --- Game settings: names, looks and job switches, shared by every device.
+# --- Game settings: names, looks, job switches and who sleeps where, shared
+# by every device.
 # The rules mirror the game's own checks (house/js/settings.js and
 # names.js in ford_games), so anything the game saves is accepted and
 # anything else is refused rather than quietly cleaned.
@@ -107,6 +108,9 @@ class Players(Strict):
 class Settings(Strict):
     players: Players
     off: List[JOB_GROUPS] = Field(default_factory=list)
+    # P and Dude have swapped bedrooms (P in the attic); may be left out,
+    # but not null
+    swapRooms: StrictBool = None
 
     @field_validator("off")
     @classmethod
