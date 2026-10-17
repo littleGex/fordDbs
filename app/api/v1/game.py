@@ -45,8 +45,8 @@ def get_family(db: Session = Depends(get_db),
     ]}
 
 
-# --- Game settings: names, looks, job switches and who sleeps where, shared
-# by every device.
+# --- Game settings: names, she/he/they, who's in the family, looks, job
+# switches and who sleeps where, shared by every device.
 # The rules mirror the game's own checks (house/js/settings.js and
 # names.js in ford_games), so anything the game saves is accepted and
 # anything else is refused rather than quietly cleaned.
@@ -84,7 +84,12 @@ class Look(Strict):
 class Player(Strict):
     # None: the usual nickname (Dad, Mum, P, Dude)
     name: Optional[StrictStr] = None
+    # None: the usual one (he for Dad and Dude, she for Mum and P)
+    pronoun: Optional[Literal["she", "he", "they"]] = None
     look: Optional[Look] = None
+    # Left out of the family (a family with one grown-up); may be left
+    # out, but not null
+    away: StrictBool = None
 
     @field_validator("name")
     @classmethod
@@ -118,6 +123,19 @@ class Settings(Strict):
         if len(set(off)) != len(off):
             raise ValueError("each job group at most once")
         return off
+
+    @field_validator("players")
+    @classmethod
+    def someone_grown_up(cls, players):
+        # Only a grown-up can be left out, and never both
+        for key in CHILD_GAME_KEYS:
+            child = getattr(players, key)
+            if child is not None and child.away:
+                raise ValueError("only a grown-up can be left out")
+        if all(getattr(players, key) is not None and getattr(players, key).away
+               for key in PARENT_GAME_KEYS):
+            raise ValueError("at least one grown-up stays in the family")
+        return players
 
 
 class SettingsSave(Strict):
