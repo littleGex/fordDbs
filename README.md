@@ -166,7 +166,7 @@ pytest tests/test_pocket_money_precision.py::TestFloatPrecisionRegression::test_
 | `test_accounts.py` | self-registration (pending, birth-year role, limits), admin approval/reject/role/reset routes, role abilities, the recovery CLI |
 | `test_household_auth.py` | investments and utilities routes are parents-and-admin only (401 without a token, 403 for adult and child) |
 | `test_login_hardening.py` | wrong-password lock-out per device and per account, registration limit, minimum password length, refresh time limit, logging a user out everywhere on a password reset |
-| `test_game.py` | `GET /v1/game/family`: game token or any login, response limited to key and birthday, game token rejected on other routes, CLI data entry |
+| `test_game.py` | `GET /v1/game/family`: game token or any login, response limited to key and birthday, game token rejected on other routes, CLI data entry. `/v1/game/settings`: saving and reading back, version conflicts (409), the field checks including `swapRooms` (422), size (413) and save (429) limits |
 | `test_pocket_money_wishes.py` | wish CRUD, negative-cost guards, `cost` column Numeric-precision regression |
 | `test_pocket_money_deductions.py` | deduction catalog CRUD, deduct-batch (incl. the dict-subscript regression) |
 | `test_pocket_money_stats.py` | history, stats aggregation (incl. total_spent regression) |
@@ -392,3 +392,44 @@ docker exec -it database_manager_api python -m app.cli set-game-parent dad dad Y
 ```
 
 The game's origin has to be in `ALLOWED_ORIGINS`.
+
+## Ford House game: settings
+
+`GET` and `PUT /v1/game/settings` hold the game's settings in one
+document shared by every family device, so a change made on one shows
+up on the others. Same access as `/v1/game/family`: any family login,
+or the game token.
+
+```json
+{ "version": 3, "updated_at": "...",
+  "settings": {
+    "players": { "girl": { "name": "Pia", "look": { "hair": "long", ... } }, ... },
+    "off": ["dragon"],
+    "swapRooms": true } }
+```
+
+- `players`: `dad`, `mum`, `girl` and `boy`, each with an optional
+  `name` (at most 16 letters, numbers, spaces and `- ' .`; `null` means
+  the usual nickname) and `look` (colours as `#rrggbb`, the game's hair
+  styles, `glasses` and `beard` as true/false).
+- `off`: the job groups switched off, each at most once.
+- `swapRooms`: true when P and Dude have swapped bedrooms. Optional;
+  older game versions leave it out.
+
+The checks mirror the game's own, so anything else gets `422` and
+nothing is saved. A field may be left out but not set to `null`,
+except a player and a player's `name` and `look`. Colours are stored
+in lowercase and names trimmed.
+
+A save sends the `version` it started from as `base_version`:
+
+```json
+{ "base_version": 3, "settings": { ... } }
+```
+
+If another device saved in between, the answer is `409` with the
+current settings, so the game can re-apply its change and try again.
+Before the first save `GET` answers `version` 0 and `settings` `null`.
+Bodies over 8 KB get `413`, and more than 30 saves a minute from one
+device get `429`. Like the login limits, that count is kept in the API
+process and resets when it restarts.
