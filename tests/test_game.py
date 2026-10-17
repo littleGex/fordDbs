@@ -250,6 +250,21 @@ class TestGameSettings:
         assert resp.status_code == 200
         assert resp.json()["settings"] == settings
 
+    def test_pronouns_and_a_grown_up_left_out_are_kept(self, client,
+                                                      game_token):
+        def change(s):
+            s["players"]["boy"]["pronoun"] = "they"
+            s["players"]["dad"] = {"name": None, "away": True}
+        settings = with_change(change)
+
+        resp = self.save(client, game_token, settings)
+
+        assert resp.status_code == 200
+        got = client.get(SETTINGS_URL, headers=game_token).json()
+        assert got["settings"] == settings
+        assert got["settings"]["players"]["boy"]["pronoun"] == "they"
+        assert got["settings"]["players"]["dad"]["away"] is True
+
     def test_swapped_rooms_are_kept(self, client, game_token):
         settings = with_change(lambda s: s.update(swapRooms=True))
 
@@ -280,13 +295,20 @@ class TestGameSettings:
         lambda s: s.pop("players"),
         lambda s: s.update(swapRooms="yes"),
         lambda s: s.update(swapRooms=None),
+        lambda s: s["players"]["girl"].update(pronoun="it"),
+        lambda s: s["players"]["girl"].update(pronoun=1),
+        lambda s: s["players"]["girl"].update(away=True),
+        lambda s: s["players"].update(dad={"away": True}, mum={"away": True}),
+        lambda s: s["players"].update(dad={"away": None}),
     ], ids=["markup in a name", "name over 16", "underscore in a name",
             "blank name", "name not text", "unknown player",
             "unknown look field", "bad colour", "null colour",
             "bad top colour", "unknown hair", "glasses not a bool",
             "extra player field", "unknown job group",
             "repeated job group", "extra top-level key", "no players",
-            "swapRooms not a bool", "null swapRooms"])
+            "swapRooms not a bool", "null swapRooms", "unknown pronoun",
+            "pronoun not text", "a child left out", "both grown-ups left out",
+            "null away"])
     def test_invalid_settings_return_422_and_save_nothing(
             self, client, game_token, change):
         resp = self.save(client, game_token, with_change(change))
