@@ -1,7 +1,7 @@
 import re
 import unicodedata
 from datetime import datetime, timezone
-from typing import Annotated, List, Literal, Optional, Union
+from typing import Annotated, Dict, List, Literal, Optional, Union
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
@@ -46,7 +46,8 @@ def get_family(db: Session = Depends(get_db),
 
 
 # --- Game settings: names, she/he/they, who's in the family, looks, job
-# switches and who sleeps where, shared by every device.
+# switches, who sleeps where, who works at which desk and who does which
+# chores, shared by every device.
 # The rules mirror the game's own checks (house/js/settings.js and
 # names.js in ford_games), so anything the game saves is accepted and
 # anything else is refused rather than quietly cleaned.
@@ -59,6 +60,8 @@ HAIR_STYLES = Literal["long", "shoulder", "ponytail", "bun", "swept",
 JOB_GROUPS = Literal["dragon", "keyboard", "clarinet", "bike", "solar",
                      "car", "shave", "loft", "halloween", "christmas",
                      "birthdays"]
+CHORES = Literal["cook", "bike", "solar", "sofabed", "dragon"]
+PLAYER_KEYS = Literal["dad", "mum", "girl", "boy"]
 Colour = Annotated[StrictStr, StringConstraints(
     pattern=r"^#[0-9a-fA-F]{6}$", to_lower=True)]
 # Letters (any language), numbers, spaces and - ' . ; \w also allows _
@@ -116,6 +119,21 @@ class Settings(Strict):
     # P and Dude have swapped bedrooms (P in the attic); may be left out,
     # but not null
     swapRooms: StrictBool = None
+    # Mum and Dad have swapped desks at home; may be left out, not null
+    swapDesks: StrictBool = None
+    # Who does the household chores, when not the usual people: each
+    # chore to one or more players, nobody twice
+    assign: Dict[CHORES, List[PLAYER_KEYS]] = None
+
+    @field_validator("assign")
+    @classmethod
+    def someone_each(cls, assign):
+        if assign is None:
+            raise ValueError("assign may be left out, but not null")
+        for chore, keys in assign.items():
+            if not keys or len(set(keys)) != len(keys):
+                raise ValueError(f"{chore}: one or more players, each once")
+        return assign
 
     @field_validator("off")
     @classmethod
