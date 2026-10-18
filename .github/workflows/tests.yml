@@ -7,6 +7,25 @@ on:
     branches: [main]
 
 jobs:
+  # Settings come from .flake8. Pinned so a new flake8 release can't
+  # start failing the build on unchanged code.
+  flake8:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install flake8
+        run: pip install flake8==7.4.1
+
+      - name: Run flake8
+        run: flake8 .
+
   pytest:
     runs-on: ubuntu-latest
 

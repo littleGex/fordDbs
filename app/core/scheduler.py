@@ -76,7 +76,7 @@ def run_monthly_etf_purchases():
         # 1. Check for schedules set for today (e.g., the 15th)
         schedules = db.query(EtfPurchaseSchedule).filter(
             EtfPurchaseSchedule.execution_day == today_day,
-            EtfPurchaseSchedule.is_active == True
+            EtfPurchaseSchedule.is_active.is_(True)
         ).all()
 
         if not schedules:

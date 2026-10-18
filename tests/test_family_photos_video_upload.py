@@ -11,7 +11,8 @@ either isn't available locally (CI always has both).
 """
 import pytest
 
-pytestmark = [pytest.mark.integration, pytest.mark.usefixtures("minio_test_bucket")]
+pytestmark = [pytest.mark.integration,
+              pytest.mark.usefixtures("minio_test_bucket")]
 
 # A minimal valid 1x1 PNG, for the image-path regression test.
 TINY_PNG_BYTES = bytes.fromhex(

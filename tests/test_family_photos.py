@@ -87,7 +87,7 @@ class TestLikedByFeed:
 
         for user in (alice, bob, carol):
             client.post(f"/v1/family-photos/{photo.id}/like",
-                       headers=auth_headers(user))
+                        headers=auth_headers(user))
 
         feed = parent_client.get("/v1/family-photos/feed").json()
         body = next(p for p in feed if p["id"] == photo.id)
@@ -163,7 +163,8 @@ class TestLikedByAcrossListingEndpoints:
         }]
 
     def test_liked_by_present_on_album_photos(self, parent_client, client,
-                                              make_user, make_photo, auth_headers):
+                                              make_user, make_photo,
+                                              auth_headers):
         uploader = make_user(username="uploader")
         liker = make_user(username="liker", display_name="Liker")
 
