@@ -166,7 +166,7 @@ pytest tests/test_pocket_money_precision.py::TestFloatPrecisionRegression::test_
 | `test_accounts.py` | self-registration (pending, birth-year role, limits), admin approval/reject/role/reset routes, role abilities, the recovery CLI |
 | `test_household_auth.py` | investments and utilities routes are parents-and-admin only (401 without a token, 403 for adult and child) |
 | `test_login_hardening.py` | wrong-password lock-out per device and per account, registration limit, minimum password length, refresh time limit, logging a user out everywhere on a password reset |
-| `test_game.py` | `GET /v1/game/family`: game token or any login, response limited to key and birthday, game token rejected on other routes, CLI data entry. `/v1/game/settings`: saving and reading back, version conflicts (409), the field checks including `swapRooms`, `pronoun` and `away` (422), size (413) and save (429) limits |
+| `test_game.py` | `GET /v1/game/family`: game token or any login, response limited to key and birthday, game token rejected on other routes, CLI data entry. `/v1/game/settings`: saving and reading back, version conflicts (409), the field checks including `swapRooms`, `pronoun`, `away`, `swapDesks` and `assign` (422), size (413) and save (429) limits |
 | `test_pocket_money_wishes.py` | wish CRUD, negative-cost guards, `cost` column Numeric-precision regression |
 | `test_pocket_money_deductions.py` | deduction catalog CRUD, deduct-batch (incl. the dict-subscript regression) |
 | `test_pocket_money_stats.py` | history, stats aggregation (incl. total_spent regression) |
@@ -405,7 +405,9 @@ or the game token.
   "settings": {
     "players": { "girl": { "name": "Pia", "look": { "hair": "long", ... } }, ... },
     "off": ["dragon"],
-    "swapRooms": true } }
+    "swapRooms": true,
+    "swapDesks": false,
+    "assign": { "dragon": ["boy", "girl"] } } }
 ```
 
 - `players`: `dad`, `mum`, `girl` and `boy`, each with an optional
@@ -419,6 +421,12 @@ or the game token.
 - `off`: the job groups switched off, each at most once.
 - `swapRooms`: true when P and Dude have swapped bedrooms. Optional;
   older game versions leave it out.
+- `swapDesks`: true when Mum and Dad have swapped desks at home (Mum at
+  the desk in the dressing room, Dad in the attic office). Optional.
+- `assign`: who does the household chores when it isn't the usual
+  people: `cook`, `bike`, `solar`, `sofabed` and `dragon`, each to one or
+  more of the four players, nobody twice. Optional; a chore left out
+  goes to the usual people.
 
 The checks mirror the game's own, so anything else gets `422` and
 nothing is saved. A field may be left out but not set to `null`,
