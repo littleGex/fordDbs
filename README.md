@@ -166,7 +166,7 @@ pytest tests/test_pocket_money_precision.py::TestFloatPrecisionRegression::test_
 | `test_accounts.py` | self-registration (pending, birth-year role, limits), admin approval/reject/role/reset routes, role abilities, the recovery CLI |
 | `test_household_auth.py` | investments and utilities routes are parents-and-admin only (401 without a token, 403 for adult and child) |
 | `test_login_hardening.py` | wrong-password lock-out per device and per account, registration limit, minimum password length, refresh time limit, logging a user out everywhere on a password reset |
-| `test_game.py` | `GET /v1/game/family`: game token or any login, response limited to key and birthday, game token rejected on other routes, CLI data entry. `/v1/game/settings`: saving and reading back, version conflicts (409), the field checks including `swapRooms` (422), size (413) and save (429) limits |
+| `test_game.py` | `GET /v1/game/family`: game token or any login, response limited to key and birthday, game token rejected on other routes, CLI data entry. `/v1/game/settings`: saving and reading back, version conflicts (409), the field checks including `swapRooms`, `pronoun` and `away` (422), size (413) and save (429) limits |
 | `test_pocket_money_wishes.py` | wish CRUD, negative-cost guards, `cost` column Numeric-precision regression |
 | `test_pocket_money_deductions.py` | deduction catalog CRUD, deduct-batch (incl. the dict-subscript regression) |
 | `test_pocket_money_stats.py` | history, stats aggregation (incl. total_spent regression) |
@@ -410,16 +410,20 @@ or the game token.
 
 - `players`: `dad`, `mum`, `girl` and `boy`, each with an optional
   `name` (at most 16 letters, numbers, spaces and `- ' .`; `null` means
-  the usual nickname) and `look` (colours as `#rrggbb`, the game's hair
-  styles, `glasses` and `beard` as true/false).
+  the usual nickname), `pronoun` (`she`, `he` or `they`; `null` means the
+  usual one: he for Dad and Dude, she for Mum and P), `look` (colours as
+  `#rrggbb`, the game's hair styles, `glasses` and `beard` as
+  true/false) and `away`.
+- `away`: true when a grown-up is left out, for a family with one
+  grown-up. Only Dad or Mum can be away, never both.
 - `off`: the job groups switched off, each at most once.
 - `swapRooms`: true when P and Dude have swapped bedrooms. Optional;
   older game versions leave it out.
 
 The checks mirror the game's own, so anything else gets `422` and
 nothing is saved. A field may be left out but not set to `null`,
-except a player and a player's `name` and `look`. Colours are stored
-in lowercase and names trimmed.
+except a player and a player's `name`, `pronoun` and `look`. Colours
+are stored in lowercase and names trimmed.
 
 A save sends the `version` it started from as `base_version`:
 
