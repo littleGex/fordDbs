@@ -251,7 +251,7 @@ class TestGameSettings:
         assert resp.json()["settings"] == settings
 
     def test_pronouns_and_a_grown_up_left_out_are_kept(self, client,
-                                                      game_token):
+                                                       game_token):
         def change(s):
             s["players"]["boy"]["pronoun"] = "they"
             s["players"]["dad"] = {"name": None, "away": True}
@@ -267,7 +267,8 @@ class TestGameSettings:
 
     def test_desks_and_chores_are_kept(self, client, game_token):
         settings = with_change(lambda s: s.update(
-            swapDesks=True, assign={"dragon": ["boy", "girl"], "cook": ["dad"]}))
+            swapDesks=True,
+            assign={"dragon": ["boy", "girl"], "cook": ["dad"]}))
 
         resp = self.save(client, game_token, settings)
 
@@ -326,8 +327,9 @@ class TestGameSettings:
             "swapRooms not a bool", "null swapRooms", "unknown pronoun",
             "pronoun not text", "a child left out", "both grown-ups left out",
             "null away", "swapDesks not a bool", "null assign",
-            "unknown chore", "unknown player for a chore", "nobody for a chore",
-            "somebody twice for a chore", "chore players not a list"])
+            "unknown chore", "unknown player for a chore",
+            "nobody for a chore", "somebody twice for a chore",
+            "chore players not a list"])
     def test_invalid_settings_return_422_and_save_nothing(
             self, client, game_token, change):
         resp = self.save(client, game_token, with_change(change))
