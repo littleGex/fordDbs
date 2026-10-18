@@ -55,18 +55,22 @@ os.environ.setdefault("ALLOWED_ORIGINS", "")
 # (the docker-compose service name), which doesn't resolve outside that
 # network and fails with a confusing urllib3 NameResolutionError deep in
 # minio's SDK rather than a clear "no test MinIO" message.
-os.environ["MINIO_ENDPOINT"] = os.getenv("TEST_MINIO_ENDPOINT", "localhost:9002")
-os.environ["MINIO_ACCESS_KEY"] = os.getenv("TEST_MINIO_ACCESS_KEY", "testadmin")
-os.environ["MINIO_SECRET_KEY"] = os.getenv("TEST_MINIO_SECRET_KEY", "testpassword")
+os.environ["MINIO_ENDPOINT"] = os.getenv("TEST_MINIO_ENDPOINT",
+                                         "localhost:9002")
+os.environ["MINIO_ACCESS_KEY"] = os.getenv("TEST_MINIO_ACCESS_KEY",
+                                           "testadmin")
+os.environ["MINIO_SECRET_KEY"] = os.getenv("TEST_MINIO_SECRET_KEY",
+                                           "testpassword")
 os.environ.setdefault("EXTERNAL_URL_HOST", os.environ["MINIO_ENDPOINT"])
 
 from app.database.database import Base, get_db, get_db_url  # noqa: E402
-from app.models.user_models import Child, Transaction, Wish, User  # noqa: E402
+from app.models.user_models import Child, Transaction, User  # noqa: E402
 from app.models.deductions_models import DeductionType  # noqa: E402
 # Importing these registers them on Base.metadata / SQLAlchemy's mapper
 # registry, mirroring what app.main does — without this, mapper
 # configuration fails with errors like KeyError: 'Photo'.
-from app.models.photo_model import Photo, Album, Like, Comment, View  # noqa: E402,F401
+from app.models.photo_model import (  # noqa: E402,F401
+    Photo, Album, Like, Comment, View)
 from app.models.shares_models import (  # noqa: E402,F401
     EmployeeShare, EtfTransaction, EtfPurchaseSchedule
 )
@@ -105,7 +109,8 @@ def db_engine():
 
     # Safety check: never run against something that looks like the
     # real app database.
-    if "forddbs_test" not in TEST_DATABASE_URL and "test" not in TEST_DATABASE_URL:
+    if ("forddbs_test" not in TEST_DATABASE_URL
+            and "test" not in TEST_DATABASE_URL):
         pytest.exit(
             "Refusing to run: TEST_DATABASE_URL does not look like a "
             f"test database ({TEST_DATABASE_URL!r}). Set TEST_* env vars "
@@ -238,9 +243,11 @@ def make_child(db_session):
 
 @pytest.fixture
 def make_deduction_type(db_session):
-    """Factory fixture: make_deduction_type(name="Unmade Bed", default_amount="0.50")"""
+    """Factory fixture:
+    make_deduction_type(name="Unmade Bed", default_amount="0.50")"""
     def _make(name="Unmade Bed", default_amount="0.50"):
-        dtype = DeductionType(name=name, default_amount=Decimal(default_amount))
+        dtype = DeductionType(name=name,
+                              default_amount=Decimal(default_amount))
         db_session.add(dtype)
         db_session.commit()
         db_session.refresh(dtype)

@@ -250,7 +250,9 @@ rewritten and folded into this suite:
   checks in `test_household_auth.py` and the price-fetching unit tests.
 - **CI**: `.github/workflows/tests.yml` now runs the full suite on PRs
   and pushes to `main`, via a `postgres:15-alpine` service container
-  plus an `ffmpeg` install step for the video upload tests.
+  plus an `ffmpeg` install step for the video upload tests. A separate
+  `flake8` job checks the code style with the settings in `.flake8`;
+  run `flake8 .` locally before pushing.
 
 ## Video uploads & deploying this change
 

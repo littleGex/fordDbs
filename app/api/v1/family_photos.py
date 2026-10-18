@@ -77,7 +77,8 @@ def format_photo_list(photos):
             "liked_by": [
                 {
                     "id": like.user.id,
-                    "display_name": like.user.display_name or like.user.username,
+                    "display_name": (like.user.display_name
+                                     or like.user.username),
                     "profile_photo_url": get_image_url(
                         like.user.profile_photo_key)
                     if like.user.profile_photo_key else None
@@ -157,7 +158,7 @@ def _upload_video(file: UploadFile) -> tuple[str, int]:
                 raise HTTPException(
                     status_code=400,
                     detail=f"Video exceeds the "
-                          f"{MAX_VIDEO_DURATION_SECONDS} second limit")
+                           f"{MAX_VIDEO_DURATION_SECONDS} second limit")
 
             transcode_to_h264_mp4(input_path, output_path)
         except VideoProcessingError as e:

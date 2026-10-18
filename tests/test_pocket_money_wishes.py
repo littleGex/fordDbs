@@ -28,7 +28,7 @@ class TestWishCostPrecision:
         from sqlalchemy import inspect
 
         columns = {c["name"]: c for c in
-                  inspect(db_session.bind).get_columns("wishes")}
+                   inspect(db_session.bind).get_columns("wishes")}
         assert str(columns["cost"]["type"]) == "NUMERIC(10, 2)"
 
     def test_stored_cost_round_trips_as_exact_decimal(
