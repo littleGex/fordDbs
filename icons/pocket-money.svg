@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <defs><linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2ed573"/><stop offset="1" stop-color="#128a48"/></linearGradient></defs>
+  <rect width="512" height="512" fill="url(#bg)"/>
+  <!-- A euro coin dropping into a pocket -->
+  <circle cx="256" cy="186" r="92" fill="#ffd32a"/>
+  <path d="M294 142a52 52 0 1 0 0 88" fill="none" stroke="#a86f00" stroke-width="20" stroke-linecap="round"/>
+  <path d="M186 170h76M186 202h66" fill="none" stroke="#a86f00" stroke-width="18" stroke-linecap="round"/>
+  <path d="M132 238h248v84c0 50-60 84-124 104-64-20-124-54-124-104z" fill="#fff"/>
+  <path d="M132 238h248v30H132z" fill="#d8dee6"/>
+</svg>
