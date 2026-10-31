@@ -447,3 +447,11 @@ Before the first save `GET` answers `version` 0 and `settings` `null`.
 Bodies over 8 KB get `413`, and more than 30 saves a minute from one
 device get `429`. Like the login limits, that count is kept in the API
 process and resets when it restarts.
+
+## Home Screen icons
+
+Each web app has its own icon, so its tile is easy to spot on a phone. The
+source SVGs are in `icons/`; after changing one, run
+`npm install && npm run generate` there to rewrite the PNGs and `favicon.ico`
+in that app's `public/` folder. Keep the artwork inside the central 80% of the
+square, because Android crops `icon-512.png` to its own shape.
