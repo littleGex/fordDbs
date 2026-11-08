@@ -62,6 +62,7 @@ os.environ["MINIO_ACCESS_KEY"] = os.getenv("TEST_MINIO_ACCESS_KEY",
 os.environ["MINIO_SECRET_KEY"] = os.getenv("TEST_MINIO_SECRET_KEY",
                                            "testpassword")
 os.environ.setdefault("EXTERNAL_URL_HOST", os.environ["MINIO_ENDPOINT"])
+os.environ.setdefault("EXTERNAL_URL_SECURE", "false")
 
 from app.database.database import Base, get_db, get_db_url  # noqa: E402
 from app.models.user_models import Child, Transaction, User  # noqa: E402

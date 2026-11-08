@@ -9,6 +9,8 @@ addition to the real Postgres test database -- see make_video_file and
 minio_test_bucket in conftest.py, which skip these tests at call time if
 either isn't available locally (CI always has both).
 """
+from urllib.parse import urlsplit
+
 import pytest
 
 pytestmark = [pytest.mark.integration,
@@ -47,7 +49,7 @@ class TestVideoUploadSuccess:
         photo = feed[0]
         assert photo["media_type"] == "video"
         assert photo["caption"] == "Short clip"
-        assert photo["url"].endswith(".mp4")
+        assert urlsplit(photo["url"]).path.endswith(".mp4")
         # Allow encoder/frame-rounding slack around the requested duration.
         assert 1 <= photo["duration_seconds"] <= 4
 
@@ -117,4 +119,4 @@ class TestImageUploadRegression:
         photo = feed[0]
         assert photo["media_type"] == "image"
         assert photo["duration_seconds"] is None
-        assert photo["url"].endswith(".png")
+        assert urlsplit(photo["url"]).path.endswith(".png")
