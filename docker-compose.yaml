@@ -119,7 +119,11 @@ services:
       - default
       - proxy_network
   minio:
-    image: minio/minio
+    # minio/minio was removed from Docker Hub. pgsty/minio is a maintained
+    # fork that reads the existing data and is what CI uses. The digest pins
+    # the exact multi-arch image that was tested against a copy of the data.
+    # Rollback: the old image is saved in minio-backups (see issue #18).
+    image: pgsty/minio:RELEASE.2026-08-04T00-00-00Z@sha256:b6bfe7239bfc83fb90d31612d9704d86039dd714f7904b3f1ad68f211e602372
     container_name: family_photos_storage
     restart: always
     ports:
