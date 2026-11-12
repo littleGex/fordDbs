@@ -364,3 +364,39 @@ class TestRunMonthlyEtfPurchases:
 
         assert len(_scheduled_buys(db_session)) == 2
         assert schedule.last_executed_date == date(2026, 11, 10)
+
+    def test_shares_use_exact_decimal_division(self, db_session,
+                                               make_schedule, prices):
+        # 14.00 / 71.68 is exactly 0.1953125 -> 0.195313 (half up).
+        # Float division gives 0.19531249999999997 -> 0.195312.
+        make_schedule(day=15, amount="14.00")
+        prices.side_effect = lambda tickers: {t: 71.68 for t in tickers}
+
+        _run(db_session, 2026, 11, 15, 9, 0)
+
+        (buy,) = _scheduled_buys(db_session)
+        assert buy.shares_acquired == Decimal("0.195313")
+
+    def test_price_failure_is_warning_while_recent(
+            self, db_session, make_schedule, prices, caplog):
+        make_schedule(day=10)
+        prices.side_effect = lambda tickers: {t: 0.0 for t in tickers}
+
+        with caplog.at_level(logging.WARNING, logger="app.core.scheduler"):
+            _run(db_session, 2026, 11, 12, 9, 0)
+
+        assert "VTI" in caplog.text
+        assert not [r for r in caplog.records if r.levelno >= logging.ERROR]
+
+    def test_price_failure_is_error_three_days_after_due(
+            self, db_session, make_schedule, prices, caplog):
+        make_schedule(day=10)
+        prices.side_effect = lambda tickers: {t: 0.0 for t in tickers}
+
+        with caplog.at_level(logging.WARNING, logger="app.core.scheduler"):
+            _run(db_session, 2026, 11, 13, 9, 0)
+
+        errors = [r for r in caplog.records if r.levelno >= logging.ERROR]
+        assert len(errors) == 1
+        assert "VTI" in errors[0].getMessage()
+        assert "2026-11-10" in errors[0].getMessage()

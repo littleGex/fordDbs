@@ -15,6 +15,12 @@ from app.core.investments import fetch_live_prices
 logger = logging.getLogger(__name__)
 BERLIN_TZ = pytz.timezone("Europe/Berlin")
 
+# EtfTransaction.shares_acquired is NUMERIC(12, 6).
+SHARES_QUANTUM = Decimal("0.000001")
+# A scheduled buy still missing its price this many days after its due
+# date is logged as an error rather than a warning.
+PRICE_FAILURE_ERROR_DAYS = 3
+
 
 def calculate_age(birth_date: date,
                   reference_date: date = None) -> int:
@@ -63,6 +69,13 @@ def run_weekly_payout():
         db.commit()
     finally:
         db.close()
+
+
+def _estimate_shares(fiat_amount, price: Decimal) -> Decimal:
+    """Shares bought for fiat_amount at price, rounded to the
+    shares_acquired column's 6 decimal places."""
+    return (Decimal(fiat_amount) / price).quantize(SHARES_QUANTUM,
+                                                   rounding=ROUND_HALF_UP)
 
 
 def _previous_month_due_date(day: int, today: date) -> date:
@@ -124,9 +137,14 @@ def run_monthly_etf_purchases(db: Session = None, now: datetime = None):
       job runs, so a second run (restart, misfire catch-up) does not
       buy again.
     - If no price can be fetched the schedule stays due and the next
-      daily run retries.
+      daily run retries. From PRICE_FAILURE_ERROR_DAYS after the due
+      date this is logged as an error instead of a warning.
     - Only this month is caught up; an earlier missed month is logged
       as a warning, not bought.
+    - The rows are estimates: shares come from Yahoo's latest close,
+      not the broker's real fill price, and fees are 0. They are kept
+      as entry_type="scheduled" so a later import of the real fills
+      (#39) can find and replace them.
 
     db and now are for tests; the scheduler calls this with neither.
     """
@@ -154,9 +172,10 @@ def run_monthly_etf_purchases(db: Session = None, now: datetime = None):
             due_date = today.replace(day=schedule.execution_day)
             price = live_prices.get(schedule.ticker_symbol, 0.0)
 
-            if price > 0:
-                # Calculate fractional shares: Amount / Price
-                shares_acquired = float(schedule.fiat_amount) / price
+            price = Decimal(str(price))
+            if price.is_finite() and price > 0:
+                shares_acquired = _estimate_shares(schedule.fiat_amount,
+                                                   price)
 
                 new_txn = EtfTransaction(
                     ticker_symbol=schedule.ticker_symbol,
@@ -174,6 +193,13 @@ def run_monthly_etf_purchases(db: Session = None, now: datetime = None):
                     logger.warning(
                         f"Scheduled buy for {schedule.ticker_symbol} "
                         f"made late: due {due_date}, bought {today}.")
+            elif (today - due_date).days >= PRICE_FAILURE_ERROR_DAYS:
+                logger.error(
+                    f"Scheduled buy for {schedule.ticker_symbol} due "
+                    f"{due_date} still not made "
+                    f"{(today - due_date).days} days later: no live "
+                    "price. Will keep retrying; check the price source "
+                    "or add it by hand.")
             else:
                 logger.warning(
                     f"Skipped {schedule.ticker_symbol}: "
