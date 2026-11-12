@@ -88,18 +88,14 @@ const importShares = async () => {
 
 const importEtfTransactions = async () => {
   try {
-    const lines = etfCsv.value.split('\n').filter(line => line.trim() !== '')
-    for (const line of lines) {
-      const [ticker, fiat_amount, shares_acquired, transaction_date, fees, transaction_type] = line.split(',').map(item => item.trim())
-      await api.post(`/investments/etf/transaction`, null, {
-        params: { ticker, fiat_amount: Number(fiat_amount), shares_acquired: Number(shares_acquired), transaction_date, fees: Number(fees), transaction_type: transaction_type || 'buy' }
-      })
-    }
-    alert('ETF transactions imported successfully!')
+    const { data } = await api.post(`/investments/etf/bulk-add`, {
+      csv_data: etfCsv.value
+    })
+    alert(`Imported ${data.imported} ETF transaction(s).`)
     etfCsv.value = ''
     fetchSchedules()
   } catch (e) {
-    alert('Error importing ETF transactions: ' + e.response?.data?.detail || e.message)
+    alert('Error importing ETF transactions (nothing was imported): ' + (e.response?.data?.detail || e.message))
   }
 }
 
@@ -167,6 +163,7 @@ onMounted(fetchSchedules)
 
       <div class="form-section">
         <h3>Bulk Import ETF Transactions (CSV)</h3>
+        <p class="hint">First line must be the header. Dates are YYYY-MM-DD; fees and transaction_type are optional (default 0 and buy).</p>
         <form @submit.prevent="importEtfTransactions">
           <textarea v-model="etfCsv" placeholder="ticker,fiat_amount,shares_acquired,transaction_date,fees,transaction_type&#10;VTI,1000.00,10.5,2024-01-01,5.00,buy&#10;VXUS,500.00,7.2,2024-02-01,2.50,sell" rows="5"></textarea>
           <button type="submit">Import ETF Transactions</button>
@@ -213,6 +210,12 @@ onMounted(fetchSchedules)
 .form-section h3 {
   margin-top: 0;
   color: #2d3436;
+}
+
+.form-section .hint {
+  margin: 0 0 10px;
+  font-size: 0.85em;
+  color: #636e72;
 }
 
 .form-section form {
