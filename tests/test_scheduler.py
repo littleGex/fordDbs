@@ -1,6 +1,7 @@
 # tests/test_scheduler.py
 """
-Tests for app/core/scheduler.py — the weekly pocket money payout job.
+Tests for app/core/scheduler.py — the weekly pocket money payout job
+and the scheduled ETF purchases job.
 
 Split into:
   - TestCalculateAge: pure function, no DB, runs fast and always.
@@ -8,11 +9,15 @@ Split into:
     including a regression test for the Decimal/float TypeError that
     broke the live job after the Numeric migration.
 """
+import logging
 import pytest
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
+from unittest.mock import patch
 
-from app.core.scheduler import calculate_age, run_weekly_payout
+from app.core.scheduler import (BERLIN_TZ, calculate_age,
+                                run_monthly_etf_purchases, run_weekly_payout)
+from app.models.shares_models import EtfPurchaseSchedule, EtfTransaction
 
 
 # ---------------------------------------------------------------------
@@ -174,3 +179,188 @@ class TestRunWeeklyPayout:
         )
         # 12.34 existing + (8 * 0.5 = 4.00) = 16.34
         assert refreshed.balance == Decimal("16.34")
+
+
+# ---------------------------------------------------------------------
+# Scheduled ETF purchases (issues #35, #36)
+#
+# run_monthly_etf_purchases() takes an optional session and "now" so
+# these tests can run it inside the rollback-wrapped db_session and
+# pretend it is any day of the month. Yahoo prices are mocked.
+# ---------------------------------------------------------------------
+
+def _berlin(*args):
+    return BERLIN_TZ.localize(datetime(*args))
+
+
+@pytest.fixture
+def make_schedule(db_session):
+    def _make(ticker="VTI", amount="100.00", day=15, is_active=True,
+              last_executed_date=None, created_at=datetime(2026, 1, 1)):
+        schedule = EtfPurchaseSchedule(
+            ticker_symbol=ticker, fiat_amount=Decimal(amount),
+            execution_day=day, is_active=is_active,
+            last_executed_date=last_executed_date, created_at=created_at)
+        db_session.add(schedule)
+        db_session.flush()
+        return schedule
+
+    return _make
+
+
+@pytest.fixture
+def prices():
+    """Mocked fetch_live_prices; set prices.return_value to change."""
+    with patch("app.core.scheduler.fetch_live_prices") as mock:
+        mock.side_effect = lambda tickers: {t: 50.0 for t in tickers}
+        yield mock
+
+
+def _scheduled_buys(db_session):
+    return (db_session.query(EtfTransaction)
+            .filter(EtfTransaction.entry_type == "scheduled")
+            .order_by(EtfTransaction.transaction_id).all())
+
+
+def _run(db_session, *now):
+    run_monthly_etf_purchases(db=db_session, now=_berlin(*now))
+    db_session.expire_all()
+
+
+class TestRunMonthlyEtfPurchases:
+
+    def test_buys_on_due_day_and_records_execution(
+            self, db_session, make_schedule, prices):
+        schedule = make_schedule(day=15)
+
+        _run(db_session, 2026, 11, 15, 9, 0)
+
+        (buy,) = _scheduled_buys(db_session)
+        assert buy.ticker_symbol == "VTI"
+        assert buy.fiat_invested == Decimal("100.00")
+        assert buy.shares_acquired == Decimal("2")
+        assert schedule.last_executed_date == date(2026, 11, 15)
+
+    def test_second_run_same_day_does_not_buy_again(
+            self, db_session, make_schedule, prices):
+        make_schedule(day=15)
+
+        _run(db_session, 2026, 11, 15, 9, 0)
+        _run(db_session, 2026, 11, 15, 9, 5)
+
+        assert len(_scheduled_buys(db_session)) == 1
+
+    def test_not_due_yet_does_nothing(self, db_session, make_schedule,
+                                      prices):
+        schedule = make_schedule(day=15)
+
+        _run(db_session, 2026, 11, 12, 9, 0)
+
+        assert _scheduled_buys(db_session) == []
+        assert schedule.last_executed_date is None
+        prices.assert_not_called()
+
+    def test_missed_day_is_bought_late_with_warning(
+            self, db_session, make_schedule, prices, caplog):
+        schedule = make_schedule(day=10)
+
+        with caplog.at_level(logging.WARNING, logger="app.core.scheduler"):
+            _run(db_session, 2026, 11, 12, 9, 0)
+
+        (buy,) = _scheduled_buys(db_session)
+        assert buy.transaction_date.date() == date(2026, 11, 12)
+        assert schedule.last_executed_date == date(2026, 11, 10)
+        assert "late" in caplog.text and "VTI" in caplog.text
+
+    def test_missed_day_is_caught_up_only_once(
+            self, db_session, make_schedule, prices):
+        make_schedule(day=10)
+
+        _run(db_session, 2026, 11, 12, 9, 0)
+        _run(db_session, 2026, 11, 13, 9, 0)
+        _run(db_session, 2026, 11, 30, 9, 0)
+
+        assert len(_scheduled_buys(db_session)) == 1
+
+    def test_buys_again_next_month(self, db_session, make_schedule, prices):
+        schedule = make_schedule(day=15,
+                                 last_executed_date=date(2026, 10, 15))
+
+        _run(db_session, 2026, 11, 15, 9, 0)
+
+        assert len(_scheduled_buys(db_session)) == 1
+        assert schedule.last_executed_date == date(2026, 11, 15)
+
+    def test_schedule_created_after_due_day_waits_for_next_month(
+            self, db_session, make_schedule, prices):
+        make_schedule(day=5, created_at=datetime(2026, 11, 10, 18, 0))
+
+        _run(db_session, 2026, 11, 12, 9, 0)
+
+        assert _scheduled_buys(db_session) == []
+
+    def test_inactive_schedule_is_skipped(self, db_session, make_schedule,
+                                          prices):
+        make_schedule(day=15, is_active=False)
+
+        _run(db_session, 2026, 11, 15, 9, 0)
+
+        assert _scheduled_buys(db_session) == []
+
+    def test_price_failure_leaves_schedule_due_for_retry(
+            self, db_session, make_schedule, prices):
+        schedule = make_schedule(day=15)
+        prices.side_effect = lambda tickers: {t: 0.0 for t in tickers}
+
+        _run(db_session, 2026, 11, 15, 9, 0)
+
+        assert _scheduled_buys(db_session) == []
+        assert schedule.last_executed_date is None
+
+        prices.side_effect = lambda tickers: {t: 50.0 for t in tickers}
+        _run(db_session, 2026, 11, 16, 9, 0)
+
+        assert len(_scheduled_buys(db_session)) == 1
+        assert schedule.last_executed_date == date(2026, 11, 15)
+
+    def test_existing_buy_from_before_upgrade_is_not_repeated(
+            self, db_session, make_schedule, prices):
+        # Before this fix last_executed_date was never written, so a
+        # schedule that already bought this month has it NULL.
+        schedule = make_schedule(day=1)
+        db_session.add(EtfTransaction(
+            ticker_symbol="VTI", fiat_invested=Decimal("100.00"),
+            shares_acquired=Decimal("2"), entry_type="scheduled",
+            transaction_date=datetime(2026, 11, 1, 9, 0)))
+        db_session.flush()
+
+        _run(db_session, 2026, 11, 12, 9, 0)
+
+        assert len(_scheduled_buys(db_session)) == 1
+        assert schedule.last_executed_date == date(2026, 11, 1)
+
+    def test_older_missed_month_is_warned_not_bought(
+            self, db_session, make_schedule, prices, caplog):
+        make_schedule(day=15, last_executed_date=date(2026, 9, 15))
+
+        with caplog.at_level(logging.WARNING, logger="app.core.scheduler"):
+            _run(db_session, 2026, 11, 15, 9, 0)
+
+        assert len(_scheduled_buys(db_session)) == 1
+        assert "missed" in caplog.text and "2026-10-15" in caplog.text
+
+    def test_other_schedules_buy_of_same_ticker_does_not_count(
+            self, db_session, make_schedule, prices):
+        # A second VTI schedule (different amount) bought on the 11th;
+        # this schedule's missed buy for the 10th must still happen.
+        schedule = make_schedule(day=10, amount="100.00")
+        db_session.add(EtfTransaction(
+            ticker_symbol="VTI", fiat_invested=Decimal("250.00"),
+            shares_acquired=Decimal("5"), entry_type="scheduled",
+            transaction_date=datetime(2026, 11, 11, 9, 0)))
+        db_session.flush()
+
+        _run(db_session, 2026, 11, 12, 9, 0)
+
+        assert len(_scheduled_buys(db_session)) == 2
+        assert schedule.last_executed_date == date(2026, 11, 10)
