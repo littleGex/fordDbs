@@ -3,7 +3,8 @@ import logging
 import pytz
 from apscheduler.schedulers.background import BackgroundScheduler
 from decimal import Decimal, ROUND_HALF_UP
-from datetime import date, datetime
+from datetime import date, datetime, time, timedelta
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 from app.database.database import SessionLocal
 from app.models.user_models import Child, Transaction
@@ -64,29 +65,93 @@ def run_weekly_payout():
         db.close()
 
 
-def run_monthly_etf_purchases():
+def _previous_month_due_date(day: int, today: date) -> date:
+    return (today.replace(day=1) - timedelta(days=1)).replace(day=day)
+
+
+def _is_due_this_month(db: Session, schedule: EtfPurchaseSchedule,
+                       today: date) -> bool:
+    """For a schedule whose day this month has passed and that has not
+    run this month: should it buy now?
+
+    May set last_executed_date (see the upgrade case) and logs a
+    warning if an earlier month was missed.
     """
-    Scheduled task: Runs daily to check if today is an execution day
-    for any active ETF purchase schedules.
+    due_date = today.replace(day=schedule.execution_day)
+    created = schedule.created_at.date() if schedule.created_at else None
+
+    # A schedule set up after this month's day starts next month.
+    if created and created > due_date:
+        return False
+
+    if schedule.last_executed_date is None:
+        # Before last_executed_date was written, a schedule that had
+        # already bought this month still has it NULL. Count that buy
+        # instead of buying again.
+        already_bought = db.query(EtfTransaction).filter(
+            EtfTransaction.ticker_symbol == schedule.ticker_symbol,
+            EtfTransaction.fiat_invested == schedule.fiat_amount,
+            EtfTransaction.entry_type == "scheduled",
+            EtfTransaction.transaction_date >= datetime.combine(
+                due_date, time.min)
+        ).first()
+        if already_bought:
+            schedule.last_executed_date = due_date
+            return False
+    else:
+        prev_due = _previous_month_due_date(schedule.execution_day, today)
+        if (schedule.last_executed_date < prev_due
+                and not (created and created > prev_due)):
+            logger.warning(
+                f"Scheduled buy for {schedule.ticker_symbol} missed: "
+                f"due {prev_due} (last made {schedule.last_executed_date})"
+                ". Only this month is caught up; add it by hand if needed.")
+
+    return True
+
+
+def run_monthly_etf_purchases(db: Session = None, now: datetime = None):
     """
-    db: Session = SessionLocal()
-    today_day = datetime.now(BERLIN_TZ).day
+    Scheduled task: runs daily and makes each active schedule's buy
+    for this month once its execution_day has arrived.
+
+    - A buy is due once this month's execution_day has passed and the
+      schedule has not run this month (last_executed_date). A day the
+      Pi was down is therefore caught up on the next run, with a
+      warning that it is late.
+    - last_executed_date is set to this month's due date in the same
+      commit as the buy, and the due schedules are locked while the
+      job runs, so a second run (restart, misfire catch-up) does not
+      buy again.
+    - If no price can be fetched the schedule stays due and the next
+      daily run retries.
+    - Only this month is caught up; an earlier missed month is logged
+      as a warning, not bought.
+
+    db and now are for tests; the scheduler calls this with neither.
+    """
+    own_session = db is None
+    db = db or SessionLocal()
+    now = now or datetime.now(BERLIN_TZ)
+    today = now.date()
+    month_start = today.replace(day=1)
 
     try:
-        # 1. Check for schedules set for today (e.g., the 15th)
-        schedules = db.query(EtfPurchaseSchedule).filter(
-            EtfPurchaseSchedule.execution_day == today_day,
-            EtfPurchaseSchedule.is_active.is_(True)
-        ).all()
+        candidates = db.query(EtfPurchaseSchedule).filter(
+            EtfPurchaseSchedule.is_active.is_(True),
+            EtfPurchaseSchedule.execution_day <= today.day,
+            or_(EtfPurchaseSchedule.last_executed_date.is_(None),
+                EtfPurchaseSchedule.last_executed_date < month_start)
+        ).with_for_update().all()
 
-        if not schedules:
-            return
+        schedules = [s for s in candidates
+                     if _is_due_this_month(db, s, today)]
 
-        # 2. Get unique tickers and fetch latest market prices
-        tickers = {s.ticker_symbol for s in schedules}
-        live_prices = fetch_live_prices(tickers)
+        live_prices = (fetch_live_prices(
+            {s.ticker_symbol for s in schedules}) if schedules else {})
 
         for schedule in schedules:
+            due_date = today.replace(day=schedule.execution_day)
             price = live_prices.get(schedule.ticker_symbol, 0.0)
 
             if price > 0:
@@ -98,23 +163,30 @@ def run_monthly_etf_purchases():
                     fiat_invested=schedule.fiat_amount,
                     shares_acquired=shares_acquired,
                     entry_type="scheduled",
-                    transaction_date=datetime.now(BERLIN_TZ)
+                    transaction_date=now
                 )
                 db.add(new_txn)
+                schedule.last_executed_date = due_date
                 logger.info(
                     f"Executed scheduled buy: {schedule.ticker_symbol} "
                     f"({shares_acquired} shares)")
+                if today > due_date:
+                    logger.warning(
+                        f"Scheduled buy for {schedule.ticker_symbol} "
+                        f"made late: due {due_date}, bought {today}.")
             else:
                 logger.warning(
                     f"Skipped {schedule.ticker_symbol}: "
-                    "Could not fetch live price.")
+                    "Could not fetch live price; will retry on the "
+                    "next run.")
 
         db.commit()
     except Exception as e:
         logger.error(f"Error during monthly ETF purchase: {e}")
         db.rollback()
     finally:
-        db.close()
+        if own_session:
+            db.close()
 
 
 def start_scheduler():
