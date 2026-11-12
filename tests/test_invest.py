@@ -21,6 +21,8 @@ fully deterministic.
 import math
 import pytest
 import pandas as pd
+from datetime import datetime
+from decimal import Decimal
 from unittest.mock import patch
 
 from app.core.investments import fetch_live_prices
@@ -137,3 +139,202 @@ class TestFetchLivePricesLiveSmokeTest:
         assert isinstance(price, (float, int))
         assert math.isfinite(price)
         assert price > 0, "A price of 0.0 usually means the fetch failed"
+
+
+# ---------------------------------------------------------------------------
+# ETF transaction endpoints (app/api/v1/shares.py)
+#
+# These hit the real API against the test Postgres database, unlike the
+# mocked fetch_live_prices tests above.
+# ---------------------------------------------------------------------------
+
+ETF_BULK_URL = "/v1/investments/etf/bulk-add"
+ETF_SINGLE_URL = "/v1/investments/etf/transaction"
+ETF_HEADER = ("ticker,fiat_amount,shares_acquired,transaction_date,"
+              "fees,transaction_type")
+
+
+def _etf_rows(db_session):
+    from app.models.shares_models import EtfTransaction
+    return (db_session.query(EtfTransaction)
+            .order_by(EtfTransaction.transaction_id).all())
+
+
+class TestEtfBulkAdd:
+
+    def test_persists_dates_fees_and_amounts(self, parent_client,
+                                             db_session):
+        csv_data = "\n".join([
+            ETF_HEADER,
+            "vti,1000.00,10.5,2024-01-15,5.00,buy",
+            "VXUS,500.25,7.2,2023-06-30,2.50,buy",
+        ])
+
+        resp = parent_client.post(ETF_BULK_URL, json={"csv_data": csv_data})
+
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["imported"] == 2
+        rows = _etf_rows(db_session)
+        assert [r.ticker_symbol for r in rows] == ["VTI", "VXUS"]
+        assert [r.transaction_date for r in rows] == [
+            datetime(2024, 1, 15), datetime(2023, 6, 30)]
+        assert [r.fees for r in rows] == [Decimal("5.00"), Decimal("2.50")]
+        assert rows[1].fiat_invested == Decimal("500.25")
+        assert rows[0].shares_acquired == Decimal("10.5")
+        assert all(r.entry_type == "import" for r in rows)
+
+    def test_header_row_is_not_imported(self, parent_client, db_session):
+        csv_data = ETF_HEADER + "\nVTI,100,1,2024-01-01,0,buy\n"
+
+        resp = parent_client.post(ETF_BULK_URL, json={"csv_data": csv_data})
+
+        assert resp.status_code == 200, resp.text
+        assert len(_etf_rows(db_session)) == 1
+
+    def test_bad_row_rolls_back_whole_import(self, parent_client,
+                                             db_session):
+        csv_data = "\n".join([
+            ETF_HEADER,
+            "VTI,100,1,2024-01-01,0,buy",
+            "VTI,100,1,2024-13-01,0,buy",
+        ])
+
+        resp = parent_client.post(ETF_BULK_URL, json={"csv_data": csv_data})
+
+        assert resp.status_code == 400
+        assert "row 3" in resp.json()["detail"]
+        assert _etf_rows(db_session) == []
+
+    @pytest.mark.parametrize("fiat,shares", [("250", "2"), ("-250", "-2")])
+    def test_sell_is_stored_negative_whatever_sign_given(
+            self, parent_client, db_session, fiat, shares):
+        csv_data = (ETF_HEADER
+                    + f"\nVTI,{fiat},{shares},2024-02-01,1.00,sell")
+
+        resp = parent_client.post(ETF_BULK_URL, json={"csv_data": csv_data})
+
+        assert resp.status_code == 200, resp.text
+        (row,) = _etf_rows(db_session)
+        assert row.transaction_type == "sell"
+        assert row.fiat_invested == Decimal("-250")
+        assert row.shares_acquired == Decimal("-2")
+
+    def test_buy_is_stored_positive_whatever_sign_given(self, parent_client,
+                                                        db_session):
+        csv_data = ETF_HEADER + "\nVTI,-250,-2,2024-02-01,0,buy"
+
+        resp = parent_client.post(ETF_BULK_URL, json={"csv_data": csv_data})
+
+        assert resp.status_code == 200, resp.text
+        (row,) = _etf_rows(db_session)
+        assert row.fiat_invested == Decimal("250")
+        assert row.shares_acquired == Decimal("2")
+
+    def test_blank_fees_and_type_default_to_zero_and_buy(self, parent_client,
+                                                         db_session):
+        csv_data = ETF_HEADER + "\nVTI,100,1,2024-01-01,,"
+
+        resp = parent_client.post(ETF_BULK_URL, json={"csv_data": csv_data})
+
+        assert resp.status_code == 200, resp.text
+        (row,) = _etf_rows(db_session)
+        assert row.fees == Decimal("0")
+        assert row.transaction_type == "buy"
+
+    def test_extra_columns_are_ignored(self, parent_client, db_session):
+        csv_data = (ETF_HEADER + ",external_id\n"
+                    "VTI,100,1,2024-01-01,0,buy,abc-123")
+
+        resp = parent_client.post(ETF_BULK_URL, json={"csv_data": csv_data})
+
+        assert resp.status_code == 200, resp.text
+        assert len(_etf_rows(db_session)) == 1
+
+    @pytest.mark.parametrize("csv_data,expected", [
+        ("", "No CSV data"),
+        (ETF_HEADER, "No rows"),
+        ("ticker,fiat_amount\nVTI,100", "Missing column"),
+        (ETF_HEADER + "\nVTI,100,1,2024-01-01,0,hold", "transaction_type"),
+        (ETF_HEADER + "\nVTI,abc,1,2024-01-01,0,buy", "fiat_amount"),
+        (ETF_HEADER + "\nVTI,NaN,1,2024-01-01,0,buy", "fiat_amount"),
+        (ETF_HEADER + "\nVTI,100,1,2024-01-01,-1,buy", "fees"),
+        (ETF_HEADER + "\n,100,1,2024-01-01,0,buy", "ticker"),
+    ])
+    def test_rejects_invalid_input(self, parent_client, db_session,
+                                   csv_data, expected):
+        resp = parent_client.post(ETF_BULK_URL, json={"csv_data": csv_data})
+
+        assert resp.status_code == 400
+        assert expected in resp.json()["detail"]
+        assert _etf_rows(db_session) == []
+
+    def test_value_too_large_for_column_rolls_back(self, parent_client,
+                                                   db_session):
+        # fiat_invested is Numeric(10, 2): max 99,999,999.99
+        csv_data = "\n".join([
+            ETF_HEADER,
+            "VTI,100,1,2024-01-01,0,buy",
+            "VTI,1000000000,1,2024-01-01,0,buy",
+        ])
+
+        resp = parent_client.post(ETF_BULK_URL, json={"csv_data": csv_data})
+
+        assert resp.status_code == 400
+        assert "nothing was imported" in resp.json()["detail"]
+        assert _etf_rows(db_session) == []
+
+    def test_rejects_non_string_csv_data(self, parent_client, db_session):
+        resp = parent_client.post(ETF_BULK_URL, json={"csv_data": 123})
+
+        assert resp.status_code == 400
+        assert _etf_rows(db_session) == []
+
+    def test_requires_login(self, client):
+        csv_data = ETF_HEADER + "\nVTI,100,1,2024-01-01,0,buy"
+
+        resp = client.post(ETF_BULK_URL, json={"csv_data": csv_data})
+
+        assert resp.status_code == 401
+
+
+class TestEtfSingleTransaction:
+
+    def test_persists_given_date_and_fees(self, parent_client, db_session):
+        resp = parent_client.post(ETF_SINGLE_URL, params={
+            "ticker": "vti", "fiat_amount": 100, "shares_acquired": 1,
+            "transaction_date": "2024-03-05", "fees": 1.25,
+        })
+
+        assert resp.status_code == 200, resp.text
+        (row,) = _etf_rows(db_session)
+        assert row.transaction_date == datetime(2024, 3, 5)
+        assert row.fees == Decimal("1.25")
+
+    def test_date_defaults_to_now(self, parent_client, db_session):
+        before = datetime.now()
+        resp = parent_client.post(ETF_SINGLE_URL, params={
+            "ticker": "VTI", "fiat_amount": 100, "shares_acquired": 1,
+        })
+
+        assert resp.status_code == 200, resp.text
+        (row,) = _etf_rows(db_session)
+        assert row.transaction_date >= before.replace(microsecond=0)
+        assert row.fees == Decimal("0")
+
+    def test_rejects_bad_date(self, parent_client, db_session):
+        resp = parent_client.post(ETF_SINGLE_URL, params={
+            "ticker": "VTI", "fiat_amount": 100, "shares_acquired": 1,
+            "transaction_date": "05/03/2024",
+        })
+
+        assert resp.status_code == 400
+        assert _etf_rows(db_session) == []
+
+    def test_rejects_negative_fees(self, parent_client, db_session):
+        resp = parent_client.post(ETF_SINGLE_URL, params={
+            "ticker": "VTI", "fiat_amount": 100, "shares_acquired": 1,
+            "fees": -1,
+        })
+
+        assert resp.status_code == 400
+        assert _etf_rows(db_session) == []
