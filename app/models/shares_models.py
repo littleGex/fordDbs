@@ -30,7 +30,9 @@ class EtfTransaction(Base):
         12, 6), nullable=False)  # Positive for buy, negative for sell
     fees = Column(Numeric(10, 2), default=0.0)
 
-    # Track how the entry was created
+    # Track how the entry was created: "manual", "import" (CSV) or
+    # "scheduled". Scheduled rows are estimates (Yahoo close price, no
+    # fees), not the broker's real fill; see run_monthly_etf_purchases.
     entry_type = Column(String, default="manual")
 
 
