@@ -7,7 +7,16 @@ const schedules = ref([])
 // Forms
 const shareForm = ref({ ticker: '', num_shares: 0, vest_date: '', purchase_price: 0 })
 const etfForm = ref({ ticker: '', fiat_amount: 0, shares_acquired: 0, transaction_type: 'buy' })
-const scheduleForm = ref({ ticker: '', fiat_amount: 0, execution_day: 1 })
+const scheduleForm = ref({ ticker: '', isin: '', fiat_amount: 0, execution_day: 1 })
+const instruments = ref([])
+const instrumentForm = ref({ isin: '', name: '' })
+// Per-ISIN inputs for "Set ticker" and "Link existing ticker"
+const tickerInputs = ref({})
+const linkInputs = ref({})
+const busy = ref('')
+
+const errorText = (e) =>
+  e.response?.data?.detail?.message || e.response?.data?.detail || e.message
 const sharesCsv = ref('')
 const etfCsv = ref('')
 
@@ -45,17 +54,106 @@ const addEtfTransaction = async () => {
 }
 
 const createSchedule = async () => {
+  const { ticker, isin, fiat_amount, execution_day } = scheduleForm.value
+  const params = { amount: fiat_amount, day: execution_day }
+  if (isin.trim()) params.isin = isin.trim()
+  else params.ticker = ticker
   try {
-    await api.post(`/investments/etf/schedule`, null, {
-      params: scheduleForm.value
-    })
+    await api.post(`/investments/etf/schedule`, null, { params })
     alert('Schedule created!')
-    scheduleForm.value = { ticker: '', fiat_amount: 0, execution_day: 1 }
+    scheduleForm.value = { ticker: '', isin: '', fiat_amount: 0, execution_day: 1 }
     fetchSchedules()
+    fetchInstruments()
   } catch (e) {
-    alert('Error creating schedule: ' + e.response?.data?.detail || e.message)
+    alert('Error creating schedule: ' + errorText(e))
   }
 }
+
+// --- Instruments (ISIN -> Yahoo ticker) ---
+
+const fetchInstruments = async () => {
+  try {
+    const res = await api.get(`/investments/instruments`)
+    instruments.value = res.data
+  } catch (e) {
+    console.error('Error fetching instruments:', e)
+  }
+}
+
+const withBusy = async (key, fn) => {
+  busy.value = key
+  try {
+    await fn()
+  } finally {
+    busy.value = ''
+  }
+}
+
+const addInstrument = () => withBusy('add', async () => {
+  try {
+    const { data } = await api.post(`/investments/instruments`, {
+      isin: instrumentForm.value.isin,
+      name: instrumentForm.value.name || null
+    })
+    instrumentForm.value = { isin: '', name: '' }
+    await fetchInstruments()
+    if (data.status === 'unresolved') {
+      alert(`${data.isin} has no ticker yet: ${data.resolution_note}`)
+    }
+  } catch (e) {
+    alert('Error adding ISIN: ' + errorText(e))
+  }
+})
+
+const reResolve = (inst) => withBusy(inst.isin, async () => {
+  try {
+    await api.post(`/investments/instruments/${inst.isin}/resolve`)
+    await fetchInstruments()
+  } catch (e) {
+    alert('Error looking up ticker: ' + errorText(e))
+  }
+})
+
+const setTicker = (inst) => withBusy(inst.isin, async () => {
+  const yahoo_ticker = (tickerInputs.value[inst.isin] || '').trim()
+  if (!yahoo_ticker) return
+  const url = `/investments/instruments/${inst.isin}/ticker`
+  try {
+    await api.put(url, { yahoo_ticker })
+  } catch (e) {
+    const d = e.response?.data?.detail
+    if (e.response?.status !== 409 || !d?.reference_date) {
+      alert('Error setting ticker: ' + errorText(e))
+      return
+    }
+    const ok = confirm(`${d.message}\n\nFill on ${d.reference_date}: ${d.reference_price} EUR\n` +
+      `${yahoo_ticker} close: ${d.close} EUR\n\nUse ${yahoo_ticker} anyway?`)
+    if (!ok) return
+    try {
+      await api.put(url, { yahoo_ticker, confirm: true })
+    } catch (e2) {
+      alert('Error setting ticker: ' + errorText(e2))
+      return
+    }
+  }
+  tickerInputs.value[inst.isin] = ''
+  await Promise.all([fetchInstruments(), fetchSchedules()])
+})
+
+const linkTicker = (inst) => withBusy(inst.isin, async () => {
+  const ticker_symbol = (linkInputs.value[inst.isin] || '').trim()
+  if (!ticker_symbol) return
+  try {
+    const { data } = await api.post(`/investments/instruments/${inst.isin}/link`, { ticker_symbol })
+    linkInputs.value[inst.isin] = ''
+    let msg = `Linked ${data.transactions} transaction(s) and ${data.schedules} schedule(s).`
+    if (data.conflicts) msg += ` ${data.conflicts} row(s) already belong to another ISIN and were left alone.`
+    alert(msg)
+    await Promise.all([fetchInstruments(), fetchSchedules()])
+  } catch (e) {
+    alert('Error linking ticker: ' + errorText(e))
+  }
+})
 
 const deleteSchedule = async (id) => {
   if (!confirm('Delete this schedule?')) return
@@ -111,7 +209,10 @@ const uploadSharesCsv = async () => {
   }
 }
 
-onMounted(fetchSchedules)
+onMounted(() => {
+  fetchSchedules()
+  fetchInstruments()
+})
 </script>
 
 <template>
@@ -147,7 +248,8 @@ onMounted(fetchSchedules)
       <div class="form-section">
         <h3>Create ETF Purchase Schedule</h3>
         <form @submit.prevent="createSchedule">
-          <input v-model="scheduleForm.ticker" placeholder="Ticker Symbol" required>
+          <input v-model="scheduleForm.isin" placeholder="ISIN (optional, uses its ticker)">
+          <input v-model="scheduleForm.ticker" placeholder="Ticker Symbol" :required="!scheduleForm.isin.trim()" :disabled="!!scheduleForm.isin.trim()">
           <input v-model.number="scheduleForm.fiat_amount" type="number" step="0.01" placeholder="Fiat Amount" required>
           <input v-model.number="scheduleForm.execution_day" type="number" min="1" max="28" placeholder="Execution Day (1-28)" required>
           <button type="submit">Create Schedule</button>
@@ -168,6 +270,44 @@ onMounted(fetchSchedules)
           <textarea v-model="etfCsv" placeholder="ticker,fiat_amount,shares_acquired,transaction_date,fees,transaction_type&#10;VTI,1000.00,10.5,2024-01-01,5.00,buy&#10;VXUS,500.00,7.2,2024-02-01,2.50,sell" rows="5"></textarea>
           <button type="submit">Import ETF Transactions</button>
         </form>
+      </div>
+    </div>
+
+    <div class="schedules-section instruments-section">
+      <h3>Instruments (ISIN → Yahoo ticker)</h3>
+      <p class="hint">Tickers are looked up from the ISIN and must be priced in EUR. Unresolved ISINs need a ticker set by hand.</p>
+      <form class="inline-form" @submit.prevent="addInstrument">
+        <input v-model="instrumentForm.isin" placeholder="ISIN, e.g. IE00B4L5Y983" required>
+        <input v-model="instrumentForm.name" placeholder="Name (optional)">
+        <button type="submit" :disabled="busy === 'add'">{{ busy === 'add' ? 'Looking up…' : 'Add ISIN' }}</button>
+      </form>
+      <div v-if="instruments.length === 0" class="empty">No instruments yet.</div>
+      <div v-else class="schedule-list">
+        <div v-for="inst in instruments" :key="inst.isin" class="instrument-item" :class="{ unresolved: inst.status === 'unresolved' }">
+          <div class="instrument-info">
+            <div>
+              <strong>{{ inst.isin }}</strong>
+              <span class="status" :class="inst.status">{{ inst.status }}</span>
+            </div>
+            <div>{{ inst.name || '—' }}</div>
+            <div>Ticker: <strong>{{ inst.yahoo_ticker || 'none' }}</strong>
+              <span v-if="inst.currency"> ({{ inst.currency }})</span>
+              · {{ inst.transactions }} transaction(s), {{ inst.schedules }} schedule(s)
+            </div>
+            <div v-if="inst.resolution_note" class="note">{{ inst.resolution_note }}</div>
+          </div>
+          <div class="instrument-actions">
+            <button v-if="inst.status !== 'override'" type="button" :disabled="busy === inst.isin" @click="reResolve(inst)">Re-resolve</button>
+            <form class="inline-form" @submit.prevent="setTicker(inst)">
+              <input v-model="tickerInputs[inst.isin]" placeholder="Ticker, e.g. EUNL.DE">
+              <button type="submit" :disabled="busy === inst.isin">Set ticker</button>
+            </form>
+            <form class="inline-form" @submit.prevent="linkTicker(inst)">
+              <input v-model="linkInputs[inst.isin]" placeholder="Existing ticker to link">
+              <button type="submit" :disabled="busy === inst.isin">Link</button>
+            </form>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -274,6 +414,99 @@ onMounted(fetchSchedules)
 .inactive {
   color: #999;
   font-style: italic;
+}
+
+.instruments-section {
+  margin-bottom: 40px;
+}
+
+.hint {
+  margin: 0 0 10px;
+  font-size: 0.85em;
+  color: #636e72;
+}
+
+.inline-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.inline-form input {
+  flex: 1 1 160px;
+  min-width: 0;
+  padding: 6px 8px;
+  border: 1px solid #ddd;
+  border-radius: 5px;
+}
+
+.inline-form button, .instrument-actions > button {
+  padding: 6px 12px;
+  border: none;
+  border-radius: 5px;
+  background: #0984e3;
+  color: white;
+  cursor: pointer;
+}
+
+.inline-form button:disabled, .instrument-actions > button:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.instrument-item {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: space-between;
+  padding: 10px;
+  border: 1px solid #eee;
+  border-radius: 5px;
+}
+
+.instrument-item.unresolved {
+  border-color: #fdcb6e;
+  background: #fffbea;
+}
+
+.instrument-info {
+  flex: 1 1 280px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.instrument-actions {
+  flex: 1 1 280px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.instrument-actions > button {
+  align-self: flex-start;
+}
+
+.instrument-actions .inline-form {
+  margin-bottom: 0;
+}
+
+.status {
+  margin-left: 8px;
+  padding: 1px 8px;
+  border-radius: 10px;
+  font-size: 0.8em;
+  background: #dfe6e9;
+}
+
+.status.resolved { background: #55efc4; }
+.status.override { background: #74b9ff; }
+.status.unresolved { background: #fdcb6e; }
+
+.note {
+  font-size: 0.85em;
+  color: #636e72;
+  font-weight: normal;
 }
 
 .empty {
