@@ -7,8 +7,9 @@ from sqlalchemy.orm import Session
 from typing import List, Optional
 from app.core.investments import get_portfolio_summary
 from app.database.database import get_db
+from app.core.instruments import normalize_isin
 from app.models.shares_models import (EmployeeShare, EtfTransaction,
-                                      EtfPurchaseSchedule)
+                                      EtfPurchaseSchedule, Instrument)
 import logging
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
@@ -275,17 +276,36 @@ def create_schedule(
         ticker: str,
         amount: float,
         day: int,
+        isin: Optional[str] = None,
         db: Session = Depends(get_db)
 ):
+    """With isin, the instrument must be resolved and the schedule
+    takes its ticker (ticker is then ignored)."""
     if not (1 <= day <= 28):
         raise HTTPException(
             status_code=400,
             detail="Day must be between 1 and 28")
 
+    if isin:
+        try:
+            isin = normalize_isin(isin)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        instrument = db.get(Instrument, isin)
+        if instrument is None or not instrument.yahoo_ticker:
+            raise HTTPException(
+                status_code=400,
+                detail=f"ISIN {isin} has no ticker yet; add or resolve "
+                       "it under Instruments first")
+        ticker = instrument.yahoo_ticker
+    else:
+        isin = None
+
     schedule = EtfPurchaseSchedule(
         ticker_symbol=ticker.upper(),
         fiat_amount=amount,
-        execution_day=day
+        execution_day=day,
+        isin=isin
     )
     db.add(schedule)
     db.commit()
