@@ -1,5 +1,5 @@
 from sqlalchemy import (Column, Integer, String, DateTime, Numeric,
-                        Boolean, func, Date)
+                        Boolean, func, Date, Text, ForeignKey, false)
 from app.database.database import Base
 
 
@@ -30,6 +30,12 @@ class EtfTransaction(Base):
         12, 6), nullable=False)  # Positive for buy, negative for sell
     fees = Column(Numeric(10, 2), default=0.0)
 
+    # ISIN this row belongs to (see Instrument); NULL for rows that
+    # were never linked. ticker_symbol is kept in sync with the
+    # instrument's yahoo_ticker.
+    isin = Column(String(12), ForeignKey("instruments.isin"),
+                  nullable=True, index=True)
+
     # Track how the entry was created: "manual", "import" (CSV) or
     # "scheduled". Scheduled rows are estimates (Yahoo close price, no
     # fees), not the broker's real fill; see run_monthly_etf_purchases.
@@ -49,4 +55,26 @@ class EtfPurchaseSchedule(Base):
 
     last_executed_date = Column(Date, nullable=True)
 
+    isin = Column(String(12), ForeignKey("instruments.isin"),
+                  nullable=True, index=True)
+
+    created_at = Column(DateTime, server_default=func.now())
+
+
+class Instrument(Base):
+    """A fund or stock, keyed by ISIN, with the Yahoo ticker used to
+    price it (see app/core/instruments.py)."""
+    __tablename__ = "instruments"
+
+    isin = Column(String(12), primary_key=True)
+    # NULL means unresolved: no EUR listing found or checked yet.
+    yahoo_ticker = Column(String, nullable=True)
+    name = Column(String, nullable=True)
+    # Currency Yahoo reports for yahoo_ticker; always EUR when set.
+    currency = Column(String(3), nullable=True)
+    resolved_at = Column(DateTime, nullable=True)
+    # Set by hand in the admin panel; automatic lookups never change it.
+    manual_override = Column(Boolean, nullable=False, default=False,
+                             server_default=false())
+    resolution_note = Column(Text, nullable=True)
     created_at = Column(DateTime, server_default=func.now())
