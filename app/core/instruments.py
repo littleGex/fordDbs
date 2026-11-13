@@ -12,16 +12,26 @@ The three network lookups are plain functions passed in by keyword so
 tests can use fakes; left out, the module-level functions are looked up
 at call time (so they can also be patched).
 """
+import json
 import logging
+import math
+import urllib.request
 from dataclasses import dataclass, field
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 from typing import Callable, List, Optional, Tuple
+
+import yfinance as yf
 
 logger = logging.getLogger(__name__)
 
 PRICE_TOLERANCE = Decimal("0.05")
 LOOKUP_FAILED = "lookup failed, retry later"
+HTTP_TIMEOUT = 10
+OPENFIGI_URL = "https://api.openfigi.com/v3/mapping"
+# OpenFIGI exchange code for the German composite; its tickers are the
+# Xetra ones, which Yahoo lists with a ".DE" suffix.
+FIGI_GERMANY = "GR"
 
 Reference = Tuple[date, Decimal]
 
@@ -73,20 +83,51 @@ def normalize_isin(value: str) -> str:
     return isin
 
 
-# --- Network lookups (filled in with the real services) ---------------
+# --- Network lookups ---------------------------------------------------
 
 def figi_tickers(isin: str) -> List[str]:
-    raise NotImplementedError
+    """Xetra tickers (as Yahoo ".DE" symbols) OpenFIGI has for isin."""
+    body = json.dumps([{"idType": "ID_ISIN", "idValue": isin}]).encode()
+    request = urllib.request.Request(
+        OPENFIGI_URL, data=body,
+        headers={"Content-Type": "application/json"})
+    with urllib.request.urlopen(request, timeout=HTTP_TIMEOUT) as resp:
+        (result,) = json.load(resp)
+    tickers = [d["ticker"] + ".DE" for d in result.get("data", [])
+               if d.get("exchCode") == FIGI_GERMANY and d.get("ticker")]
+    return list(dict.fromkeys(tickers))
 
 
 def yahoo_search(isin: str) -> List[Tuple[str, Optional[str]]]:
-    raise NotImplementedError
+    """(symbol, short name) for each listing Yahoo search finds."""
+    quotes = yf.Search(isin, max_results=10, news_count=0,
+                       timeout=HTTP_TIMEOUT).quotes
+    return [(q["symbol"], q.get("shortname")) for q in quotes
+            if q.get("symbol")]
 
 
 def yahoo_quote(ticker: str,
                 on: Optional[date]) -> Tuple[Optional[str],
                                              Optional[Decimal]]:
-    raise NotImplementedError
+    """(currency, close) for ticker: the last close on or before `on`,
+    or the latest close when on is None. close is None when Yahoo has
+    no usable price; LookupError when Yahoo does not know the ticker."""
+    t = yf.Ticker(ticker)
+    try:
+        currency = t.fast_info["currency"]
+    except KeyError:
+        raise LookupError(f"Yahoo has no data for {ticker}")
+    if on is None:
+        history = t.history(period="5d", timeout=HTTP_TIMEOUT)
+    else:
+        history = t.history(start=on - timedelta(days=5),
+                            end=on + timedelta(days=1),
+                            timeout=HTTP_TIMEOUT)
+    closes = [c for c in history.get("Close", [])
+              if c is not None and math.isfinite(c)]
+    if not closes:
+        return currency, None
+    return currency, Decimal(str(round(float(closes[-1]), 4)))
 
 
 # --- Resolver ---------------------------------------------------------
