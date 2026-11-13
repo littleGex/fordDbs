@@ -4,7 +4,7 @@ from fastapi import (APIRouter, Depends,
                      HTTPException)
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
-from typing import List, Optional
+from typing import Optional
 from app.core.investments import get_portfolio_summary
 from app.database.database import get_db
 from app.core.instruments import normalize_isin
@@ -266,16 +266,16 @@ def bulk_add_etf_transactions(data: dict, db: Session = Depends(get_db)):
 
 # --- ETF SCHEDULE CRUD ---
 
-@shares_router.get("/etf/schedules", response_model=List[dict])
+@shares_router.get("/etf/schedules")
 def get_schedules(db: Session = Depends(get_db)):
     return db.query(EtfPurchaseSchedule).all()
 
 
 @shares_router.post("/etf/schedule")
 def create_schedule(
-        ticker: str,
         amount: float,
         day: int,
+        ticker: Optional[str] = None,
         isin: Optional[str] = None,
         db: Session = Depends(get_db)
 ):
@@ -298,11 +298,14 @@ def create_schedule(
                 detail=f"ISIN {isin} has no ticker yet; add or resolve "
                        "it under Instruments first")
         ticker = instrument.yahoo_ticker
+    elif not (ticker or "").strip():
+        raise HTTPException(status_code=400,
+                            detail="Give a ticker or an ISIN")
     else:
         isin = None
 
     schedule = EtfPurchaseSchedule(
-        ticker_symbol=ticker.upper(),
+        ticker_symbol=ticker.strip().upper(),
         fiat_amount=amount,
         execution_day=day,
         isin=isin
