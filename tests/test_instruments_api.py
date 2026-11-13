@@ -239,3 +239,34 @@ class TestScheduleWithIsin:
         (schedule,) = db_session.query(EtfPurchaseSchedule).all()
         assert schedule.ticker_symbol == "VTI"
         assert schedule.isin is None
+
+    def test_schedule_with_isin_needs_no_ticker(self, parent_client,
+                                                lookups, db_session):
+        parent_client.post(BASE, json={"isin": ISIN})
+        resp = parent_client.post(self.URL, params={
+            "amount": 10, "day": 5, "isin": ISIN})
+        assert resp.status_code == 200, resp.text
+        (schedule,) = db_session.query(EtfPurchaseSchedule).all()
+        assert schedule.ticker_symbol == "EUNL.DE"
+
+    def test_schedule_needs_ticker_or_isin(self, parent_client,
+                                           db_session):
+        resp = parent_client.post(self.URL, params={"amount": 10, "day": 5})
+        assert resp.status_code == 400
+        assert db_session.query(EtfPurchaseSchedule).count() == 0
+
+    def test_list_schedules_returns_them(self, parent_client, db_session):
+        # Regression: response_model=List[dict] could not serialise ORM
+        # rows, so any existing schedule made this a 500.
+        db_session.add(EtfPurchaseSchedule(
+            ticker_symbol="EUNL.DE", isin=None, fiat_amount=Decimal("50"),
+            execution_day=15, is_active=True))
+        db_session.flush()
+
+        resp = parent_client.get("/v1/investments/etf/schedules")
+
+        assert resp.status_code == 200, resp.text
+        (row,) = resp.json()
+        assert row["ticker_symbol"] == "EUNL.DE"
+        assert row["execution_day"] == 15
+        assert row["isin"] is None
