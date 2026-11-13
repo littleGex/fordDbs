@@ -174,6 +174,22 @@ class TestInstrumentsApi:
         assert linked_txn.ticker_symbol == "EUNK.DE"
         assert resp.json()["schedules"] == 1
 
+    def test_zero_cost_linked_transaction_does_not_500(
+            self, parent_client, lookups, linked_txn, db_session):
+        # Review fix: reference price 0 used to raise DivisionByZero.
+        db_session.add(EtfTransaction(
+            ticker_symbol="OLD", isin=ISIN, fiat_invested=Decimal("0"),
+            shares_acquired=Decimal("1"),
+            transaction_date=datetime(2026, 3, 1, 10, 0)))
+        db_session.flush()
+        lookups.quotes["EUNK.DE"] = ("EUR", Decimal("98.13"))
+
+        assert parent_client.post(
+            f"{BASE}/{ISIN}/resolve").status_code == 200
+        resp = parent_client.put(f"{BASE}/{ISIN}/ticker",
+                                 json={"yahoo_ticker": "EUNK.DE"})
+        assert resp.status_code == 200, resp.text
+
     def test_link_returns_counts(self, parent_client, lookups, db_session):
         parent_client.post(BASE, json={"isin": ISIN})
         db_session.add(EtfTransaction(ticker_symbol="IWDA",

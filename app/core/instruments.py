@@ -330,13 +330,18 @@ def link_ticker(db: Session, instrument: Instrument,
 
 
 def reference_for(db: Session, isin: str) -> Optional[Reference]:
-    """(date, EUR price per share) of the latest linked transaction
-    with shares, to check a ticker against."""
+    """(date, EUR price per share) of the latest real fill linked to
+    isin, to check a ticker against. Scheduled rows are skipped (they
+    are estimates at the old ticker's price), as are zero-cost rows and
+    rows without a date."""
     txn = db.query(EtfTransaction).filter(
         EtfTransaction.isin == isin,
         EtfTransaction.shares_acquired != 0,
+        EtfTransaction.fiat_invested != 0,
+        EtfTransaction.transaction_date.isnot(None),
+        EtfTransaction.entry_type.is_distinct_from("scheduled"),
     ).order_by(EtfTransaction.transaction_date.desc()).first()
-    if txn is None or txn.transaction_date is None:
+    if txn is None:
         return None
     price = (abs(Decimal(txn.fiat_invested))
              / abs(Decimal(txn.shares_acquired))).quantize(
