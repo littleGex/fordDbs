@@ -80,7 +80,8 @@ tests use plain fake functions instead of patching internals:
 
 - `figi_tickers(isin) -> list[str]`: OpenFIGI `v3/mapping`, `idType=ID_ISIN`,
   tickers on exchange code `GR`, each with `.DE` appended. No API key.
-- `yahoo_search(isin) -> list[str]`: yfinance `Search(isin)` quote symbols.
+- `yahoo_search(isin) -> list[tuple[str, str | None]]`: yfinance `Search(isin)`
+  quote symbols with their short names (the name source).
 - `yahoo_quote(ticker, on: date | None) -> (currency, close)`: currency from
   Yahoo's metadata; close is the last close on or before `on` (within a few
   days), or the latest close when `on` is None. Raises or returns no close
@@ -196,9 +197,12 @@ New "Instruments" section:
 
 ## Rollout
 
-The release contains a migration: on the Pi run
-`alembic -c /code/alembic.ini upgrade head` in the API container after
-rebuilding. Existing data is untouched. Afterwards, add ISINs and link the
+The release contains a migration. The app's startup `create_all` creates
+`instruments` but not the new `isin` columns, so the migration skips creating
+`instruments` if it exists, and on the Pi it runs before the API restarts:
+build, then `docker compose run --rm api alembic -c /code/alembic.ini upgrade
+head`, then `docker compose up -d api investments-ui`. Existing data is
+untouched. Afterwards, add ISINs and link the
 existing tickers in the admin panel.
 
 ## Out of scope
