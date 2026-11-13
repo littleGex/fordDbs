@@ -7,7 +7,7 @@ Only public ISINs are used here; the repo is public.
 """
 import io
 import json
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 from unittest.mock import MagicMock, PropertyMock, patch
 
@@ -15,8 +15,12 @@ import pandas as pd
 import pytest
 
 from app.core import instruments
-from app.core.instruments import normalize_isin, resolve_isin
-from app.models.shares_models import EtfTransaction, Instrument
+from app.core.instruments import (Resolution, apply_resolution,
+                                  get_or_resolve, link_ticker,
+                                  normalize_isin, re_resolve, reference_for,
+                                  resolve_isin, set_instrument_ticker)
+from app.models.shares_models import (EtfPurchaseSchedule, EtfTransaction,
+                                      Instrument)
 
 
 class TestInstrumentModel:
@@ -287,3 +291,216 @@ class TestRealLookups:
 def test_live_resolves_public_isin():
     """Opt-in: hits OpenFIGI and Yahoo. Run with --run-live-api."""
     assert resolve_isin("IE00B4L5Y983").ticker == "EUNL.DE"
+
+
+# ---------------------------------------------------------------------
+# Service layer (database).
+# ---------------------------------------------------------------------
+
+ISIN = "IE00B4L5Y983"
+OTHER_ISIN = "IE00BK5BQT80"
+
+
+class FakeResolver:
+    def __init__(self, ticker="EUNL.DE", name="iShares Core MSCI World"):
+        self.ticker = ticker
+        self.name = name
+        self.calls = []
+
+    def __call__(self, isin, reference=None):
+        self.calls.append((isin, reference))
+        return Resolution(isin=isin, ticker=self.ticker,
+                          currency="EUR" if self.ticker else None,
+                          name=self.name, candidates=[],
+                          note="picked" if self.ticker else "unresolved")
+
+
+@pytest.fixture
+def add_txn(db_session):
+    def _add(ticker, isin=None, fiat="100.00", shares="1",
+             when=datetime(2026, 2, 16, 10, 0)):
+        txn = EtfTransaction(ticker_symbol=ticker, isin=isin,
+                             fiat_invested=Decimal(fiat),
+                             shares_acquired=Decimal(shares),
+                             transaction_date=when)
+        db_session.add(txn)
+        db_session.flush()
+        return txn
+    return _add
+
+
+@pytest.fixture
+def add_schedule(db_session):
+    def _add(ticker, isin=None):
+        schedule = EtfPurchaseSchedule(ticker_symbol=ticker, isin=isin,
+                                       fiat_amount=Decimal("50"),
+                                       execution_day=15)
+        db_session.add(schedule)
+        db_session.flush()
+        return schedule
+    return _add
+
+
+@pytest.fixture
+def instrument(db_session):
+    def _make(isin=ISIN, ticker=None, manual=False, name=None):
+        inst = Instrument(isin=isin, yahoo_ticker=ticker,
+                          currency="EUR" if ticker else None,
+                          manual_override=manual, name=name)
+        db_session.add(inst)
+        db_session.flush()
+        return inst
+    return _make
+
+
+class TestServiceLayer:
+
+    def test_set_ticker_updates_linked_transactions_and_schedules(
+            self, db_session, instrument, add_txn, add_schedule):
+        inst = instrument()
+        linked_txn = add_txn("OLD", isin=ISIN)
+        linked_schedule = add_schedule("OLD", isin=ISIN)
+        unlinked = add_txn("OLD")
+
+        set_instrument_ticker(db_session, inst, "EUNL.DE", "EUR",
+                              manual=True)
+        db_session.flush()
+        db_session.expire_all()
+
+        assert linked_txn.ticker_symbol == "EUNL.DE"
+        assert linked_schedule.ticker_symbol == "EUNL.DE"
+        assert unlinked.ticker_symbol == "OLD"
+        assert inst.manual_override is True
+        assert inst.resolved_at is not None
+
+    def test_get_or_resolve_creates_then_caches(self, db_session):
+        resolver = FakeResolver()
+        first = get_or_resolve(db_session, " ie00b4l5y983", resolver=resolver)
+        second = get_or_resolve(db_session, ISIN, resolver=resolver)
+
+        assert first is second
+        assert first.yahoo_ticker == "EUNL.DE"
+        assert first.name == "iShares Core MSCI World"
+        assert len(resolver.calls) == 1
+        assert db_session.query(Instrument).count() == 1
+
+    def test_get_or_resolve_passes_reference(self, db_session):
+        resolver = FakeResolver()
+        ref = (date(2026, 2, 16), Decimal("98.27"))
+        get_or_resolve(db_session, ISIN, reference=ref, resolver=resolver)
+        assert resolver.calls == [(ISIN, ref)]
+
+    def test_get_or_resolve_unresolved_is_not_retried(self, db_session):
+        resolver = FakeResolver(ticker=None)
+        inst = get_or_resolve(db_session, ISIN, resolver=resolver)
+        get_or_resolve(db_session, ISIN, resolver=resolver)
+
+        assert inst.yahoo_ticker is None
+        assert inst.resolution_note == "unresolved"
+        assert len(resolver.calls) == 1
+
+    def test_get_or_resolve_rejects_invalid_isin(self, db_session):
+        with pytest.raises(ValueError):
+            get_or_resolve(db_session, "IE00B4L5Y984",
+                           resolver=FakeResolver())
+
+    def test_re_resolve_refuses_override(self, db_session, instrument):
+        inst = instrument(ticker="EUNL.DE", manual=True)
+        with pytest.raises(PermissionError):
+            re_resolve(db_session, inst, resolver=FakeResolver())
+
+    def test_re_resolve_updates_ticker(self, db_session, instrument,
+                                       add_txn):
+        inst = instrument()
+        txn = add_txn("OLD", isin=ISIN)
+        re_resolve(db_session, inst, resolver=FakeResolver("EUNL.DE"))
+        db_session.flush()
+        db_session.expire_all()
+        assert inst.yahoo_ticker == "EUNL.DE"
+        assert txn.ticker_symbol == "EUNL.DE"
+        assert inst.manual_override is False
+
+    def test_apply_resolution_keeps_given_name(self, db_session,
+                                               instrument):
+        inst = instrument(name="My fund")
+        apply_resolution(db_session, inst,
+                         FakeResolver(name="Other")(ISIN))
+        assert inst.name == "My fund"
+
+    def test_link_sets_isin_and_syncs_ticker(
+            self, db_session, instrument, add_txn, add_schedule):
+        instrument(ticker="EUNL.DE")
+        t1, t2 = add_txn("IWDA"), add_txn("IWDA")
+        schedule = add_schedule("IWDA")
+
+        counts = link_ticker(db_session, db_session.get(Instrument, ISIN),
+                             " iwda ")
+        db_session.flush()
+        db_session.expire_all()
+
+        assert counts == {"transactions": 2, "schedules": 1,
+                          "conflicts": 0}
+        for row in (t1, t2, schedule):
+            assert row.isin == ISIN
+            assert row.ticker_symbol == "EUNL.DE"
+
+    def test_link_unresolved_keeps_ticker(self, db_session, instrument,
+                                          add_txn):
+        inst = instrument()
+        txn = add_txn("IWDA")
+        link_ticker(db_session, inst, "IWDA")
+        db_session.flush()
+        db_session.expire_all()
+        assert txn.isin == ISIN
+        assert txn.ticker_symbol == "IWDA"
+
+    def test_link_counts_conflicts(self, db_session, instrument, add_txn):
+        inst = instrument()
+        instrument(isin=OTHER_ISIN)
+        other = add_txn("IWDA", isin=OTHER_ISIN)
+        add_txn("IWDA")
+
+        counts = link_ticker(db_session, inst, "IWDA")
+        db_session.flush()
+        db_session.expire_all()
+
+        assert counts == {"transactions": 1, "schedules": 0,
+                          "conflicts": 1}
+        assert other.isin == OTHER_ISIN
+
+    def test_link_twice_returns_zero_counts(self, db_session, instrument,
+                                            add_txn):
+        inst = instrument()
+        add_txn("IWDA")
+        link_ticker(db_session, inst, "IWDA")
+        db_session.flush()
+        assert link_ticker(db_session, inst, "IWDA") == {
+            "transactions": 0, "schedules": 0, "conflicts": 0}
+
+    def test_link_twice_after_ticker_sync_returns_zero_counts(
+            self, db_session, instrument, add_txn):
+        # Linking renames IWDA rows to EUNL.DE; linking IWDA again
+        # finds no rows under that name any more but must not fail.
+        inst = instrument(ticker="EUNL.DE")
+        add_txn("IWDA")
+        link_ticker(db_session, inst, "IWDA")
+        db_session.flush()
+        assert link_ticker(db_session, inst, "IWDA") == {
+            "transactions": 0, "schedules": 0, "conflicts": 0}
+
+    def test_link_unknown_ticker_raises(self, db_session, instrument):
+        with pytest.raises(LookupError):
+            link_ticker(db_session, instrument(), "NOPE")
+
+    def test_reference_for_latest_fill(self, db_session, instrument,
+                                       add_txn):
+        instrument()
+        assert reference_for(db_session, ISIN) is None
+        add_txn("X", isin=ISIN, fiat="100.00", shares="1",
+                when=datetime(2026, 1, 16, 10, 0))
+        add_txn("X", isin=ISIN, fiat="-98.27", shares="-1",
+                when=datetime(2026, 2, 16, 10, 0))
+        add_txn("X", isin=ISIN, fiat="0", shares="0",
+                when=datetime(2026, 3, 1, 10, 0))
+        assert reference_for(db_session, ISIN) == (
+            date(2026, 2, 16), Decimal("98.27"))

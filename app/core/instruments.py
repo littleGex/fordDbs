@@ -17,11 +17,15 @@ import logging
 import math
 import urllib.request
 from dataclasses import dataclass, field
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 from typing import Callable, List, Optional, Tuple
 
 import yfinance as yf
+from sqlalchemy.orm import Session
+
+from app.models.shares_models import (EtfPurchaseSchedule, EtfTransaction,
+                                      Instrument)
 
 logger = logging.getLogger(__name__)
 
@@ -232,3 +236,109 @@ def resolve_isin(isin: str, reference: Optional[Reference] = None, *,
     result.ticker = pick.ticker
     result.currency = pick.currency
     return result
+
+
+# --- Service layer (database). Callers commit. -------------------------
+
+LINKED_MODELS = (EtfTransaction, EtfPurchaseSchedule)
+
+
+def set_instrument_ticker(db: Session, instrument: Instrument, ticker: str,
+                          currency: str, *, manual: bool) -> None:
+    """The one place an instrument's ticker changes: also rewrites
+    ticker_symbol on every transaction and schedule linked to it."""
+    ticker = ticker.strip().upper()
+    instrument.yahoo_ticker = ticker
+    instrument.currency = currency
+    instrument.manual_override = manual
+    instrument.resolved_at = datetime.now()
+    for model in LINKED_MODELS:
+        db.query(model).filter(model.isin == instrument.isin).update(
+            {model.ticker_symbol: ticker}, synchronize_session="fetch")
+
+
+def apply_resolution(db: Session, instrument: Instrument,
+                     resolution: Resolution) -> None:
+    """Store a resolver result; an unresolved result keeps any ticker
+    the instrument already had."""
+    if not instrument.name and resolution.name:
+        instrument.name = resolution.name
+    instrument.resolution_note = resolution.note
+    if resolution.ticker:
+        set_instrument_ticker(db, instrument, resolution.ticker,
+                              resolution.currency, manual=False)
+
+
+def get_or_resolve(db: Session, isin: str, name: Optional[str] = None,
+                   reference: Optional[Reference] = None, *,
+                   resolver: Callable = resolve_isin) -> Instrument:
+    """The stored instrument for isin, resolved or not, without a
+    lookup; otherwise create it and run the resolver once."""
+    isin = normalize_isin(isin)
+    instrument = db.get(Instrument, isin)
+    if instrument is not None:
+        return instrument
+    instrument = Instrument(isin=isin, name=(name or "").strip() or None,
+                            manual_override=False)
+    db.add(instrument)
+    db.flush()
+    apply_resolution(db, instrument, resolver(isin, reference))
+    return instrument
+
+
+def re_resolve(db: Session, instrument: Instrument, *,
+               resolver: Callable = resolve_isin) -> Instrument:
+    """Run the lookup again; never for a manual override."""
+    if instrument.manual_override:
+        raise PermissionError(
+            f"{instrument.isin} was set by hand; set the ticker instead")
+    apply_resolution(db, instrument,
+                     resolver(instrument.isin,
+                              reference_for(db, instrument.isin)))
+    return instrument
+
+
+def link_ticker(db: Session, instrument: Instrument,
+                ticker_symbol: str) -> dict:
+    """Attach existing rows with ticker_symbol (and no ISIN yet) to the
+    instrument, renaming them to its ticker if it is resolved. Rows
+    already linked to another ISIN are left alone and counted."""
+    ticker_symbol = ticker_symbol.strip().upper()
+    counts = {"transactions": 0, "schedules": 0, "conflicts": 0}
+    found = already_linked = False
+    for model, key in ((EtfTransaction, "transactions"),
+                       (EtfPurchaseSchedule, "schedules")):
+        rows = db.query(model).filter(
+            model.ticker_symbol == ticker_symbol).all()
+        found = found or bool(rows)
+        already_linked = already_linked or db.query(model).filter(
+            model.isin == instrument.isin).first() is not None
+        for row in rows:
+            if row.isin is None:
+                row.isin = instrument.isin
+                if instrument.yahoo_ticker:
+                    row.ticker_symbol = instrument.yahoo_ticker
+                counts[key] += 1
+            elif row.isin != instrument.isin:
+                counts["conflicts"] += 1
+    # A repeated link finds nothing under the old name (the rows were
+    # renamed), which is fine; a ticker nothing ever had is an error.
+    if not found and not already_linked:
+        raise LookupError(f"no transactions or schedules with ticker "
+                          f"{ticker_symbol}")
+    return counts
+
+
+def reference_for(db: Session, isin: str) -> Optional[Reference]:
+    """(date, EUR price per share) of the latest linked transaction
+    with shares, to check a ticker against."""
+    txn = db.query(EtfTransaction).filter(
+        EtfTransaction.isin == isin,
+        EtfTransaction.shares_acquired != 0,
+    ).order_by(EtfTransaction.transaction_date.desc()).first()
+    if txn is None or txn.transaction_date is None:
+        return None
+    price = (abs(Decimal(txn.fiat_invested))
+             / abs(Decimal(txn.shares_acquired))).quantize(
+                 Decimal("0.0001"))
+    return txn.transaction_date.date(), price
