@@ -5,11 +5,16 @@ the ticker resolver and the service layer in app/core/instruments.py.
 
 Only public ISINs are used here; the repo is public.
 """
+import io
+import json
 from datetime import date
 from decimal import Decimal
+from unittest.mock import MagicMock, PropertyMock, patch
 
+import pandas as pd
 import pytest
 
+from app.core import instruments
 from app.core.instruments import normalize_isin, resolve_isin
 from app.models.shares_models import EtfTransaction, Instrument
 
@@ -188,3 +193,97 @@ class TestResolveIsin:
                         quotes={"EUNL.DE": (EUR, Decimal("131.63"))})
         assert f.resolve("IE00B4L5Y983").name == "iShares Core MSCI World"
         assert FakeLookups().resolve("IE00B4L5Y983").name is None
+
+
+# ---------------------------------------------------------------------
+# Real lookups, with the HTTP and yfinance layers patched.
+# ---------------------------------------------------------------------
+
+class _FakeResponse(io.BytesIO):
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+
+def _figi_response(payload):
+    return _FakeResponse(json.dumps(payload).encode())
+
+
+class _FakeTicker:
+    def __init__(self, currency, closes):
+        self.fast_info = {"currency": currency}
+        self._closes = closes
+
+    def history(self, **kwargs):
+        index = pd.date_range("2026-02-12", periods=len(self._closes))
+        return pd.DataFrame({"Close": self._closes}, index=index)
+
+
+class TestRealLookups:
+
+    def test_figi_tickers_keeps_german_composite_only(self):
+        payload = [{"data": [
+            {"ticker": "EUNL", "exchCode": "GR"},
+            {"ticker": "EUNL", "exchCode": "GY"},
+            {"ticker": "IWDA", "exchCode": "LN"},
+            {"ticker": "EUNL", "exchCode": "GR"},
+        ]}]
+        with patch("app.core.instruments.urllib.request.urlopen",
+                   return_value=_figi_response(payload)) as urlopen:
+            assert instruments.figi_tickers("IE00B4L5Y983") == ["EUNL.DE"]
+        request = urlopen.call_args.args[0]
+        assert json.loads(request.data) == [
+            {"idType": "ID_ISIN", "idValue": "IE00B4L5Y983"}]
+        assert urlopen.call_args.kwargs["timeout"] == 10
+
+    def test_figi_tickers_no_match_returns_empty(self):
+        payload = [{"warning": "No identifier found."}]
+        with patch("app.core.instruments.urllib.request.urlopen",
+                   return_value=_figi_response(payload)):
+            assert instruments.figi_tickers("IE00B4L5Y983") == []
+
+    def test_yahoo_search_returns_symbols_and_names(self):
+        search = MagicMock()
+        search.return_value.quotes = [
+            {"symbol": "IWDA.L", "shortname": "iShares MSCI World"},
+            {"symbol": "EUNL.DE"},
+        ]
+        with patch("app.core.instruments.yf.Search", search):
+            assert instruments.yahoo_search("IE00B4L5Y983") == [
+                ("IWDA.L", "iShares MSCI World"), ("EUNL.DE", None)]
+
+    def test_yahoo_quote_skips_nan_close(self):
+        with patch("app.core.instruments.yf.Ticker",
+                   return_value=_FakeTicker("EUR", [131.5, float("nan")])):
+            assert instruments.yahoo_quote(
+                "EUNL.DE", date(2026, 2, 13)) == ("EUR", Decimal("131.5"))
+        with patch("app.core.instruments.yf.Ticker",
+                   return_value=_FakeTicker("EUR", [float("nan")] * 2)):
+            assert instruments.yahoo_quote("EUNL.DE", None) == ("EUR", None)
+
+    def test_yahoo_quote_unknown_ticker_is_lookup_error(self):
+        ticker = MagicMock()
+        type(ticker).fast_info = PropertyMock(side_effect=KeyError("x"))
+        with patch("app.core.instruments.yf.Ticker", return_value=ticker):
+            with pytest.raises(LookupError):
+                instruments.yahoo_quote("XMWO.DE", None)
+
+    def test_resolve_isin_uses_real_lookups_by_default(self):
+        with patch("app.core.instruments.figi_tickers",
+                   return_value=["EUNL.DE"]) as figi, \
+                patch("app.core.instruments.yahoo_search",
+                      return_value=[]) as search, \
+                patch("app.core.instruments.yahoo_quote",
+                      return_value=("EUR", Decimal("131.63"))) as quote:
+            assert resolve_isin("IE00B4L5Y983").ticker == "EUNL.DE"
+        figi.assert_called_once_with("IE00B4L5Y983")
+        search.assert_called_once_with("IE00B4L5Y983")
+        quote.assert_called_once_with("EUNL.DE", None)
+
+
+@pytest.mark.live_api
+def test_live_resolves_public_isin():
+    """Opt-in: hits OpenFIGI and Yahoo. Run with --run-live-api."""
+    assert resolve_isin("IE00B4L5Y983").ticker == "EUNL.DE"
