@@ -182,7 +182,10 @@ def run_monthly_etf_purchases(db: Session = None, now: datetime = None):
                     fiat_invested=schedule.fiat_amount,
                     shares_acquired=shares_acquired,
                     entry_type="scheduled",
-                    transaction_date=now
+                    transaction_date=now,
+                    # Linked like its schedule, so a later ticker change
+                    # for the ISIN renames this row too.
+                    isin=schedule.isin
                 )
                 db.add(new_txn)
                 schedule.last_executed_date = due_date

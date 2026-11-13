@@ -400,3 +400,20 @@ class TestRunMonthlyEtfPurchases:
         assert len(errors) == 1
         assert "VTI" in errors[0].getMessage()
         assert "2026-11-10" in errors[0].getMessage()
+
+    def test_scheduled_buy_carries_schedule_isin(self, db_session,
+                                                 make_schedule, prices):
+        # Review fix: buys from an ISIN-linked schedule must be linked
+        # too, or a later ticker change leaves them under the old one.
+        from app.models.shares_models import Instrument
+        db_session.add(Instrument(isin="IE00B4L5Y983",
+                                  yahoo_ticker="VTI", currency="EUR"))
+        db_session.flush()
+        schedule = make_schedule(day=15)
+        schedule.isin = "IE00B4L5Y983"
+        db_session.flush()
+
+        _run(db_session, 2026, 11, 15, 9, 0)
+
+        (buy,) = _scheduled_buys(db_session)
+        assert buy.isin == "IE00B4L5Y983"

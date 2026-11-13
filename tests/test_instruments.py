@@ -492,6 +492,36 @@ class TestServiceLayer:
         with pytest.raises(LookupError):
             link_ticker(db_session, instrument(), "NOPE")
 
+    def test_reference_for_skips_zero_cost_and_scheduled_rows(
+            self, db_session, instrument, add_txn):
+        # Review fix: a zero-cost row (gifted share) gave price 0 and a
+        # DivisionByZero 500; scheduled rows are estimates at the old
+        # ticker's price, not real fills.
+        instrument()
+        add_txn("X", isin=ISIN, fiat="98.27", shares="1",
+                when=datetime(2026, 2, 16, 10, 0))
+        add_txn("X", isin=ISIN, fiat="0", shares="1",
+                when=datetime(2026, 3, 1, 10, 0))
+        scheduled = add_txn("X", isin=ISIN, fiat="145.00", shares="1",
+                            when=datetime(2026, 3, 15, 9, 0))
+        scheduled.entry_type = "scheduled"
+        db_session.flush()
+
+        assert reference_for(db_session, ISIN) == (
+            date(2026, 2, 16), Decimal("98.27"))
+
+    def test_reference_for_ignores_rows_without_date(
+            self, db_session, instrument, add_txn):
+        instrument()
+        add_txn("X", isin=ISIN, fiat="98.27", shares="1",
+                when=datetime(2026, 2, 16, 10, 0))
+        undated = add_txn("X", isin=ISIN, fiat="50", shares="1")
+        undated.transaction_date = None
+        db_session.flush()
+
+        assert reference_for(db_session, ISIN) == (
+            date(2026, 2, 16), Decimal("98.27"))
+
     def test_reference_for_latest_fill(self, db_session, instrument,
                                        add_txn):
         instrument()
