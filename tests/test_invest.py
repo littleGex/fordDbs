@@ -367,8 +367,9 @@ class TestSummaryInvested:
     def test_missing_fees_count_as_zero(self, db_session):
         db_session.add(EtfTransaction(ticker_symbol="EUNL.DE",
                                       fiat_invested=Decimal("100.00"),
-                                      fees=None,
                                       shares_acquired=Decimal("1")))
         db_session.flush()
+        # The ORM fills the column default for None, so write a real NULL
+        db_session.query(EtfTransaction).update({EtfTransaction.fees: None})
         assert self._summary_etf(db_session, "EUNL.DE")[
             "total_invested"] == 100.0
