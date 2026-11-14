@@ -1,12 +1,17 @@
 """Backup steps (#31): NAS check, databases, photos, volume, secrets."""
+import io
+import json
 import os
-from datetime import datetime, timedelta, timezone
+import tarfile
+from datetime import date, datetime, timedelta, timezone
 
 import pytest
 
 from backup_fakes import FakeRunner
 from ops.backup.common import Config
-from ops.backup.steps import check_target, copy_databases, mc_env
+from ops.backup.steps import (apply_retention, check_target, copy_databases,
+                              list_bucket, mc_env, mirror_photos,
+                              pack_secrets, volume_copy)
 
 pytestmark = pytest.mark.unit
 
@@ -134,3 +139,184 @@ class TestCopyDatabases:
         r = copy_databases(cfg, FakeRunner({"rsync": 23}), NOW)
 
         assert not r.ok and "rsync" in r.detail
+
+
+TODAY = date(2026, 11, 14)
+
+
+def listing(objects):
+    lines = [json.dumps({"status": "success", "type": "file", "key": k,
+                         "size": len(v)}) for k, v in objects.items()]
+    lines.append(json.dumps({"status": "success", "type": "folder",
+                             "key": "profiles/", "size": 0}))
+    return ("\n".join(lines) + "\n").encode()
+
+
+def put_files(cfg, objects):
+    for key, body in objects.items():
+        path = cfg.backup_root / "photos" / "files" / key
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(body)
+
+
+OBJECTS = {"a.jpg": b"abc", "profiles/3_ab.jpg": b"xy"}
+
+
+class TestPhotos:
+
+    def test_list_bucket_skips_folders(self, cfg):
+        assert list_bucket(cfg, FakeRunner({"mc ls": listing(OBJECTS)})) \
+            == {"a.jpg": 3, "profiles/3_ab.jpg": 2}
+
+    def test_mirror_verifies_nested_keys(self, cfg):  # Review Focus 3
+        put_files(cfg, OBJECTS)
+
+        r = mirror_photos(cfg, FakeRunner({"mc ls": listing(OBJECTS)}))
+
+        assert r.ok, r.detail
+        assert r.data == {"objects": 2, "bytes": 5}
+
+    def test_mirror_reports_missing_and_wrong_size(self, cfg):
+        put_files(cfg, {"a.jpg": b"abcd"})
+
+        r = mirror_photos(cfg, FakeRunner({"mc ls": listing(OBJECTS)}))
+
+        assert not r.ok
+        assert "2 of 2" in r.detail and "profiles/3_ab.jpg" in r.detail
+
+    def test_mirror_never_removes_or_overwrites(self, cfg):
+        put_files(cfg, OBJECTS)
+        fake = FakeRunner({"mc ls": listing(OBJECTS)})
+
+        mirror_photos(cfg, fake)
+
+        cmd, kwargs = fake.calls[0]
+        assert cmd == ["mc", "mirror", "--json", "backup/family-photos",
+                       str(cfg.backup_root / "photos" / "files")]
+        assert kwargs["env"]["MC_HOST_backup"].startswith("http://reader:")
+
+    def test_mirror_failure_fails_the_step(self, cfg):
+        r = mirror_photos(cfg, FakeRunner({"mc mirror": 1,
+                                           "mc ls": listing({})}))
+
+        assert not r.ok and "mc mirror" in r.detail
+
+
+def volume_tar(keys):
+    buffer = io.BytesIO()
+    with tarfile.open(fileobj=buffer, mode="w:gz") as tar:
+        for key in keys:
+            info = tarfile.TarInfo(f"family-photos/{key}/xl.meta")
+            info.size = 1
+            tar.addfile(info, io.BytesIO(b"m"))
+    return buffer.getvalue()
+
+
+class TestVolumeCopy:
+
+    def test_skipped_when_month_exists(self, cfg):
+        folder = cfg.backup_root / "photos" / "volume"
+        folder.mkdir(parents=True)
+        (folder / "2026-11.tar.gz").write_bytes(b"x")
+        fake = FakeRunner()
+
+        r = volume_copy(cfg, fake, TODAY, objects=2)
+
+        assert r.ok and r.detail == "exists" and fake.calls == []
+
+    def test_writes_verified_archive(self, cfg):
+        fake = FakeRunner({"docker run": volume_tar(OBJECTS)})
+
+        r = volume_copy(cfg, fake, TODAY, objects=2)
+
+        assert r.ok, r.detail
+        assert r.data == {"volume": "2026-11.tar.gz"}
+        assert (cfg.backup_root / "photos" / "volume" /
+                "2026-11.tar.gz").stat().st_size > 0
+        assert fake.calls[0][0] == [
+            "docker", "run", "--rm", "--entrypoint", "tar", "-v",
+            "forddbs_minio_data:/data:ro", "forddbs-api", "-C", "/data",
+            "-czf", "-", "family-photos"]
+
+    def test_count_mismatch_leaves_no_file(self, cfg):
+        fake = FakeRunner({"docker run": volume_tar(OBJECTS)})
+
+        r = volume_copy(cfg, fake, TODAY, objects=3)
+
+        assert not r.ok and "2" in r.detail and "3" in r.detail
+        assert list((cfg.backup_root / "photos" / "volume").iterdir()) == []
+
+    def test_without_photo_count_it_fails(self, cfg):
+        r = volume_copy(cfg, FakeRunner(), TODAY, objects=None)
+
+        assert not r.ok
+
+
+def fake_age(seen):
+    def run(cmd, kwargs):
+        seen.append(kwargs["stdin"])
+        out = cmd[cmd.index("-o") + 1]
+        with open(out, "wb") as f:
+            f.write(b"age-encryption.org/v1\n...")
+        return b""
+    return run
+
+
+class TestSecrets:
+
+    def test_skip_bak_folders_and_encrypt(self, cfg):
+        for folder in ("fordDbs", "chore-tracker", "trading-bot.bak-1"):
+            (cfg.docker_root / folder).mkdir(parents=True)
+            (cfg.docker_root / folder / ".env").write_text("K=v\n")
+        (cfg.docker_root / "no-env").mkdir()
+        seen = []
+        fake = FakeRunner({"age": fake_age(seen)})
+
+        r = pack_secrets(cfg, fake, TODAY)
+
+        assert r.ok, r.detail
+        assert r.data == {"secrets": "2026-11-14.tar.age", "files": 2}
+        with tarfile.open(fileobj=io.BytesIO(seen[0]), mode="r:gz") as tar:
+            assert sorted(tar.getnames()) == ["chore-tracker/.env",
+                                              "fordDbs/.env"]
+        cmd = fake.calls[0][0]
+        assert cmd[:3] == ["age", "-r", "age1abc"]
+        assert (cfg.backup_root / "secrets" / "2026-11-14.tar.age").exists()
+
+    def test_fail_without_env_files(self, cfg):
+        cfg.docker_root.mkdir()
+
+        r = pack_secrets(cfg, FakeRunner(), TODAY)
+
+        assert not r.ok and "no .env" in r.detail
+
+    def test_age_failure_leaves_no_file(self, cfg):
+        (cfg.docker_root / "fordDbs").mkdir(parents=True)
+        (cfg.docker_root / "fordDbs" / ".env").write_text("K=v\n")
+
+        r = pack_secrets(cfg, FakeRunner({"age": 1}), TODAY)
+
+        assert not r.ok
+        assert list((cfg.backup_root / "secrets").iterdir()) == []
+
+
+def test_retention_deletes_only_old(cfg):
+    volumes = cfg.backup_root / "photos" / "volume"
+    secrets = cfg.backup_root / "secrets"
+    volumes.mkdir(parents=True)
+    secrets.mkdir(parents=True)
+    for m in range(3, 11):
+        (volumes / f"2026-{m:02d}.tar.gz").write_bytes(b"v")
+    for n in range(40):
+        day = TODAY - timedelta(days=n)
+        (secrets / f"{day.isoformat()}.tar.age").write_bytes(b"s")
+    (secrets / "README").write_text("keep")
+
+    r = apply_retention(cfg, TODAY)
+
+    assert r.ok
+    assert sorted(p.name for p in volumes.iterdir())[0] == "2026-05.tar.gz"
+    assert (secrets / "README").exists()
+    assert (secrets / "2026-10-31.tar.age").exists()
+    assert not (secrets / "2026-10-07.tar.age").exists()
+    assert r.data["deleted"] == 2 + 10
