@@ -4,7 +4,10 @@ Daily close cache for the portfolio history chart (#52).
 ensure_price_history() fetches unadjusted daily closes from Yahoo for the
 days each ticker is missing, in one batched download, and records how
 far each ticker has been fetched so days without a close (weekends,
-holidays) aren't asked for again. Only finished days are cached.
+holidays) aren't asked for again. A ticker only counts as fetched up to
+the last close Yahoo actually returned (plus a trailing weekend), so an
+empty answer is retried and reported as out of date. Only finished days
+are cached.
 """
 import logging
 import math
@@ -95,12 +98,35 @@ def _rows_for(series: Optional[pd.Series], ticker: str, start: date,
     return rows
 
 
-def _store(db: Session, rows: List[dict], tickers: Iterable[str],
-           through: date) -> None:
+def _has_weekday(first: date, last: date) -> bool:
+    day = first
+    while day <= last:
+        if day.weekday() < 5:
+            return True
+        day += timedelta(days=1)
+    return False
+
+
+def _fetched_through(start: date, through: date,
+                     last_close: Optional[date]) -> Optional[date]:
+    """How far a download really got for one ticker. yfinance often
+    returns empty data instead of raising, so only days up to the last
+    close returned count as fetched, plus trailing weekend days (which
+    never have one). None: nothing new was fetched."""
+    if last_close is None:
+        return through if not _has_weekday(start, through) else None
+    if not _has_weekday(last_close + timedelta(days=1), through):
+        return through
+    return last_close
+
+
+def _store(db: Session, rows: List[dict],
+           progress: Dict[str, date]) -> None:
     if rows:
         db.execute(insert(PriceHistory).values(rows)
                    .on_conflict_do_nothing())
-    states = [{"ticker": t, "fetched_through": through} for t in tickers]
+    states = [{"ticker": t, "fetched_through": d}
+              for t, d in progress.items()]
     if states:
         stmt = insert(PriceFetchState).values(states)
         db.execute(stmt.on_conflict_do_update(
@@ -133,11 +159,19 @@ def ensure_price_history(db: Session, tickers: Optional[Iterable[str]] = None,
         logger.exception("Price history download failed for %s", wanted)
         return {t: states.get(t) for t in wanted}
     single = len(wanted) == 1
-    rows = [row for t in wanted
-            for row in _rows_for(_close_series(frame, t, single), t,
-                                 starts[t], through)]
-    _store(db, rows, wanted, through)
-    return {}
+    rows, progress = [], {}
+    for ticker in wanted:
+        found = _rows_for(_close_series(frame, ticker, single), ticker,
+                          starts[ticker], through)
+        rows += found
+        reached = _fetched_through(
+            starts[ticker], through,
+            max((r["day"] for r in found), default=None))
+        if reached:
+            progress[ticker] = reached
+    _store(db, rows, progress)
+    return {t: progress.get(t, states.get(t)) for t in wanted
+            if progress.get(t) != through}
 
 
 def cached_closes(db: Session, tickers: Iterable[str]
