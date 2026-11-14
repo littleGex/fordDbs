@@ -4,17 +4,35 @@ Trade Republic transaction export import (#45).
 parse_tr_export() turns the CSV from the Trade Republic app (Profile ->
 Transaction export) into buys and sells; it is pure (no database, no
 network). Holdings only: cash movements are counted and ignored.
+
+import_tr_export() stores the new ones, linked to their ISIN's
+instrument, skipping rows already imported (external_id). Trade Republic
+is the source of truth for its savings plans: scheduled rows are never
+touched.
 """
 import csv
 import io
+import logging
+import time
 from dataclasses import dataclass, field
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
-from typing import Dict, List, Optional
+from typing import Callable, Dict, List, Optional
 
+from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.orm import Session
+
+from app.core import instruments
 from app.core.instruments import normalize_isin
+from app.models.shares_models import EtfTransaction, Instrument
+
+logger = logging.getLogger(__name__)
 
 LIQUIDATION_PREFIX = "liquidation:"
+RESOLVE_BUDGET_SECONDS = 60
+NOT_LOOKED_UP = "not looked up yet, press Re-resolve"
+SHARES_PLACES = Decimal("0.000001")
+CENTS = Decimal("0.01")
 IGNORED_CASH = "cash"
 IGNORED_LIQUIDATION_CANCELLED = "liquidation cancelled"
 
@@ -186,3 +204,129 @@ def parse_tr_export(csv_text: str) -> ParseResult:
             result.ignored[IGNORED_LIQUIDATION_CANCELLED] = (
                 result.ignored.get(IGNORED_LIQUIDATION_CANCELLED, 0) + 1)
     return result
+
+
+# --- Import (database) ------------------------------------------------
+
+
+@dataclass
+class ImportResult:
+    imported: int  # would be imported, for a dry run
+    skipped_duplicates: int
+    ignored: Dict[str, int]
+    unknown: List[dict]
+    unresolved: List[str]  # ISINs of new rows without a ticker
+    warnings: List[str]
+    dry_run: bool
+
+
+class ImportSaveError(Exception):
+    """The database rejected the rows; nothing was imported."""
+
+
+def _not_looked_up(isin, reference=None):
+    return instruments.Resolution(isin=isin, ticker=None, currency=None,
+                                  name=None, candidates=[],
+                                  note=NOT_LOOKED_UP)
+
+
+def _liquidation_warning(stored: EtfTransaction,
+                         txn: ParsedTxn) -> Optional[str]:
+    shares = txn.shares.quantize(SHARES_PLACES)
+    fiat = txn.fiat.quantize(CENTS)
+    if stored.shares_acquired == shares and stored.fiat_invested == fiat:
+        return None
+    return (f"{txn.isin}: liquidation in this export ({shares} shares, "
+            f"{fiat} EUR) differs from the one already imported "
+            f"({stored.shares_acquired} shares, {stored.fiat_invested} "
+            "EUR); kept the stored one")
+
+
+def _split_new(db: Session, parsed: List[ParsedTxn]):
+    """(new rows, duplicate count, warnings)."""
+    ids = [t.external_id for t in parsed]
+    stored = {t.external_id: t for t in db.query(EtfTransaction).filter(
+        EtfTransaction.external_id.in_(ids))} if ids else {}
+    new, warnings = [], []
+    for txn in parsed:
+        if txn.external_id not in stored:
+            new.append(txn)
+        elif txn.external_id.startswith(LIQUIDATION_PREFIX):
+            warning = _liquidation_warning(stored[txn.external_id], txn)
+            if warning:
+                warnings.append(warning)
+    return new, len(parsed) - len(new), warnings
+
+
+def _references(new: List[ParsedTxn]) -> dict:
+    """ISIN -> (trade date, price) of its latest buy in the export."""
+    refs = {}
+    for txn in new:
+        if txn.transaction_type != "buy" or txn.price is None:
+            continue
+        if txn.isin not in refs or txn.trade_date >= refs[txn.isin][0]:
+            refs[txn.isin] = (txn.trade_date, txn.price)
+    return refs
+
+
+def _resolve_all(db: Session, new: List[ParsedTxn], resolver: Callable,
+                 clock: Callable[[], float]) -> Dict[str, Instrument]:
+    """The instrument of every ISIN, created and looked up if new.
+    After RESOLVE_BUDGET_SECONDS the rest are created unresolved, so a
+    big first import can't outlast the proxy's timeout."""
+    names = {}
+    for txn in new:
+        names.setdefault(txn.isin, txn.name)
+    refs = _references(new)
+    start = clock()
+    found = {}
+    for isin, name in names.items():
+        within_budget = clock() - start < RESOLVE_BUDGET_SECONDS
+        found[isin] = instruments.get_or_resolve(
+            db, isin, name, refs.get(isin),
+            resolver=resolver if within_budget else _not_looked_up)
+    return found
+
+
+def _row(txn: ParsedTxn, instrument: Instrument) -> EtfTransaction:
+    return EtfTransaction(
+        ticker_symbol=instrument.yahoo_ticker or txn.isin,
+        isin=txn.isin, external_id=txn.external_id, entry_type="import",
+        transaction_type=txn.transaction_type,
+        transaction_date=datetime.combine(txn.trade_date,
+                                          datetime.min.time()),
+        shares_acquired=txn.shares, fiat_invested=txn.fiat, fees=txn.fees)
+
+
+def import_tr_export(db: Session, csv_text: str, *, dry_run: bool = False,
+                     resolver: Optional[Callable] = None,
+                     clock: Callable[[], float] = time.monotonic
+                     ) -> ImportResult:
+    """Import a Trade Republic export in one transaction (a savepoint,
+    so a dry run rolls back only its own work). Raises ValueError for
+    a file that can't be parsed, ImportSaveError if the database
+    rejects the rows."""
+    parsed = parse_tr_export(csv_text)
+    resolver = resolver or instruments.resolve_isin
+    savepoint = db.begin_nested()
+    try:
+        new, duplicates, warnings = _split_new(db, parsed.transactions)
+        found = _resolve_all(db, new, resolver, clock)
+        db.add_all([_row(txn, found[txn.isin]) for txn in new])
+        db.flush()
+        unresolved = sorted({txn.isin for txn in new
+                             if not found[txn.isin].yahoo_ticker})
+    except SQLAlchemyError:
+        savepoint.rollback()
+        logger.exception("Trade Republic import failed while saving")
+        raise ImportSaveError(
+            "Could not save the import; nothing was imported")
+    if dry_run:
+        savepoint.rollback()
+    else:
+        savepoint.commit()
+        db.commit()
+    return ImportResult(imported=len(new), skipped_duplicates=duplicates,
+                        ignored=parsed.ignored, unknown=parsed.unknown,
+                        unresolved=unresolved, warnings=warnings,
+                        dry_run=dry_run)
