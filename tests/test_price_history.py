@@ -9,9 +9,11 @@ from decimal import Decimal
 
 import pandas as pd
 import pytest
+from sqlalchemy import event
 from sqlalchemy.exc import IntegrityError
 
-from app.core.price_history import cached_closes, ensure_price_history
+from app.core.price_history import (_store, cached_closes,
+                                    ensure_price_history)
 from app.models.shares_models import (EtfTransaction, PriceFetchState,
                                       PriceHistory)
 
@@ -367,3 +369,47 @@ class TestEnsurePriceHistory:
         assert cached_closes(db_session, ["EUNL.DE"]) == {"EUNL.DE": [
             (date(2026, 3, 2), Decimal("100.000000")),
             (date(2026, 3, 3), Decimal("101.000000"))]}
+
+
+class TestConcurrentRefresh:
+    """#57: the 06:00 job and a dashboard load can refresh at once; the
+    one that saves last must not move the fetch state backwards."""
+
+    def test_older_result_never_moves_fetch_state_back(self, db_session):
+        set_state(db_session, "EUNL.DE", through=date(2026, 3, 9),
+                  since=date(2026, 3, 2))
+
+        _store(db_session, [], {"EUNL.DE": (date(2026, 3, 4),
+                                            date(2026, 3, 6))})
+        db_session.expire_all()
+
+        assert state(db_session, "EUNL.DE") == date(2026, 3, 9)
+        assert state_from(db_session, "EUNL.DE") == date(2026, 3, 2)
+
+    def test_newer_result_still_widens_fetch_state(self, db_session):
+        set_state(db_session, "EUNL.DE", through=date(2026, 3, 6),
+                  since=date(2026, 3, 4))
+
+        _store(db_session, [], {"EUNL.DE": (date(2026, 3, 2),
+                                            date(2026, 3, 9))})
+        db_session.expire_all()
+
+        assert state(db_session, "EUNL.DE") == date(2026, 3, 9)
+        assert state_from(db_session, "EUNL.DE") == date(2026, 3, 2)
+
+
+def test_cached_closes_loads_no_orm_objects(db_session):
+    db_session.add_all([PriceHistory(ticker="EUNL.DE", day=date(2026, 3, d),
+                                     close=Decimal("100")) for d in (2, 3)])
+    db_session.flush()
+    db_session.expunge_all()
+    loaded = []
+    listener = lambda target, context: loaded.append(target)  # noqa: E731
+    event.listen(PriceHistory, "load", listener)
+    try:
+        closes = cached_closes(db_session, ["EUNL.DE"])
+    finally:
+        event.remove(PriceHistory, "load", listener)
+
+    assert len(closes["EUNL.DE"]) == 2
+    assert loaded == []

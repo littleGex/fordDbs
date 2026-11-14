@@ -176,10 +176,16 @@ def _store(db: Session, rows: List[dict],
               for t, (since, done) in progress.items()]
     if states:
         stmt = insert(PriceFetchState).values(states)
+        # Two refreshes can run at once (06:00 job, dashboard load); the
+        # one saving last must not move the state backwards (#57).
         db.execute(stmt.on_conflict_do_update(
             index_elements=[PriceFetchState.ticker],
-            set_={"fetched_from": stmt.excluded.fetched_from,
-                  "fetched_through": stmt.excluded.fetched_through}))
+            set_={"fetched_from": func.least(
+                      PriceFetchState.fetched_from,
+                      stmt.excluded.fetched_from),
+                  "fetched_through": func.greatest(
+                      PriceFetchState.fetched_through,
+                      stmt.excluded.fetched_through)}))
     db.flush()
 
 
@@ -234,8 +240,10 @@ def cached_closes(db: Session, tickers: Iterable[str]
                   ) -> Dict[str, List[Tuple[date, Decimal]]]:
     """Cached closes per ticker, oldest first."""
     result: Dict[str, List[Tuple[date, Decimal]]] = {}
-    for row in db.query(PriceHistory).filter(
-            PriceHistory.ticker.in_(list(tickers))).order_by(
+    # Plain columns, not ORM objects: years of closes add up on the Pi.
+    for ticker, day, close in db.query(
+            PriceHistory.ticker, PriceHistory.day, PriceHistory.close
+            ).filter(PriceHistory.ticker.in_(list(tickers))).order_by(
             PriceHistory.ticker, PriceHistory.day):
-        result.setdefault(row.ticker, []).append((row.day, row.close))
+        result.setdefault(ticker, []).append((day, close))
     return result
