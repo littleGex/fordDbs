@@ -35,7 +35,7 @@ Set `VITE_API_BASE` to the backend API URL (default: http://localhost:8005/v1)
 ### Adding Employee Shares
 
 #### Individual Share Entry
-1. Navigate to Admin Panel (`/admin`) - requires password `1682`
+1. Navigate to Admin Panel (`/admin`) - requires a parent login (the same account as the other family apps)
 2. Use the "Add Employee Share" form:
    - **Ticker Symbol**: Stock ticker (e.g., AAPL, GOOGL)
    - **Number of Shares**: Quantity (supports decimals)
