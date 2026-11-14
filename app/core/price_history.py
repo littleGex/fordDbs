@@ -11,6 +11,7 @@ are cached.
 """
 import logging
 import math
+from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 from typing import Callable, Dict, Iterable, List, Optional, Tuple
@@ -45,30 +46,52 @@ def _is_isin(ticker: str) -> bool:
         return False
 
 
-def _first_trade_dates(db: Session,
-                       tickers: Optional[Iterable[str]]) -> Dict[str, date]:
+@dataclass
+class _Need:
+    """What one ticker needs: priced from its first trade through `end`
+    (yesterday, or the day it was sold out), minus what is cached."""
+    first: date
+    end: date
+    since: Optional[date] = None  # fetched_from
+    done: Optional[date] = None  # fetched_through
+
+    def ranges(self) -> List[Tuple[date, date]]:
+        if self.first > self.end:
+            return []
+        if self.done is None:
+            return [(self.first, self.end)]
+        out = []
+        if self.first < self.since:  # earlier trades added since
+            out.append((self.first,
+                        min(self.since - timedelta(days=1), self.end)))
+        if self.done < self.end:
+            out.append((self.done + timedelta(days=1), self.end))
+        return out
+
+
+def _needs(db: Session, tickers: Optional[Iterable[str]],
+           through: date) -> Dict[str, _Need]:
+    """Per ticker with trades: first trade through yesterday, or only
+    through its last trade if it is no longer held (sold or liquidated
+    funds aren't fetched, or reported as out of date, forever)."""
     query = db.query(EtfTransaction.ticker_symbol,
-                     func.min(EtfTransaction.transaction_date)
+                     func.min(EtfTransaction.transaction_date),
+                     func.max(EtfTransaction.transaction_date),
+                     func.sum(EtfTransaction.shares_acquired)
                      ).group_by(EtfTransaction.ticker_symbol)
     if tickers is not None:
         query = query.filter(EtfTransaction.ticker_symbol.in_(list(tickers)))
-    return {ticker: first.date() for ticker, first in query
-            if first is not None and not _is_isin(ticker)}
-
-
-def _missing_starts(db: Session, firsts: Dict[str, date],
-                    through: date) -> Tuple[Dict[str, date], dict]:
-    """(ticker -> first day to fetch, ticker -> fetched_through)."""
-    states = {s.ticker: s.fetched_through for s in
-              db.query(PriceFetchState).filter(
-                  PriceFetchState.ticker.in_(list(firsts)))}
-    starts = {}
-    for ticker, first in firsts.items():
-        done = states.get(ticker)
-        start = done + timedelta(days=1) if done else first
-        if start <= through:
-            starts[ticker] = start
-    return starts, states
+    needs = {}
+    for ticker, first, last, held in query:
+        if first is None or _is_isin(ticker):
+            continue
+        end = through if held else min(through, last.date())
+        needs[ticker] = _Need(first=first.date(), end=end)
+    for row in db.query(PriceFetchState).filter(
+            PriceFetchState.ticker.in_(list(needs))):
+        needs[row.ticker].since = row.fetched_from
+        needs[row.ticker].done = row.fetched_through
+    return needs
 
 
 def _close_series(frame: pd.DataFrame, ticker: str,
@@ -120,58 +143,91 @@ def _fetched_through(start: date, through: date,
     return last_close
 
 
+def _progress(need: _Need, found: List[dict]) -> Optional[Tuple[date, date]]:
+    """The ticker's new (fetched_from, fetched_through) after a
+    download, or None if nothing counts as fetched yet."""
+    days = [r["day"] for r in found]
+
+    def last_in(lo, hi):
+        return max((d for d in days if lo <= d <= hi), default=None)
+
+    if need.done is None:
+        reached = _fetched_through(need.first, need.end,
+                                   last_in(need.first, need.end))
+        return (need.first, reached) if reached else None
+    since, done = need.since, need.done
+    if need.first < need.since:
+        lo, hi = need.first, need.since - timedelta(days=1)
+        if last_in(lo, hi) or not _has_weekday(lo, hi):
+            since = need.first
+    if need.done < need.end:
+        lo = need.done + timedelta(days=1)
+        done = _fetched_through(lo, need.end,
+                                last_in(lo, need.end)) or need.done
+    return since, done
+
+
 def _store(db: Session, rows: List[dict],
-           progress: Dict[str, date]) -> None:
+           progress: Dict[str, Tuple[date, date]]) -> None:
     if rows:
         db.execute(insert(PriceHistory).values(rows)
                    .on_conflict_do_nothing())
-    states = [{"ticker": t, "fetched_through": d}
-              for t, d in progress.items()]
+    states = [{"ticker": t, "fetched_from": since, "fetched_through": done}
+              for t, (since, done) in progress.items()]
     if states:
         stmt = insert(PriceFetchState).values(states)
         db.execute(stmt.on_conflict_do_update(
             index_elements=[PriceFetchState.ticker],
-            set_={"fetched_through": stmt.excluded.fetched_through}))
+            set_={"fetched_from": stmt.excluded.fetched_from,
+                  "fetched_through": stmt.excluded.fetched_through}))
     db.flush()
+
+
+def _is_stale(need: _Need, state: Optional[Tuple[date, date]]) -> bool:
+    return (state is None or state[0] > need.first
+            or state[1] < need.end)
 
 
 def ensure_price_history(db: Session, tickers: Optional[Iterable[str]] = None,
                          *, through: Optional[date] = None,
                          download: Optional[Callable] = None
                          ) -> Dict[str, Optional[date]]:
-    """Fetch the missing daily closes (through yesterday by default).
+    """Fetch the missing daily closes (through yesterday by default):
+    earlier trades added since the last fetch, and new days, but only
+    while a ticker is held.
 
-    Returns the tickers still not fetched through `through` (Yahoo
-    failed), mapped to how far they were fetched. Does not commit."""
+    Returns the tickers whose needed days still aren't all fetched
+    (Yahoo failed or returned nothing), mapped to their fetched_through.
+    Does not commit."""
     through = through or berlin_today() - timedelta(days=1)
     download = download or yf.download
-    starts, states = _missing_starts(db, _first_trade_dates(db, tickers),
-                                     through)
-    if not starts:
+    needs = {t: n for t, n in _needs(db, tickers, through).items()
+             if n.ranges()}
+    if not needs:
         return {}
-    wanted = sorted(starts)
+    wanted = sorted(needs)
+    spans = [r for t in wanted for r in needs[t].ranges()]
     try:
-        frame = download(wanted, start=min(starts.values()),
-                         end=through + timedelta(days=1), interval="1d",
-                         auto_adjust=False, progress=False,
+        frame = download(wanted, start=min(lo for lo, _ in spans),
+                         end=max(hi for _, hi in spans) + timedelta(days=1),
+                         interval="1d", auto_adjust=False, progress=False,
                          timeout=DOWNLOAD_TIMEOUT)
     except Exception:
         logger.exception("Price history download failed for %s", wanted)
-        return {t: states.get(t) for t in wanted}
+        return {t: needs[t].done for t in wanted}
     single = len(wanted) == 1
     rows, progress = [], {}
     for ticker in wanted:
-        found = _rows_for(_close_series(frame, ticker, single), ticker,
-                          starts[ticker], through)
+        series = _close_series(frame, ticker, single)
+        found = [row for lo, hi in needs[ticker].ranges()
+                 for row in _rows_for(series, ticker, lo, hi)]
         rows += found
-        reached = _fetched_through(
-            starts[ticker], through,
-            max((r["day"] for r in found), default=None))
-        if reached:
-            progress[ticker] = reached
+        state = _progress(needs[ticker], found)
+        if state:
+            progress[ticker] = state
     _store(db, rows, progress)
-    return {t: progress.get(t, states.get(t)) for t in wanted
-            if progress.get(t) != through}
+    return {t: (progress[t][1] if t in progress else needs[t].done)
+            for t in wanted if _is_stale(needs[t], progress.get(t))}
 
 
 def cached_closes(db: Session, tickers: Iterable[str]

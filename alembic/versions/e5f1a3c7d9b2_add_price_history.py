@@ -33,6 +33,7 @@ def upgrade():
         op.create_table(
             'price_fetch_state',
             sa.Column('ticker', sa.String(), primary_key=True),
+            sa.Column('fetched_from', sa.Date(), nullable=False),
             sa.Column('fetched_through', sa.Date(), nullable=False),
         )
 
