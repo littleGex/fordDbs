@@ -10,6 +10,7 @@ from app.database.database import SessionLocal
 from app.models.user_models import Child, Transaction
 from app.models.shares_models import EtfPurchaseSchedule, EtfTransaction
 from app.core.investments import fetch_live_prices
+from app.core.price_history import ensure_price_history
 
 
 logger = logging.getLogger(__name__)
@@ -218,6 +219,25 @@ def run_monthly_etf_purchases(db: Session = None, now: datetime = None):
             db.close()
 
 
+def run_price_history_refresh(db: Session = None):
+    """Fetch yesterday's closes for the portfolio history chart (#52),
+    so the dashboard rarely waits on Yahoo."""
+    own_session = db is None
+    db = db or SessionLocal()
+    try:
+        stale = ensure_price_history(db)
+        db.commit()
+        if stale:
+            logger.warning("Price history not up to date for %s",
+                           sorted(stale))
+    except Exception:
+        db.rollback()
+        logger.exception("Price history refresh failed")
+    finally:
+        if own_session:
+            db.close()
+
+
 def start_scheduler():
     """Initializes and starts the background scheduler."""
     scheduler = BackgroundScheduler(timezone=BERLIN_TZ)
@@ -233,6 +253,12 @@ def start_scheduler():
     scheduler.add_job(run_monthly_etf_purchases,
                       'cron',
                       hour=9,
+                      minute=0,
+                      misfire_grace_time=86400)
+    # Daily 06:00: cache yesterday's closes for the portfolio history
+    scheduler.add_job(run_price_history_refresh,
+                      'cron',
+                      hour=6,
                       minute=0,
                       misfire_grace_time=86400)
     scheduler.start()

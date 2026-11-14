@@ -417,3 +417,25 @@ class TestRunMonthlyEtfPurchases:
 
         (buy,) = _scheduled_buys(db_session)
         assert buy.isin == "IE00B4L5Y983"
+
+
+class TestPriceHistoryRefresh:
+
+    def test_price_refresh_job_registered_at_six(self):
+        from app.core import scheduler as sched
+        with patch("app.core.scheduler.BackgroundScheduler") as cls:
+            sched.start_scheduler()
+        calls = [c for c in cls.return_value.add_job.call_args_list
+                 if c.args[0] is sched.run_price_history_refresh]
+        assert len(calls) == 1
+        args, kwargs = calls[0].args, calls[0].kwargs
+        assert args[1] == "cron"
+        assert (kwargs["hour"], kwargs["minute"]) == (6, 0)
+        assert kwargs["misfire_grace_time"] == 86400
+
+    def test_price_refresh_runs_ensure(self, db_session):
+        from app.core import scheduler as sched
+        with patch("app.core.scheduler.ensure_price_history",
+                   return_value={}) as ensure:
+            sched.run_price_history_refresh(db=db_session)
+        ensure.assert_called_once_with(db_session)
