@@ -18,7 +18,8 @@ from app.core import instruments
 from app.core.instruments import (Resolution, apply_resolution,
                                   get_or_resolve, link_ticker,
                                   normalize_isin, re_resolve, reference_for,
-                                  resolve_isin, set_instrument_ticker)
+                                  resolve_isin, set_instrument_ticker,
+                                  unlink_instrument)
 from app.models.shares_models import (EtfPurchaseSchedule, EtfTransaction,
                                       Instrument)
 
@@ -491,6 +492,46 @@ class TestServiceLayer:
     def test_link_unknown_ticker_raises(self, db_session, instrument):
         with pytest.raises(LookupError):
             link_ticker(db_session, instrument(), "NOPE")
+
+    def test_unlink_clears_only_this_instruments_rows(
+            self, db_session, instrument, add_txn, add_schedule):
+        inst = instrument(ticker="EUNL.DE")
+        instrument(isin=OTHER_ISIN, ticker="VWCE.DE")
+        txn = add_txn("EUNL.DE", isin=ISIN)
+        schedule = add_schedule("EUNL.DE", isin=ISIN)
+        other = add_txn("VWCE.DE", isin=OTHER_ISIN)
+
+        counts = unlink_instrument(db_session, inst)
+        db_session.flush()
+        db_session.expire_all()
+
+        assert counts == {"transactions": 1, "schedules": 1}
+        assert txn.isin is None and schedule.isin is None
+        assert txn.ticker_symbol == "EUNL.DE"
+        assert other.isin == OTHER_ISIN
+
+    def test_unlink_then_relink_corrects_a_wrong_link(
+            self, db_session, instrument, add_txn):
+        wrong = instrument(ticker="EUNL.DE")
+        right = instrument(isin=OTHER_ISIN, ticker="VWCE.DE")
+        txn = add_txn("VWRA")
+        link_ticker(db_session, wrong, "VWRA")
+        db_session.flush()
+
+        unlink_instrument(db_session, wrong)
+        db_session.flush()
+        counts = link_ticker(db_session, right, "EUNL.DE")
+        db_session.flush()
+        db_session.expire_all()
+
+        assert counts["transactions"] == 1
+        assert txn.isin == OTHER_ISIN
+        assert txn.ticker_symbol == "VWCE.DE"
+
+    def test_unlink_with_no_rows_returns_zero(self, db_session,
+                                              instrument):
+        assert unlink_instrument(db_session, instrument()) == {
+            "transactions": 0, "schedules": 0}
 
     def test_reference_for_skips_zero_cost_and_scheduled_rows(
             self, db_session, instrument, add_txn):

@@ -160,3 +160,13 @@ def link_instrument(isin: str, body: LinkRequest,
         raise HTTPException(status_code=404, detail=str(e))
     db.commit()
     return counts
+
+
+@instruments_router.post("/instruments/{isin}/unlink")
+def unlink_instrument(isin: str, db: Session = Depends(get_db)):
+    """Detach all linked transactions and schedules (to correct a wrong
+    link); their tickers stay as they are."""
+    instrument = _get_instrument(db, isin)
+    counts = svc.unlink_instrument(db, instrument)
+    db.commit()
+    return counts

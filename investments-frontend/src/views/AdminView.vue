@@ -140,6 +140,19 @@ const setTicker = (inst) => withBusy(inst.isin, async () => {
   await Promise.all([fetchInstruments(), fetchSchedules()])
 })
 
+const unlinkInstrument = (inst) => withBusy(inst.isin, async () => {
+  const ok = confirm(`Unlink ${inst.transactions} transaction(s) and ${inst.schedules} schedule(s) from ${inst.isin}?\n\n` +
+    `They keep the ticker ${inst.yahoo_ticker || '(unchanged)'}. To correct a wrong link, then link that ticker to the right ISIN.`)
+  if (!ok) return
+  try {
+    const { data } = await api.post(`/investments/instruments/${inst.isin}/unlink`)
+    alert(`Unlinked ${data.transactions} transaction(s) and ${data.schedules} schedule(s).`)
+    await Promise.all([fetchInstruments(), fetchSchedules()])
+  } catch (e) {
+    alert('Error unlinking: ' + errorText(e))
+  }
+})
+
 const linkTicker = (inst) => withBusy(inst.isin, async () => {
   const ticker_symbol = (linkInputs.value[inst.isin] || '').trim()
   if (!ticker_symbol) return
@@ -302,6 +315,7 @@ onMounted(() => {
               <input v-model="tickerInputs[inst.isin]" placeholder="Ticker, e.g. EUNL.DE">
               <button type="submit" :disabled="busy === inst.isin">Set ticker</button>
             </form>
+            <button v-if="inst.transactions || inst.schedules" type="button" class="btn-unlink" :disabled="busy === inst.isin" @click="unlinkInstrument(inst)">Unlink all</button>
             <form class="inline-form" @submit.prevent="linkTicker(inst)">
               <input v-model="linkInputs[inst.isin]" placeholder="Existing ticker to link">
               <button type="submit" :disabled="busy === inst.isin">Link</button>
@@ -485,6 +499,10 @@ onMounted(() => {
 
 .instrument-actions > button {
   align-self: flex-start;
+}
+
+.instrument-actions > .btn-unlink {
+  background: #ff4757;
 }
 
 .instrument-actions .inline-form {
