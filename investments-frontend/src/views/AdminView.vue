@@ -20,6 +20,13 @@ const errorText = (e) =>
 const sharesCsv = ref('')
 const etfCsv = ref('')
 
+// Trade Republic export import (#45)
+const TR_MAX_BYTES = 5 * 1024 * 1024
+const trFile = ref(null)
+const trBusy = ref('')
+const trResult = ref(null)
+const trError = ref('')
+
 const fetchSchedules = async () => {
   try {
     const res = await api.get(`/investments/etf/schedules`)
@@ -53,8 +60,17 @@ const addEtfTransaction = async () => {
   }
 }
 
+// Trade Republic is the source of truth for funds whose fills are
+// imported: an app schedule for them would count each month twice.
+const importedInstrumentFor = (isin, ticker) => instruments.value.find(inst =>
+  inst.imported > 0 && (isin
+    ? inst.isin === isin.toUpperCase()
+    : inst.yahoo_ticker && inst.yahoo_ticker === ticker.trim().toUpperCase()))
+
 const createSchedule = async () => {
   const { ticker, isin, fiat_amount, execution_day } = scheduleForm.value
+  if (importedInstrumentFor(isin.trim(), ticker) &&
+      !confirm('Trade Republic fills for this fund are imported; an app schedule would count them twice. Create anyway?')) return
   const params = { amount: fiat_amount, day: execution_day }
   if (isin.trim()) params.isin = isin.trim()
   else params.ticker = ticker
@@ -222,6 +238,36 @@ const uploadSharesCsv = async () => {
   }
 }
 
+const onTrFile = (event) => {
+  trFile.value = event.target.files[0] || null
+  trResult.value = null
+  trError.value = ''
+}
+
+const runTrImport = async (dryRun) => {
+  const file = trFile.value
+  if (!file) return
+  trResult.value = null
+  trError.value = ''
+  if (file.size > TR_MAX_BYTES) {
+    trError.value = 'This file is larger than 5 MB; is it a Trade Republic transaction export?'
+    return
+  }
+  trBusy.value = dryRun ? 'check' : 'import'
+  try {
+    const { data } = await api.post(`/investments/etf/import/trade-republic`, {
+      csv_data: await file.text(),
+      dry_run: dryRun
+    })
+    trResult.value = data
+    if (!dryRun) await Promise.all([fetchInstruments(), fetchSchedules()])
+  } catch (e) {
+    trError.value = (dryRun ? 'Check failed: ' : 'Import failed, nothing was imported: ') + errorText(e)
+  } finally {
+    trBusy.value = ''
+  }
+}
+
 onMounted(() => {
   fetchSchedules()
   fetchInstruments()
@@ -283,6 +329,30 @@ onMounted(() => {
           <textarea v-model="etfCsv" placeholder="ticker,fiat_amount,shares_acquired,transaction_date,fees,transaction_type&#10;VTI,1000.00,10.5,2024-01-01,5.00,buy&#10;VXUS,500.00,7.2,2024-02-01,2.50,sell" rows="5"></textarea>
           <button type="submit">Import ETF Transactions</button>
         </form>
+      </div>
+
+      <div class="form-section tr-import">
+        <h3>Import Trade Republic export</h3>
+        <p class="hint">Trade Republic app → Profile → Transaction export. Check the file first; re-importing skips rows already imported.</p>
+        <input type="file" accept=".csv,text/csv" @change="onTrFile">
+        <div class="tr-buttons">
+          <button type="button" :disabled="!trFile || !!trBusy" @click="runTrImport(true)">{{ trBusy === 'check' ? 'Checking…' : 'Check file' }}</button>
+          <button type="button" :disabled="!trFile || !!trBusy" @click="runTrImport(false)">{{ trBusy === 'import' ? 'Importing…' : 'Import' }}</button>
+        </div>
+        <p v-if="trError" class="tr-error">{{ trError }}</p>
+        <div v-if="trResult" class="tr-result">
+          <p><strong>{{ trResult.dry_run ? 'Would import' : 'Imported' }} {{ trResult.imported }}</strong> transaction(s); {{ trResult.skipped_duplicates }} already imported.</p>
+          <p v-if="Object.keys(trResult.ignored).length">Ignored: <span v-for="(n, reason) in trResult.ignored" :key="reason">{{ reason }} {{ n }}&nbsp;</span></p>
+          <div v-if="trResult.unknown.length">
+            <p>Not understood (not imported):</p>
+            <ul><li v-for="u in trResult.unknown" :key="u.line">line {{ u.line }}: {{ u.category }} / {{ u.type }}</li></ul>
+          </div>
+          <div v-if="trResult.warnings.length">
+            <p>Warnings:</p>
+            <ul><li v-for="w in trResult.warnings" :key="w">{{ w }}</li></ul>
+          </div>
+          <p v-if="trResult.unresolved.length">No ticker yet for {{ trResult.unresolved.join(', ') }}: set their tickers in Instruments below.</p>
+        </div>
       </div>
     </div>
 
@@ -532,5 +602,26 @@ onMounted(() => {
   color: #999;
   padding: 20px;
   font-style: italic;
+}
+.tr-import input[type="file"] {
+  margin-bottom: 0.5rem;
+}
+
+.tr-buttons {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.tr-error {
+  color: #ff4757;
+}
+
+.tr-result ul {
+  margin: 0.25rem 0 0.5rem 1.25rem;
+  padding: 0;
+}
+
+.tr-result p {
+  margin: 0.4rem 0;
 }
 </style>
