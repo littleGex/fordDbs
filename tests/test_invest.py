@@ -25,7 +25,8 @@ from datetime import datetime
 from decimal import Decimal
 from unittest.mock import patch
 
-from app.core.investments import fetch_live_prices
+from app.core.investments import fetch_live_prices, get_portfolio_summary
+from app.models.shares_models import EtfTransaction
 
 
 class TestFetchLivePricesLogic:
@@ -338,3 +339,36 @@ class TestEtfSingleTransaction:
 
         assert resp.status_code == 400
         assert _etf_rows(db_session) == []
+
+
+class TestSummaryInvested:
+    """The dashboard's ETF invested is net money put in, fees included
+    (#52)."""
+
+    def _summary_etf(self, db_session, ticker):
+        with patch("app.core.investments.fetch_live_prices",
+                   return_value={ticker: 120.0}):
+            summary = get_portfolio_summary(db_session)
+        return next(e for e in summary["etfs"] if e["ticker"] == ticker)
+
+    def test_invested_includes_fees(self, db_session):
+        db_session.add_all([
+            EtfTransaction(ticker_symbol="EUNL.DE",
+                           fiat_invested=Decimal("100.00"),
+                           fees=Decimal("1.00"), shares_acquired=Decimal("1")),
+            EtfTransaction(ticker_symbol="EUNL.DE",
+                           fiat_invested=Decimal("-50.00"),
+                           fees=Decimal("1.00"),
+                           shares_acquired=Decimal("-0.5"))])
+        db_session.flush()
+        assert self._summary_etf(db_session, "EUNL.DE")[
+            "total_invested"] == 52.0
+
+    def test_missing_fees_count_as_zero(self, db_session):
+        db_session.add(EtfTransaction(ticker_symbol="EUNL.DE",
+                                      fiat_invested=Decimal("100.00"),
+                                      fees=None,
+                                      shares_acquired=Decimal("1")))
+        db_session.flush()
+        assert self._summary_etf(db_session, "EUNL.DE")[
+            "total_invested"] == 100.0
