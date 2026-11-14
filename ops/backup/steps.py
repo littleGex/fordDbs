@@ -132,10 +132,18 @@ def mirror_photos(cfg: Config, runner) -> StepResult:
                        "bytes": sum(objects.values())})
 
 
+def count_objects(tar: tarfile.TarFile, bucket: str) -> int:
+    """Objects of `bucket` in a volume archive: one xl.meta each."""
+    prefixes = (f"./{bucket}/", f"{bucket}/")
+    return sum(1 for m in tar.getmembers()
+               if m.name.startswith(prefixes) and m.name.endswith("/xl.meta"))
+
+
 def volume_copy(cfg: Config, runner, today, objects: Optional[int]
                 ) -> StepResult:
-    """Monthly exact copy of the MinIO volume, read-only, verified by
-    counting one xl.meta per object."""
+    """Monthly exact copy of the whole MinIO volume (bucket and MinIO's
+    own metadata), read-only, verified by counting one xl.meta per object
+    in the bucket."""
     folder = cfg.backup_root / "photos" / "volume"
     folder.mkdir(parents=True, exist_ok=True)
     name = f"{today:%Y-%m}.tar.gz"
@@ -148,11 +156,10 @@ def volume_copy(cfg: Config, runner, today, objects: Optional[int]
         with open(part, "wb") as handle:
             runner.run(["docker", "run", "--rm", "--entrypoint", "tar",
                         "-v", f"{cfg.minio_volume}:/data:ro", cfg.tar_image,
-                        "-C", "/data", "-czf", "-", cfg.bucket],
+                        "-C", "/data", "-czf", "-", "."],
                        stdout=handle)
         with tarfile.open(part, "r:gz") as tar:
-            found = sum(1 for m in tar.getmembers()
-                        if m.name.endswith("/xl.meta"))
+            found = count_objects(tar, cfg.bucket)
         if found != objects:
             raise ValueError(f"archive holds {found} objects, "
                              f"bucket {objects}")

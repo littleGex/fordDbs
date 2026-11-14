@@ -206,9 +206,12 @@ def volume_tar(keys):
     buffer = io.BytesIO()
     with tarfile.open(fileobj=buffer, mode="w:gz") as tar:
         for key in keys:
-            info = tarfile.TarInfo(f"family-photos/{key}/xl.meta")
+            info = tarfile.TarInfo(f"./family-photos/{key}/xl.meta")
             info.size = 1
             tar.addfile(info, io.BytesIO(b"m"))
+        sys_meta = tarfile.TarInfo("./.minio.sys/config/config.json/xl.meta")
+        sys_meta.size = 1
+        tar.addfile(sys_meta, io.BytesIO(b"m"))
     return buffer.getvalue()
 
 
@@ -236,7 +239,7 @@ class TestVolumeCopy:
         assert fake.calls[0][0] == [
             "docker", "run", "--rm", "--entrypoint", "tar", "-v",
             "forddbs_minio_data:/data:ro", "forddbs-api", "-C", "/data",
-            "-czf", "-", "family-photos"]
+            "-czf", "-", "."]
 
     def test_count_mismatch_leaves_no_file(self, cfg):
         fake = FakeRunner({"docker run": volume_tar(OBJECTS)})
