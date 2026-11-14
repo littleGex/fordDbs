@@ -77,7 +77,8 @@ journal.
    bucket to `photos/files/` (an existing file that differs is left alone,
    and the size check below reports it), logged
    in as a read-only MinIO user `backup-reader` (policy `readonly`, bucket
-   `family-photos`) through an mc config dir private to the job. Then
+   `family-photos`), passed to `mc` only through the `MC_HOST_backup`
+   environment variable, so the job never writes an mc config file. Then
    verify: every object in the bucket exists in `photos/files/` with the
    same size.
 4. **Volume copy.** If `photos/volume/<this month>.tar.gz` is missing:
