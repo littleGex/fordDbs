@@ -109,7 +109,8 @@ Rules:
 - **Errors** (`ValueError` naming the CSV line): a buy or sell whose
   `currency` is not `EUR`; empty `symbol` or `transaction_id` on a buy or
   sell; an invalid ISIN (#38's `normalize_isin`); an unparseable number or
-  date; the same `transaction_id` twice in the file.
+  date; the same non-empty `transaction_id` on two rows of any category
+  (a broken or concatenated file).
 
 Amounts are parsed as `Decimal`.
 
@@ -132,7 +133,8 @@ clock=time.monotonic) -> ImportResult`, one database transaction:
    the ISIN if unresolved; `isin`; `external_id`; `entry_type="import"`;
    `transaction_type`; `fees`; `transaction_date` = trade date at midnight.
 5. Commit once, or roll back everything (including instruments created in
-   step 3) for a dry run.
+   step 3) for a dry run. #38's service functions only flush, never commit,
+   so the import owns the single commit or rollback.
 
 ```python
 @dataclass
