@@ -1,0 +1,9 @@
+[Unit]
+Description=Monthly fordDbs restore test, first Sunday (#31)
+
+[Timer]
+OnCalendar=Sun *-*-01..07 04:30:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target
