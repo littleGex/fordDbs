@@ -9,11 +9,11 @@ from datetime import datetime
 from pathlib import Path
 
 from ops.backup.common import (AlreadyRunning, Runner, atomic_write,
-                               exclusive_lock, human_size, load_config,
-                               notify)
-from ops.backup.steps import (StepResult, apply_retention, check_target,
-                              copy_databases, mirror_photos, pack_secrets,
-                              volume_copy)
+                               exclusive_lock, exit_on_sigterm, human_size,
+                               load_config, notify)
+from ops.backup.steps import (StepResult, apply_retention, check_storage,
+                              check_target, copy_databases, mirror_photos,
+                              pack_secrets, volume_copy)
 
 DEFAULT_CONFIG = Path.home() / ".config" / "fordDbs-backup" / "env"
 JOURNAL_HINT = "(see journalctl -u fordDbs-backup)"
@@ -56,12 +56,15 @@ def run_backup(cfg, runner, now: datetime, notifier=notify) -> int:
     today = now.date()
     results = [_step("checks", check_target, cfg, runner)]
     if results[0].ok:
+        storage = _step("minio", check_storage, cfg, runner)
+        results.append(storage)
         results.append(_step("databases", copy_databases, cfg, runner, now))
-        photos = _step("photos", mirror_photos, cfg, runner)
-        results.append(photos)
-        results.append(_step("volume", volume_copy, cfg, runner, today,
-                             objects=photos.data.get("objects")
-                             if photos.ok else None))
+        if storage.ok:
+            photos = _step("photos", mirror_photos, cfg, runner)
+            results.append(photos)
+            results.append(_step("volume", volume_copy, cfg, runner, today,
+                                 objects=photos.data.get("objects")
+                                 if photos.ok else None))
         results.append(_step("secrets", pack_secrets, cfg, runner, today))
         results.append(_step("retention", apply_retention, cfg, today))
     failed = [r.name for r in results if not r.ok]
@@ -84,12 +87,17 @@ def main(argv=None) -> int:
     parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
     args = parser.parse_args(argv)
     cfg = load_config(args.config)
+    exit_on_sigterm()
     try:
         with exclusive_lock(cfg.lock_path):
             return run_backup(cfg, Runner(), datetime.now().astimezone())
     except AlreadyRunning:
         print("another backup or restore test is running", flush=True)
         return 0
+    except BaseException as exc:  # crash, timeout or shutdown: say so
+        notify(cfg.ntfy_url, "fordDbs backup failed",
+               f"interrupted ({type(exc).__name__}) {JOURNAL_HINT}", "high")
+        raise
 
 
 if __name__ == "__main__":

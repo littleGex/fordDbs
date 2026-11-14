@@ -7,7 +7,10 @@ Standard library only: this runs with the Pi's own python3.
 import fcntl
 import os
 import re
+import signal
 import subprocess
+import sys
+import time
 import urllib.request
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -91,6 +94,11 @@ class Runner:
             stdout=stdout if stdout is not None else subprocess.PIPE,
             stderr=subprocess.PIPE, env=full_env)
         if check and result.returncode:
+            # The tail of stderr goes to the journal only, never to ntfy.
+            tail = (result.stderr or b"").decode(errors="replace")
+            print(f"{cmd[0]} exited {result.returncode}", flush=True)
+            for line in tail.strip().splitlines()[-5:]:
+                print(f"  {line}", flush=True)
             raise CommandError(cmd, result.returncode, result.stderr)
         return result
 
@@ -109,18 +117,30 @@ def atomic_write(dest: Path, write: Callable[[Path], None]) -> None:
 
 
 @contextmanager
-def exclusive_lock(path: Path):
+def exclusive_lock(path: Path, wait_seconds: int = 0, sleep=time.sleep):
+    """Hold the lock shared by the backup and the restore test; wait up
+    to wait_seconds for the other one to finish."""
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, "w") as handle:
-        try:
-            fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except BlockingIOError:
-            raise AlreadyRunning(str(path)) from None
+        for attempt in range(wait_seconds + 1):
+            try:
+                fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                break
+            except BlockingIOError:
+                if attempt == wait_seconds:
+                    raise AlreadyRunning(str(path)) from None
+                sleep(1)
         try:
             yield
         finally:
             fcntl.flock(handle, fcntl.LOCK_UN)
+
+
+def exit_on_sigterm() -> None:
+    """systemd stops a job with SIGTERM (timeout, shutdown). Turn it into
+    SystemExit so cleanup in finally blocks and the alert still run."""
+    signal.signal(signal.SIGTERM, lambda signum, frame: sys.exit(143))
 
 
 def _post(url: str, body: bytes, headers: dict) -> None:
@@ -151,8 +171,9 @@ def is_cifs_mount(path: Path, runner) -> bool:
         return False
     result = runner.run(["findmnt", "-n", "-o", "FSTYPE", "-T", str(path)],
                         check=False)
-    return result.returncode == 0 and \
-        (result.stdout or b"").decode().strip() in CIFS_TYPES
+    # On an automount findmnt lists autofs, then the share once mounted.
+    types = (result.stdout or b"").decode().split()
+    return result.returncode == 0 and any(t in CIFS_TYPES for t in types)
 
 
 def volumes_to_delete(names, keep: int = 6):

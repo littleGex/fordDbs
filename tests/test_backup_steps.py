@@ -9,7 +9,8 @@ import pytest
 
 from backup_fakes import FakeRunner
 from ops.backup.common import Config
-from ops.backup.steps import (apply_retention, check_target, copy_databases,
+from ops.backup.steps import (apply_retention, check_storage, check_target,
+                              copy_databases,
                               list_bucket, mc_env, mirror_photos,
                               pack_secrets, volume_copy)
 
@@ -55,31 +56,37 @@ class TestCheckTarget:
         assert not r.ok and "not mounted" in r.detail
         assert not cfg.backup_root.exists()
 
-    def test_ok_on_cifs_with_space(self, cfg):
-        r = check_target(cfg, FakeRunner({"findmnt": b"cifs\n",
-                                          "mc du": b'{"size": 1000}\n'}))
+    def test_ok_on_cifs(self, cfg):
+        r = check_target(cfg, FakeRunner({"findmnt": b"autofs\ncifs\n"}))
+
+        assert r.ok, r.detail
+        assert cfg.backup_root.is_dir()
+
+    def test_storage_ok_with_space(self, cfg):
+        cfg.backup_root.mkdir()
+        r = check_storage(cfg, FakeRunner({"mc du": b'{"size": 1000}\n'}))
 
         assert r.ok, r.detail
         assert r.data["bucket_bytes"] == 1000
-        assert cfg.backup_root.is_dir()
 
-    def test_fails_when_minio_down(self, cfg):
-        r = check_target(cfg, FakeRunner({"findmnt": b"cifs\n",
-                                          "mc du": 1}))
+    def test_storage_fails_when_minio_down(self, cfg):
+        cfg.backup_root.mkdir()
+        r = check_storage(cfg, FakeRunner({"mc du": 1}))
 
         assert not r.ok and "MinIO" in r.detail
 
-    def test_fails_without_space(self, cfg):
-        r = check_target(cfg, FakeRunner({"findmnt": b"cifs\n",
-                                          "mc du": b'{"size": %d}'
-                                          % 10 ** 18}))
+    def test_storage_fails_without_space(self, cfg):
+        cfg.backup_root.mkdir()
+        r = check_storage(cfg, FakeRunner({"mc du": b'{"size": %d}'
+                                           % 10 ** 18}))
 
         assert not r.ok and "space" in r.detail
 
     def test_mc_credentials_only_in_env(self, cfg):
-        fake = FakeRunner({"findmnt": b"cifs\n", "mc du": b'{"size": 1}'})
+        cfg.backup_root.mkdir()
+        fake = FakeRunner({"mc du": b'{"size": 1}'})
 
-        check_target(cfg, fake)
+        check_storage(cfg, fake)
 
         cmd, kwargs = fake.calls[-1]
         assert cmd[:2] == ["mc", "du"]
@@ -106,7 +113,8 @@ class TestCopyDatabases:
 
         assert r.ok, r.detail
         assert fake.commands("rsync") == [
-            ["rsync", "-a", "--delete", f"{cfg.postgres_source}/{db}/",
+            ["rsync", "-rt", "--delete", "--no-links",
+             f"{cfg.postgres_source}/{db}/",
              f"{cfg.backup_root}/postgres/{db}/"] for db in cfg.databases]
         assert r.data["newest"] == {"forddbs": "forddbs-latest.sql.gz",
                                     "chore_tracker":
@@ -121,7 +129,7 @@ class TestCopyDatabases:
         r = copy_databases(cfg, fake, NOW)
 
         assert not r.ok and "forddbs" in r.detail
-        copied = [c[3] for c in fake.commands("rsync")]
+        copied = [c[4] for c in fake.commands("rsync")]
         assert copied == [f"{cfg.postgres_source}/chore_tracker/"]
 
     def test_stale_dump_fails_but_still_copies(self, cfg):  # Review Focus 2
@@ -236,10 +244,34 @@ class TestVolumeCopy:
         assert r.data == {"volume": "2026-11.tar.gz"}
         assert (cfg.backup_root / "photos" / "volume" /
                 "2026-11.tar.gz").stat().st_size > 0
-        assert fake.calls[0][0] == [
+        cmd = fake.calls[0][0]
+        assert cmd[:8] == [
             "docker", "run", "--rm", "--entrypoint", "tar", "-v",
-            "forddbs_minio_data:/data:ro", "forddbs-api", "-C", "/data",
-            "-czf", "-", "."]
+            "forddbs_minio_data:/data:ro", "forddbs-api"]
+        assert cmd[-5:] == ["-C", "/data", "-czf", "-", "."]
+        for skipped in ("./.minio.sys/tmp", "./.minio.sys/multipart",
+                        "./.minio.sys/config"):
+            assert f"--exclude={skipped}" in cmd
+        assert "--warning=no-file-changed" in cmd
+        assert "--ignore-failed-read" in cmd
+
+    def test_tar_exit_1_accepted_when_count_matches(self, cfg):
+        fake = FakeRunner({"docker run": volume_tar(OBJECTS)})
+        fake.responses["docker run"] = lambda cmd, kw: (
+            kw["stdout"].write(volume_tar(OBJECTS)) and None) or 1
+
+        r = volume_copy(cfg, fake, TODAY, objects=2)
+
+        assert r.ok, r.detail
+
+    def test_tar_exit_2_fails(self, cfg):
+        fake = FakeRunner()
+        fake.responses["docker run"] = lambda cmd, kw: (
+            kw["stdout"].write(volume_tar(OBJECTS)) and None) or 2
+
+        r = volume_copy(cfg, fake, TODAY, objects=2)
+
+        assert not r.ok
 
     def test_count_mismatch_leaves_no_file(self, cfg):
         fake = FakeRunner({"docker run": volume_tar(OBJECTS)})

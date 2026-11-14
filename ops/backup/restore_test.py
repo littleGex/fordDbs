@@ -17,7 +17,8 @@ from pathlib import Path
 from urllib.parse import quote
 
 from ops.backup.common import (AlreadyRunning, CommandError, Runner,
-                               exclusive_lock, load_config, notify)
+                               exclusive_lock, exit_on_sigterm, load_config,
+                               notify)
 from ops.backup.steps import StepResult, count_objects
 
 DEFAULT_CONFIG = Path.home() / ".config" / "fordDbs-backup" / "env"
@@ -25,6 +26,9 @@ PG_IMAGE = "postgres:15-alpine"
 MINIO_CONTAINER = "restoretest-minio"
 MINIO_VOLUME = "restoretest-minio"
 WAIT_TRIES = 60
+# The backup takes the same lock; on the first Sunday of a month it may
+# still be making the volume copy at 04:30.
+LOCK_WAIT_SECONDS = 90 * 60
 KEY_TABLES = {"forddbs": ("users", "photos", "etf_transactions"),
               "chore_tracker": ('"user"', "chore", "completion")}
 # live container, and the database inside it the dump was taken from
@@ -83,6 +87,7 @@ def _restore_one(cfg, runner, db, sleep) -> list:
     sql = gzip.decompress(dump.read_bytes())
     container = f"restoretest-pg-{db}"
     live_container, target = LIVE[db]
+    runner.run(["docker", "rm", "-f", container], check=False)  # leftovers
     try:
         runner.run(["docker", "run", "-d", "--name", container, "-e",
                     f"POSTGRES_PASSWORD={secrets.token_hex(16)}", PG_IMAGE])
@@ -184,6 +189,8 @@ def restore_photos(cfg, runner, sleep=time.sleep) -> StepResult:
         image = runner.run(["docker", "inspect", "family_photos_storage",
                             "--format", "{{.Config.Image}}"]
                            ).stdout.decode().strip()
+        runner.run(["docker", "rm", "-f", MINIO_CONTAINER], check=False)
+        runner.run(["docker", "volume", "rm", MINIO_VOLUME], check=False)
         runner.run(["docker", "volume", "create", MINIO_VOLUME])
         runner.run(["docker", "run", "--rm", "-v", f"{MINIO_VOLUME}:/data",
                     "-v", f"{volume_dir}:/backup:ro", "--entrypoint", "tar",
@@ -252,14 +259,20 @@ def main(argv=None) -> int:
     parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
     args = parser.parse_args(argv)
     cfg = load_config(args.config)
+    exit_on_sigterm()
     try:
-        with exclusive_lock(cfg.lock_path):
+        with exclusive_lock(cfg.lock_path, wait_seconds=LOCK_WAIT_SECONDS):
             print(f"restore test started {datetime.now().astimezone():%c}",
                   flush=True)
             return run_restore_test(cfg, Runner())
     except AlreadyRunning:
-        print("another backup or restore test is running", flush=True)
-        return 0
+        notify(cfg.ntfy_url, "fordDbs restore test",
+               "restore test skipped: backup still running", "high")
+        return 1
+    except BaseException as exc:  # crash, timeout or shutdown: say so
+        notify(cfg.ntfy_url, "fordDbs restore test",
+               f"restore test interrupted ({type(exc).__name__})", "high")
+        raise
 
 
 if __name__ == "__main__":

@@ -15,6 +15,12 @@ fi
 for tool in rsync mc age docker findmnt; do
   command -v "$tool" >/dev/null || { echo "Missing tool: $tool" >&2; exit 1; }
 done
+# Debian's "mc" package is Midnight Commander; the job needs the MinIO
+# client, on systemd's PATH (e.g. /usr/local/bin/mc).
+if ! mc --version 2>/dev/null | grep -qi minio; then
+  echo "mc is not the MinIO client (install it to /usr/local/bin/mc)." >&2
+  exit 1
+fi
 
 here="$(cd "$(dirname "$0")" && pwd)"
 for unit in fordDbs-backup.service fordDbs-backup.timer \

@@ -17,6 +17,10 @@ from ops.backup.common import (CommandError, Config, atomic_write,
                                volumes_to_delete)
 
 STALE_AFTER = timedelta(hours=36)
+# Scratch space, and MinIO's users and settings: secrets are only ever
+# stored encrypted, so the plain volume copy leaves config/ out.
+VOLUME_EXCLUDES = ("./.minio.sys/tmp", "./.minio.sys/multipart",
+                   "./.minio.sys/config")
 MC_ALIAS = "backup"
 
 
@@ -43,23 +47,30 @@ def bucket_path(cfg: Config) -> str:
 
 
 def check_target(cfg: Config, runner) -> StepResult:
+    """The NAS share is mounted. Nothing may write before this passes."""
     share = cfg.backup_root.parent
     if not is_cifs_mount(share, runner):
         return StepResult("checks", False, f"{share} is not mounted")
+    cfg.backup_root.mkdir(exist_ok=True)
+    return StepResult("checks", True)
+
+
+def check_storage(cfg: Config, runner) -> StepResult:
+    """MinIO answers and the NAS has room for the photos. Only the photo
+    steps depend on this."""
     try:
         out = runner.run(["mc", "du", "--json", bucket_path(cfg)],
                          env=mc_env(cfg)).stdout
         bucket_bytes = int(json.loads(out.decode().splitlines()[-1])["size"])
     except (CommandError, ValueError, KeyError, IndexError) as exc:
-        return StepResult("checks", False,
+        return StepResult("minio", False,
                           f"MinIO not answering ({type(exc).__name__})")
-    cfg.backup_root.mkdir(exist_ok=True)
     free = shutil.disk_usage(cfg.backup_root).free
     if free < 2 * bucket_bytes:
-        return StepResult("checks", False,
+        return StepResult("minio", False,
                           f"not enough space on the NAS ({free} bytes free)",
                           {"bucket_bytes": bucket_bytes})
-    return StepResult("checks", True, data={"bucket_bytes": bucket_bytes})
+    return StepResult("minio", True, data={"bucket_bytes": bucket_bytes})
 
 
 def _newest(folder: Path) -> Optional[Path]:
@@ -83,8 +94,10 @@ def copy_databases(cfg: Config, runner, now: datetime) -> StepResult:
         target = cfg.backup_root / "postgres" / db
         target.mkdir(parents=True, exist_ok=True)
         try:
-            runner.run(["rsync", "-a", "--delete", f"{source}/",
-                        f"{target}/"])
+            # -rt, no links: the share is CIFS (no symlinks, owners or
+            # modes); the -latest symlink in last/ is skipped.
+            runner.run(["rsync", "-rt", "--delete", "--no-links",
+                        f"{source}/", f"{target}/"])
         except CommandError as exc:
             problems.append(f"{db}: rsync exited {exc.returncode}")
     return StepResult("databases", not problems, "; ".join(problems),
@@ -154,10 +167,17 @@ def volume_copy(cfg: Config, runner, today, objects: Optional[int]
 
     def write(part: Path) -> None:
         with open(part, "wb") as handle:
-            runner.run(["docker", "run", "--rm", "--entrypoint", "tar",
-                        "-v", f"{cfg.minio_volume}:/data:ro", cfg.tar_image,
-                        "-C", "/data", "-czf", "-", "."],
-                       stdout=handle)
+            result = runner.run(
+                ["docker", "run", "--rm", "--entrypoint", "tar", "-v",
+                 f"{cfg.minio_volume}:/data:ro", cfg.tar_image,
+                 *[f"--exclude={p}" for p in VOLUME_EXCLUDES],
+                 "--warning=no-file-changed", "--ignore-failed-read",
+                 "-C", "/data", "-czf", "-", "."],
+                stdout=handle, check=False)
+        # GNU tar exits 1 when a file changed while read (MinIO is live);
+        # the object count below decides whether the copy is good.
+        if result.returncode not in (0, 1):
+            raise ValueError(f"tar exited {result.returncode}")
         with tarfile.open(part, "r:gz") as tar:
             found = count_objects(tar, cfg.bucket)
         if found != objects:

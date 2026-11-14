@@ -91,6 +91,33 @@ def test_cifs_mount_detected(tmp_path):
                                 str(tmp_path)]
 
 
+def test_automount_reports_autofs_then_cifs(tmp_path):
+    assert is_cifs_mount(tmp_path, FakeRunner({"findmnt": b"autofs\ncifs\n"}))
+
+
+def test_untriggered_automount_is_not_a_mount(tmp_path):
+    assert not is_cifs_mount(tmp_path, FakeRunner({"findmnt": b"autofs\n"}))
+
+
+def test_lock_waits_for_the_holder_then_gives_up(tmp_path):
+    lock = tmp_path / "backup.lock"
+    naps = []
+    with exclusive_lock(lock):
+        with pytest.raises(AlreadyRunning):
+            with exclusive_lock(lock, wait_seconds=5, sleep=naps.append):
+                pass
+    assert len(naps) == 5
+
+
+def test_failed_command_prints_stderr_tail(capsys):
+    from ops.backup.common import CommandError, Runner
+    with pytest.raises(CommandError):
+        Runner().run(["sh", "-c", "echo first >&2; echo boom >&2; exit 3"])
+
+    out = capsys.readouterr().out
+    assert "sh exited 3" in out and "boom" in out
+
+
 def test_smb3_mount_detected(tmp_path):
     assert is_cifs_mount(tmp_path, FakeRunner({"findmnt": b"smb3\n"}))
 

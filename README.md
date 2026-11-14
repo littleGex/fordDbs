@@ -486,7 +486,8 @@ the Pi, the same folder on the NAS from the Mac):
    Put the whole key file into the password manager, then delete it.
    Only the `age1…` public key goes on the Pi.
 2. Create the read-only MinIO user for the photo copy (`readonly` on
-   `family-photos`).
+   `family-photos`). The job needs the MinIO client as `mc` in
+   `/usr/local/bin` (Debian's `mc` package is a different program).
 3. `sudo apt install age`, then copy `ops/backup/env.example` to
    `~/.config/fordDbs-backup/env`, fill it in and `chmod 600` it.
 4. `ops/backup/install.sh`, then run one backup by hand (below) and check
@@ -519,19 +520,25 @@ gunzip -c postgres/forddbs/daily/<file>.sql.gz \
 For chore_tracker use `chore-tracker-db-1` and the `chore_tracker`
 database.
 
-**All photos (exact).** The volume copy holds the whole MinIO volume,
-including its users and settings:
+**All photos (exact).** The volume copy holds the whole MinIO volume
+except MinIO's own users and settings (`.minio.sys/config`), which are
+left out because the copy is not encrypted. Restoring it replaces
+everything in the photo store, so check the archive first; the `rm`
+only runs if the check passes:
 
 ```bash
-docker compose stop minio
-docker run --rm -v forddbs_minio_data:/data -v "$PWD":/backup:ro \
+archive=/mnt/nas/alan/fordDbs-backups/photos/volume/2026-11.tar.gz  # pick one
+tar -tzf "$archive" >/dev/null && echo "archive OK"
+docker stop family_photos_storage
+docker run --rm -v forddbs_minio_data:/data -v "$archive":/backup.tar.gz:ro \
   --entrypoint sh forddbs-api -c \
-  'rm -rf /data/* /data/.minio.sys && tar -C /data -xzf /backup/YYYY-MM.tar.gz'
-docker compose start minio
+  'tar -tzf /backup.tar.gz >/dev/null && rm -rf /data/* /data/.minio.sys && tar -C /data -xzf /backup.tar.gz'
+docker start family_photos_storage
 ```
 
-Run it from `photos/volume/`. Photos added after that month's copy are
-then still in `photos/files/` and can be uploaded again.
+MinIO starts with the root user from `.env`; create the `backup-reader`
+user again afterwards (Setup, step 2). Photos added after that month's
+copy are still in `photos/files/` and can be uploaded again.
 
 **A single photo.** Copy it from `photos/files/` (the same path as its
 key; profile photos are under `profiles/` and `avatars/`).
