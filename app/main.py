@@ -10,6 +10,7 @@ from app.api.v1.game import game_router
 from app.core.auth import require_parent
 from app.api.v1.utils import utils_router
 from app.api.v1.shares import shares_router
+from app.api.v1.tr_import import tr_import_router
 from app.api.v1.instruments import instruments_router
 from app.api.v1.messaging import messaging_router
 from app.core.scheduler import start_scheduler
@@ -107,6 +108,13 @@ def create_app():
 
     app.include_router(
         instruments_router,
+        prefix="/v1/investments",
+        tags=["Investments"],
+        dependencies=[Depends(require_parent)]
+    )
+
+    app.include_router(
+        tr_import_router,
         prefix="/v1/investments",
         tags=["Investments"],
         dependencies=[Depends(require_parent)]

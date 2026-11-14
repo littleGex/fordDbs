@@ -52,6 +52,9 @@ def _to_json(db: Session, instrument: Instrument) -> dict:
         "resolved_at": instrument.resolved_at,
         "transactions": count(EtfTransaction),
         "schedules": count(EtfPurchaseSchedule),
+        "imported": db.query(EtfTransaction).filter(
+            EtfTransaction.isin == instrument.isin,
+            EtfTransaction.entry_type == "import").count(),
     }
 
 
