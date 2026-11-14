@@ -83,3 +83,23 @@ class Instrument(Base):
                              server_default=false())
     resolution_note = Column(Text, nullable=True)
     created_at = Column(DateTime, server_default=func.now())
+
+
+class PriceHistory(Base):
+    """Unadjusted daily close (EUR) per Yahoo ticker, for the portfolio
+    history chart. Only finished days are stored."""
+    __tablename__ = "price_history"
+
+    ticker = Column(String, primary_key=True)
+    day = Column(Date, primary_key=True)
+    close = Column(Numeric(14, 6), nullable=False)
+    fetched_at = Column(DateTime, server_default=func.now())
+
+
+class PriceFetchState(Base):
+    """How far each ticker's closes have been fetched, so days without a
+    close (weekends, holidays) aren't asked for again."""
+    __tablename__ = "price_fetch_state"
+
+    ticker = Column(String, primary_key=True)
+    fetched_through = Column(Date, nullable=False)
