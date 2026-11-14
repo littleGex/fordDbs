@@ -71,15 +71,18 @@ Table `price_fetch_state`:
 - Rows before each ticker's own missing start, after `through`, NaN, zero
   or negative are dropped.
 - Closes are inserted with Postgres `INSERT ... ON CONFLICT DO NOTHING`.
-  After a download that did not raise, every requested ticker's
-  `fetched_through` is set to `through` (upsert), even if Yahoo returned no
-  rows for it in the range (a weekend, a holiday). The caller commits.
+- A ticker's `fetched_through` only advances as far as Yahoo really
+  returned data: to its last close in the range, or to `through` when
+  only weekend days follow that close (or the whole range is a weekend).
+  yfinance often returns empty data instead of raising, so an empty answer
+  on weekdays leaves `fetched_through` unchanged; those days are fetched
+  again on the next call and reported as out of date. The caller commits.
 - Returns `{ticker: fetched_through or None}` for requested tickers whose
   `fetched_through` is still before `through` (the stale list). A download
   exception is logged, caught, and leaves every requested ticker stale and
   its state unchanged.
-- A ticker Yahoo doesn't know returns no rows without raising; it is
-  marked fetched and simply has no closes, so its fill prices value it.
+- A ticker Yahoo doesn't know therefore stays stale and is retried on
+  every call; the warning points at a ticker that needs fixing.
 
 Scheduler: a job at 06:00 Europe/Berlin runs `ensure_price_history` with its
 own session and commits; `misfire_grace_time=86400`.
@@ -140,7 +143,9 @@ request after the summary:
   live price; empty portfolio gives `[]`.
 - Cache (fake download): fetches only missing days, one batched call;
   skips ISIN-as-ticker rows and tickers already current; a weekend with no
-  closes is not fetched again and is not stale; `auto_adjust=False`
+  closes is not fetched again and is not stale; state advances only to the
+  last close; an empty answer on weekdays is retried and stale; an unknown
+  ticker stays stale; `auto_adjust=False`
   passed; drops NaN, zero and negative closes; repeated insert harmless;
   download failure leaves the cache unchanged and returns the tickers as
   stale.

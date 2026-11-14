@@ -111,8 +111,9 @@ class TestEnsurePriceHistory:
         add_txn("EUNL.DE", date(2026, 3, 2))
         add_txn("APC.DE", date(2026, 3, 4))
         fake = FakeDownload(frame({
-            "EUNL.DE": {date(2026, 3, 2): 100.0, date(2026, 3, 3): 101.0},
-            "APC.DE": {date(2026, 3, 4): 180.0}}))
+            "EUNL.DE": {date(2026, 3, 2): 100.0, date(2026, 3, 3): 101.0,
+                        THROUGH: 102.0},
+            "APC.DE": {date(2026, 3, 4): 180.0, THROUGH: 181.0}}))
 
         result = ensure_price_history(db_session, through=THROUGH,
                                       download=fake)
@@ -125,9 +126,11 @@ class TestEnsurePriceHistory:
         assert kwargs["auto_adjust"] is False
         assert stored(db_session, "EUNL.DE") == {
             date(2026, 3, 2): Decimal("100.000000"),
-            date(2026, 3, 3): Decimal("101.000000")}
+            date(2026, 3, 3): Decimal("101.000000"),
+            THROUGH: Decimal("102.000000")}
         assert stored(db_session, "APC.DE") == {
-            date(2026, 3, 4): Decimal("180.000000")}
+            date(2026, 3, 4): Decimal("180.000000"),
+            THROUGH: Decimal("181.000000")}
         assert state(db_session, "EUNL.DE") == THROUGH
         assert state(db_session, "APC.DE") == THROUGH
 
@@ -216,15 +219,52 @@ class TestEnsurePriceHistory:
         assert state(db_session, "EUNL.DE") == date(2026, 3, 5)
         assert state(db_session, "APC.DE") is None
 
-    def test_unknown_ticker_is_marked_fetched(self, db_session, add_txn):
+    def test_unknown_ticker_stays_stale_and_is_retried(self, db_session,
+                                                       add_txn):
         add_txn("EUNL.DE", date(2026, 3, 2))
         add_txn("NOPE.DE", date(2026, 3, 2))
-        fake = FakeDownload(frame({"EUNL.DE": {date(2026, 3, 2): 100.0}}))
+        fake = FakeDownload(frame({"EUNL.DE": {THROUGH: 100.0}}))
 
         assert ensure_price_history(db_session, through=THROUGH,
+                                    download=fake) == {"NOPE.DE": None}
+        assert state(db_session, "NOPE.DE") is None
+        ensure_price_history(db_session, through=THROUGH, download=fake)
+        assert fake.calls[1][0] == ["NOPE.DE"]
+
+    def test_empty_download_on_weekdays_is_retried_and_stale(
+            self, db_session, add_txn):
+        add_txn("EUNL.DE", date(2026, 3, 2))
+        set_state(db_session, "EUNL.DE", date(2026, 3, 4))
+        fake = FakeDownload(pd.DataFrame())
+
+        result = ensure_price_history(db_session, through=THROUGH,
+                                      download=fake)
+
+        assert result == {"EUNL.DE": date(2026, 3, 4)}
+        assert state(db_session, "EUNL.DE") == date(2026, 3, 4)
+        ensure_price_history(db_session, through=THROUGH, download=fake)
+        assert len(fake.calls) == 2
+
+    def test_state_advances_only_to_last_close(self, db_session, add_txn):
+        add_txn("EUNL.DE", date(2026, 3, 2))
+        fake = FakeDownload(frame({"EUNL.DE": {date(2026, 3, 2): 100.0,
+                                               date(2026, 3, 5): 101.0}}))
+
+        result = ensure_price_history(db_session, through=THROUGH,
+                                      download=fake)
+
+        assert state(db_session, "EUNL.DE") == date(2026, 3, 5)
+        assert result == {"EUNL.DE": date(2026, 3, 5)}
+
+    def test_weekend_after_last_close_counts_as_fetched(self, db_session,
+                                                        add_txn):
+        add_txn("EUNL.DE", date(2026, 3, 2))
+        sunday = date(2026, 3, 8)
+        fake = FakeDownload(frame({"EUNL.DE": {date(2026, 3, 6): 100.0}}))
+
+        assert ensure_price_history(db_session, through=sunday,
                                     download=fake) == {}
-        assert state(db_session, "NOPE.DE") == THROUGH
-        assert stored(db_session, "NOPE.DE") == {}
+        assert state(db_session, "EUNL.DE") == sunday
 
     def test_single_ticker_flat_columns_are_read(self, db_session, add_txn):
         add_txn("EUNL.DE", date(2026, 3, 2))
