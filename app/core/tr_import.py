@@ -19,12 +19,14 @@ from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 from typing import Callable, Dict, List, Optional
 
+from sqlalchemy import or_
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.core import instruments
 from app.core.instruments import normalize_isin
-from app.models.shares_models import EtfTransaction, Instrument
+from app.models.shares_models import (EtfPurchaseSchedule, EtfTransaction,
+                                      Instrument)
 
 logger = logging.getLogger(__name__)
 
@@ -63,6 +65,8 @@ class ParseResult:
     transactions: List[ParsedTxn] = field(default_factory=list)
     ignored: Dict[str, int] = field(default_factory=dict)
     unknown: List[dict] = field(default_factory=list)
+    # ISINs whose liquidation nets to zero shares (cancelled)
+    cancelled_liquidations: List[str] = field(default_factory=list)
 
 
 @dataclass
@@ -203,6 +207,7 @@ def parse_tr_export(csv_text: str) -> ParseResult:
         else:
             result.ignored[IGNORED_LIQUIDATION_CANCELLED] = (
                 result.ignored.get(IGNORED_LIQUIDATION_CANCELLED, 0) + 1)
+            result.cancelled_liquidations.append(group.isin)
     return result
 
 
@@ -258,6 +263,38 @@ def _split_new(db: Session, parsed: List[ParsedTxn]):
     return new, len(parsed) - len(new), warnings
 
 
+def _cancelled_warnings(db: Session, isins: List[str]) -> List[str]:
+    """A liquidation imported earlier that this export shows as
+    cancelled: the stored sell is kept, so say so."""
+    ids = [f"{LIQUIDATION_PREFIX}{isin}" for isin in isins]
+    stored = db.query(EtfTransaction.isin).filter(
+        EtfTransaction.external_id.in_(ids)).all() if ids else []
+    return [f"{isin}: this export shows its liquidation as cancelled, but "
+            "a liquidation sell was imported earlier and has been kept; "
+            "check this holding" for (isin,) in stored]
+
+
+def _app_entries_warning(db: Session, isin: str,
+                         instrument: Instrument) -> Optional[str]:
+    """Rows or active schedules entered in the app for a fund whose real
+    fills are being imported may count the same buys twice."""
+    tickers = [t for t in (instrument.yahoo_ticker, isin) if t]
+    rows = db.query(EtfTransaction).filter(
+        EtfTransaction.external_id.is_(None),
+        or_(EtfTransaction.isin == isin,
+            EtfTransaction.ticker_symbol.in_(tickers))).count()
+    schedules = db.query(EtfPurchaseSchedule).filter(
+        EtfPurchaseSchedule.is_active.is_(True),
+        or_(EtfPurchaseSchedule.isin == isin,
+            EtfPurchaseSchedule.ticker_symbol.in_(tickers))).count()
+    if not rows and not schedules:
+        return None
+    return (f"{isin} ({tickers[0]}): {rows} transaction(s) and "
+            f"{schedules} active schedule(s) entered in the app also "
+            "exist for this fund and may count the same buys twice; "
+            "deactivate the schedule(s) and check those rows")
+
+
 def _references(new: List[ParsedTxn]) -> dict:
     """ISIN -> (trade date, price) of its latest buy in the export."""
     refs = {}
@@ -311,7 +348,10 @@ def import_tr_export(db: Session, csv_text: str, *, dry_run: bool = False,
     savepoint = db.begin_nested()
     try:
         new, duplicates, warnings = _split_new(db, parsed.transactions)
+        warnings += _cancelled_warnings(db, parsed.cancelled_liquidations)
         found = _resolve_all(db, new, resolver, clock)
+        warnings += [w for w in (_app_entries_warning(db, isin, inst)
+                                 for isin, inst in found.items()) if w]
         db.add_all([_row(txn, found[txn.isin]) for txn in new])
         db.flush()
         unresolved = sorted({txn.isin for txn in new

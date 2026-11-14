@@ -17,7 +17,8 @@ from sqlalchemy.exc import IntegrityError
 from app.core.instruments import Resolution, set_instrument_ticker
 from app.core.tr_import import (NOT_LOOKED_UP, ImportSaveError,
                                 import_tr_export, parse_tr_export)
-from app.models.shares_models import Instrument, EtfTransaction
+from app.models.shares_models import (EtfPurchaseSchedule, EtfTransaction,
+                                      Instrument)
 
 FIXTURE = Path(__file__).parent / "fixtures" / "tr_export_sample.csv"
 SAMPLE = FIXTURE.read_text()
@@ -324,3 +325,41 @@ class TestImportTrExport:
         assert scheduled.isin is None
         assert scheduled.external_id is None
         assert scheduled.fiat_invested == Decimal("50.00")
+
+    def test_liquidation_cancelled_after_import_warns(self, db_session):
+        self.run(db_session)
+        cancelled = drop(SAMPLE, "ca-0003", "lp-0003")
+        assert parse_tr_export(cancelled).ignored[
+            "liquidation cancelled"] == 2
+
+        result = self.run(db_session, cancelled)
+
+        assert len(result.warnings) == 1
+        assert "IE00BK5BQT80" in result.warnings[0]
+        assert "cancelled" in result.warnings[0]
+
+    def test_app_rows_for_an_imported_fund_warn(self, db_session):
+        db_session.add(EtfTransaction(ticker_symbol="EUNL.DE",
+                                      fiat_invested=Decimal("50"),
+                                      shares_acquired=Decimal("0.4"),
+                                      entry_type="scheduled"))
+        db_session.add(EtfPurchaseSchedule(ticker_symbol="APC.DE",
+                                           fiat_amount=Decimal("25"),
+                                           execution_day=15))
+        db_session.flush()
+
+        result = self.run(db_session)
+
+        assert len(result.warnings) == 2
+        world = next(w for w in result.warnings if "IE00B4L5Y983" in w)
+        apple = next(w for w in result.warnings if "US0378331005" in w)
+        assert "1 transaction" in world
+        assert "1 active schedule" in apple
+
+    def test_inactive_schedule_does_not_warn(self, db_session):
+        db_session.add(EtfPurchaseSchedule(ticker_symbol="APC.DE",
+                                           fiat_amount=Decimal("25"),
+                                           execution_day=15,
+                                           is_active=False))
+        db_session.flush()
+        assert self.run(db_session).warnings == []

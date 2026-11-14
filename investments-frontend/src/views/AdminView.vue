@@ -262,7 +262,14 @@ const runTrImport = async (dryRun) => {
     trResult.value = data
     if (!dryRun) await Promise.all([fetchInstruments(), fetchSchedules()])
   } catch (e) {
-    trError.value = (dryRun ? 'Check failed: ' : 'Import failed, nothing was imported: ') + errorText(e)
+    if (!e.response) {
+      // No answer (e.g. a proxy timeout): the server may still have
+      // finished; a dry run shows which rows are already stored.
+      trError.value = 'No answer from the server. ' + (dryRun ? 'Try again.'
+        : 'The import may still have finished: press Check file, rows already imported show as skipped.')
+    } else {
+      trError.value = (dryRun ? 'Check failed: ' : 'Import failed, nothing was imported: ') + errorText(e)
+    }
   } finally {
     trBusy.value = ''
   }
