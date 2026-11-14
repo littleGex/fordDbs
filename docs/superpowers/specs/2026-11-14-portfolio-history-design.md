@@ -30,6 +30,10 @@ Success:
 
 ## Data model (one Alembic migration, after `c4d8e2a6f0b1`)
 
+Two tables. `price_fetch_state` records how far each ticker has been
+fetched, so weekends and holidays (days with no close) are not asked for
+again on every load and do not count as out of date.
+
 Table `price_history`:
 
 | column | type | |
@@ -41,6 +45,13 @@ Table `price_history`:
 
 Only finished days (before today) are stored.
 
+Table `price_fetch_state`:
+
+| column | type | |
+|---|---|---|
+| `ticker` | `String`, PK | |
+| `fetched_through` | `Date`, not null | last day a successful download covered |
+
 ## Price cache (`app/core/price_history.py`)
 
 `ensure_price_history(db, tickers=None, *, through=None, download=None)
@@ -49,9 +60,9 @@ Only finished days (before today) are stored.
 - `tickers=None` means every `ticker_symbol` in `etf_transactions` that is
   not a valid ISIN (ISIN-as-ticker rows are never fetched).
 - `through` defaults to yesterday (Europe/Berlin).
-- Per ticker, the missing range is from the day after its latest cached
-  `day` (or from its first trade date if none) to `through`. Tickers with
-  nothing missing are skipped.
+- Per ticker, the missing range is from the day after its
+  `fetched_through` (or from its first trade date if it has no state) to
+  `through`. Tickers with nothing missing are skipped.
 - One batched download for all tickers that need data, from the earliest
   missing start: `yf.download(tickers, start=..., end=through + 1 day,
   interval="1d", auto_adjust=False, progress=False, timeout=10)`, reading
@@ -59,11 +70,16 @@ Only finished days (before today) are stored.
   `yf.download` looked up at call time) for tests.
 - Rows before each ticker's own missing start, after `through`, NaN, zero
   or negative are dropped.
-- Inserted with Postgres `INSERT ... ON CONFLICT DO NOTHING`, then
-  committed by the caller.
-- Returns `{ticker: last cached day}` for tickers still short of `through`
-  after the fetch (the stale list). A download exception is logged, caught,
-  and leaves every requested ticker stale.
+- Closes are inserted with Postgres `INSERT ... ON CONFLICT DO NOTHING`.
+  After a download that did not raise, every requested ticker's
+  `fetched_through` is set to `through` (upsert), even if Yahoo returned no
+  rows for it in the range (a weekend, a holiday). The caller commits.
+- Returns `{ticker: fetched_through or None}` for requested tickers whose
+  `fetched_through` is still before `through` (the stale list). A download
+  exception is logged, caught, and leaves every requested ticker stale and
+  its state unchanged.
+- A ticker Yahoo doesn't know returns no rows without raising; it is
+  marked fetched and simply has no closes, so its fill prices value it.
 
 Scheduler: a job at 06:00 Europe/Berlin runs `ensure_price_history` with its
 own session and commits; `misfire_grace_time=86400`.
@@ -123,7 +139,8 @@ request after the summary:
   fills then 0; zero-share or zero-fiat rows give no price; today uses the
   live price; empty portfolio gives `[]`.
 - Cache (fake download): fetches only missing days, one batched call;
-  skips ISIN-as-ticker rows and tickers already current; `auto_adjust=False`
+  skips ISIN-as-ticker rows and tickers already current; a weekend with no
+  closes is not fetched again and is not stale; `auto_adjust=False`
   passed; drops NaN, zero and negative closes; repeated insert harmless;
   download failure leaves the cache unchanged and returns the tickers as
   stale.
