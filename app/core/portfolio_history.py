@@ -67,6 +67,8 @@ def portfolio_history(db: Session, today: date,
     """One point per calendar day from the first trade to today:
     {"date", "value", "invested"}; [] without transactions."""
     rows = db.query(EtfTransaction).filter(
+        # Rows without a date can't be placed on the timeline; the
+        # dashboard card still counts them (#57).
         EtfTransaction.transaction_date.isnot(None)).order_by(
         EtfTransaction.transaction_date).all()
     if not rows:

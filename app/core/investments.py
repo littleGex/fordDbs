@@ -111,6 +111,11 @@ def get_grouped_shares(db: Session, target_date: datetime):
 
 
 def get_grouped_etfs(db: Session):
+    # Counts every row. The history chart (portfolio_history) skips rows
+    # without a transaction_date and only reaches today, so a row with no
+    # date or a future date shows here but not on the chart (#57). Neither
+    # exists in practice; the card keeps counting them so no holding is
+    # hidden.
     return db.query(
         EtfTransaction.ticker_symbol,
         func.sum(EtfTransaction.shares_acquired).label("total_shares"),

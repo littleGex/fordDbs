@@ -1,6 +1,7 @@
 <script setup>
-import {ref, computed, onMounted, watch, nextTick} from 'vue'
+import {ref, computed, onMounted, onUnmounted, watch, nextTick} from 'vue'
 import api from '../api'
+import {rangeStart} from '../utils/ranges.js'
 import Chart from 'chart.js/auto'
 
 const portfolio = ref({shares: [], etfs: [], vesting_timeline: [], timestamp: ''})
@@ -50,7 +51,11 @@ const fetchPortfolio = async () => {
     portfolio.value = res.data
   } catch (e) {
     console.error("Error fetching portfolio:", e)
+    return
   }
+  // The history chart's last point must match the summary (#52), so it
+  // is reloaded whenever the summary is (#57).
+  fetchHistory()
 }
 
 const formatCurrency = (amount) => {
@@ -238,20 +243,8 @@ const fetchHistory = async () => {
   }
 }
 
-const rangeStart = (range, asOf) => {
-  const d = new Date(asOf + 'T00:00:00')
-  if (range === '1M') d.setMonth(d.getMonth() - 1)
-  else if (range === '6M') d.setMonth(d.getMonth() - 6)
-  else if (range === '1Y') d.setFullYear(d.getFullYear() - 1)
-  else if (range === 'YTD') d.setMonth(0, 1)
-  else return ''
-  // Local date parts: toISOString() would shift a local midnight a day back
-  const pad = (n) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
-}
-
 const historyPoints = computed(() => {
-  const start = rangeStart(historyRange.value, history.value.as_of)
+  const start = history.value.as_of ? rangeStart(historyRange.value, history.value.as_of) : ''
   return history.value.points.filter(p => !start || p.date >= start)
 })
 
@@ -306,9 +299,14 @@ const renderHistory = async () => {
 
 watch(historyPoints, () => renderHistory())
 watch(() => portfolio.value, () => renderCharts(), {deep: true})
-onMounted(async () => {
-  await fetchPortfolio()
-  fetchHistory()
+onMounted(fetchPortfolio)
+// Chart.js keeps listeners and canvases alive until destroyed (#57).
+onUnmounted(() => {
+  for (const chart of [totalChartInstance, availableChartInstance, pendingChartInstance,
+    timelineChartInstance, allocationChartInstance, investedChartInstance,
+    historyChartInstance]) {
+    if (chart) chart.destroy()
+  }
 })
 </script>
 

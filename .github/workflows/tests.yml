@@ -85,3 +85,6 @@ jobs:
 
       - name: Run test suite
         run: pytest
+
+      - name: Frontend unit tests
+        run: cd investments-frontend && npm test
