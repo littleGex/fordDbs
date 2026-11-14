@@ -4,13 +4,15 @@ from sqlalchemy import extract
 from sqlalchemy.orm import Session
 from app.database.database import get_db
 from app.core.storage import (upload_image_to_storage, get_image_url,
-                              minio_client, BUCKET_NAME)
+                              stored_image_type, minio_client,
+                              BUCKET_NAME)
 from app.core.media import (is_video_upload, probe_duration_seconds,
                             transcode_to_h264_mp4, VideoProcessingError,
                             MAX_VIDEO_DURATION_SECONDS,
                             MAX_VIDEO_UPLOAD_BYTES)
 from app.models.photo_model import Photo, Like, Comment, View, Album
 from app.models.user_models import User
+import io
 import uuid
 import logging
 import os
@@ -192,13 +194,9 @@ def upload_photo(
         file_ext = file.filename.split(".")[-1]
         minio_key = f"{uuid.uuid4()}.{file_ext}"
 
-        minio_client.put_object(
-            BUCKET_NAME,
-            minio_key,
-            file.file,
-            length=-1,
-            part_size=10 * 1024 * 1024
-        )
+        upload_image_to_storage(
+            minio_key, file.file, -1,
+            stored_image_type(file.filename, file.content_type))
 
     new_photo = Photo(
         minio_key=minio_key,
@@ -384,7 +382,7 @@ def update_profile(
                 new_photo_key,
                 file.file,
                 -1,
-                file.content_type
+                stored_image_type(file.filename, file.content_type)
             )
             user.profile_photo_key = new_photo_key
         except Exception as e:
@@ -536,7 +534,9 @@ def create_user(
             if len(contents) > MAX_AVATAR_BYTES:
                 raise HTTPException(status_code=413,
                                     detail="Profile photo is too large")
-            upload_image_to_storage(contents, unique_key)
+            upload_image_to_storage(
+                unique_key, io.BytesIO(contents), len(contents),
+                stored_image_type(file.filename, file.content_type))
 
             # Save the KEY to the database (not the full URL)
             new_user.profile_photo_key = unique_key
