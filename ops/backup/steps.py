@@ -2,15 +2,19 @@
 The steps of the nightly NAS backup (#31). Each returns a StepResult and
 never raises for an expected failure; run_backup() wraps the unexpected.
 """
+import io
 import json
 import shutil
+import tarfile
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional
 from urllib.parse import quote, urlsplit
 
-from ops.backup.common import CommandError, Config, is_cifs_mount
+from ops.backup.common import (CommandError, Config, atomic_write,
+                               is_cifs_mount, secrets_to_delete,
+                               volumes_to_delete)
 
 STALE_AFTER = timedelta(hours=36)
 MC_ALIAS = "backup"
@@ -85,3 +89,125 @@ def copy_databases(cfg: Config, runner, now: datetime) -> StepResult:
             problems.append(f"{db}: rsync exited {exc.returncode}")
     return StepResult("databases", not problems, "; ".join(problems),
                       {"newest": newest_names})
+
+
+def list_bucket(cfg: Config, runner) -> dict:
+    """key -> size for every object in the bucket."""
+    out = runner.run(["mc", "ls", "--recursive", "--json", bucket_path(cfg)],
+                     env=mc_env(cfg)).stdout
+    objects = {}
+    for line in out.decode().splitlines():
+        if line.strip():
+            entry = json.loads(line)
+            if entry.get("type") != "folder" and "key" in entry:
+                objects[entry["key"]] = int(entry["size"])
+    return objects
+
+
+def mirror_photos(cfg: Config, runner) -> StepResult:
+    """Plain copy of the bucket. Never removes or overwrites a file on
+    the NAS; differences are reported by the size check."""
+    files = cfg.backup_root / "photos" / "files"
+    files.mkdir(parents=True, exist_ok=True)
+    problems = []
+    try:
+        runner.run(["mc", "mirror", "--json", bucket_path(cfg), str(files)],
+                   env=mc_env(cfg))
+    except CommandError as exc:
+        problems.append(f"mc mirror exited {exc.returncode}")
+    try:
+        objects = list_bucket(cfg, runner)
+    except (CommandError, ValueError) as exc:
+        problems.append(f"could not list the bucket "
+                        f"({type(exc).__name__})")
+        return StepResult("photos", False, "; ".join(problems))
+    bad = sorted(key for key, size in objects.items()
+                 if not (files / key).is_file()
+                 or (files / key).stat().st_size != size)
+    if bad:
+        problems.append(f"{len(bad)} of {len(objects)} photos missing or "
+                        f"different on the NAS: {', '.join(bad[:5])}")
+    return StepResult("photos", not problems, "; ".join(problems),
+                      {"objects": len(objects),
+                       "bytes": sum(objects.values())})
+
+
+def volume_copy(cfg: Config, runner, today, objects: Optional[int]
+                ) -> StepResult:
+    """Monthly exact copy of the MinIO volume, read-only, verified by
+    counting one xl.meta per object."""
+    folder = cfg.backup_root / "photos" / "volume"
+    folder.mkdir(parents=True, exist_ok=True)
+    name = f"{today:%Y-%m}.tar.gz"
+    if (folder / name).exists():
+        return StepResult("volume", True, "exists", {"volume": name})
+    if objects is None:
+        return StepResult("volume", False, "photo count unknown")
+
+    def write(part: Path) -> None:
+        with open(part, "wb") as handle:
+            runner.run(["docker", "run", "--rm", "--entrypoint", "tar",
+                        "-v", f"{cfg.minio_volume}:/data:ro", cfg.tar_image,
+                        "-C", "/data", "-czf", "-", cfg.bucket],
+                       stdout=handle)
+        with tarfile.open(part, "r:gz") as tar:
+            found = sum(1 for m in tar.getmembers()
+                        if m.name.endswith("/xl.meta"))
+        if found != objects:
+            raise ValueError(f"archive holds {found} objects, "
+                             f"bucket {objects}")
+
+    try:
+        atomic_write(folder / name, write)
+    except (CommandError, ValueError, tarfile.TarError, OSError) as exc:
+        return StepResult("volume", False, str(exc))
+    return StepResult("volume", True, data={"volume": name})
+
+
+def _env_files(docker_root: Path) -> list:
+    if not docker_root.is_dir():
+        return []
+    return sorted(p for p in docker_root.glob("*/.env")
+                  if p.is_file() and ".bak" not in p.parent.name)
+
+
+def pack_secrets(cfg: Config, runner, today) -> StepResult:
+    """Every app's .env, encrypted to the owner's age key. The private
+    key never touches the Pi."""
+    folder = cfg.backup_root / "secrets"
+    folder.mkdir(parents=True, exist_ok=True)
+    env_files = _env_files(cfg.docker_root)
+    if not env_files:
+        return StepResult("secrets", False,
+                          f"no .env files under {cfg.docker_root}")
+    buffer = io.BytesIO()
+    with tarfile.open(fileobj=buffer, mode="w:gz") as tar:
+        for path in env_files:
+            tar.add(path, arcname=f"{path.parent.name}/.env")
+    name = f"{today:%Y-%m-%d}.tar.age"
+
+    def write(part: Path) -> None:
+        runner.run(["age", "-r", cfg.age_recipient, "-o", str(part)],
+                   stdin=buffer.getvalue())
+        if not part.is_file() or part.stat().st_size == 0:
+            raise ValueError("age wrote nothing")
+
+    try:
+        atomic_write(folder / name, write)
+    except (CommandError, ValueError, OSError) as exc:
+        return StepResult("secrets", False, str(exc))
+    return StepResult("secrets", True,
+                      data={"secrets": name, "files": len(env_files)})
+
+
+def apply_retention(cfg: Config, today) -> StepResult:
+    deleted = 0
+    for folder, choose in (
+            (cfg.backup_root / "photos" / "volume", volumes_to_delete),
+            (cfg.backup_root / "secrets",
+             lambda names: secrets_to_delete(names, today))):
+        if folder.is_dir():
+            for name in choose([p.name for p in folder.iterdir()]):
+                (folder / name).unlink()
+                deleted += 1
+    return StepResult("retention", True, data={"deleted": deleted})
