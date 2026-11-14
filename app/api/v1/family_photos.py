@@ -26,6 +26,7 @@ from app.core.rate_limit import (client_address, refuse_if_blocked,
                                  login_failures_per_client,
                                  login_failures_per_account,
                                  registrations_per_client)
+from app.schema.auth_schema import LoginRequest
 
 logger = logging.getLogger("app.api.users")
 family_photos_router = APIRouter()
@@ -94,13 +95,9 @@ def format_photo_list(photos):
 
 
 @family_photos_router.post("/login", tags=["Auth"])
-def login(data: dict, request: Request, db: Session = Depends(get_db)):
-    # bool is a subclass of int, so True would otherwise mean user 1
-    user_id = data.get('user_id')
-    if not isinstance(user_id, int) or isinstance(user_id, bool):
-        raise HTTPException(status_code=422,
-                            detail="user_id must be a whole number")
-    user = db.query(User).filter(User.id == user_id).first()
+def login(data: LoginRequest, request: Request,
+          db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.id == data.user_id).first()
     if not user:
         raise HTTPException(status_code=404)
 
@@ -121,7 +118,7 @@ def login(data: dict, request: Request, db: Session = Depends(get_db)):
             detail="No password set. Ask the admin to reset it.")
 
     # 2. Verify password
-    if not verify_pw(data.get('password') or "", user.hashed_password):
+    if not verify_pw(data.password, user.hashed_password):
         login_failures_per_client.record(client_key)
         login_failures_per_account.record(user.id)
         raise HTTPException(status_code=401,
