@@ -114,7 +114,11 @@ def get_grouped_etfs(db: Session):
     return db.query(
         EtfTransaction.ticker_symbol,
         func.sum(EtfTransaction.shares_acquired).label("total_shares"),
-        func.sum(EtfTransaction.fiat_invested).label("total_invested")
+        # Net money put in, fees included (#52): a sell adds its
+        # negative proceeds plus its fee.
+        func.sum(EtfTransaction.fiat_invested
+                 + func.coalesce(EtfTransaction.fees, 0)
+                 ).label("total_invested")
     ).group_by(EtfTransaction.ticker_symbol).all()
 
 
