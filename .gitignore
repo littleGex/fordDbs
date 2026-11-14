@@ -5,4 +5,4 @@ __pycache__*
 .env
 
 # Trade Republic exports hold names, IBANs and holdings: never commit
-*Transaction_export*.csv
+*Transaction?export*.csv
