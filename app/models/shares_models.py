@@ -36,6 +36,11 @@ class EtfTransaction(Base):
     isin = Column(String(12), ForeignKey("instruments.isin"),
                   nullable=True, index=True)
 
+    # Trade Republic transaction_id, or "liquidation:<ISIN>" for a
+    # netted liquidation sell; NULL for rows not imported from an
+    # export. Unique, so a re-import skips rows already stored.
+    external_id = Column(String, nullable=True, unique=True)
+
     # Track how the entry was created: "manual", "import" (CSV) or
     # "scheduled". Scheduled rows are estimates (Yahoo close price, no
     # fees), not the broker's real fill; see run_monthly_etf_purchases.

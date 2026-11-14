@@ -3,3 +3,6 @@ __pycache__*
 .venv*
 .DS_Store*
 .env
+
+# Trade Republic exports hold names, IBANs and holdings: never commit
+*Transaction_export*.csv
