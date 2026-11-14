@@ -65,8 +65,14 @@ def state(db, ticker):
     return row.fetched_through if row else None
 
 
-def set_state(db, ticker, through):
-    db.merge(PriceFetchState(ticker=ticker, fetched_through=through))
+def state_from(db, ticker):
+    row = db.get(PriceFetchState, ticker)
+    return row.fetched_from if row else None
+
+
+def set_state(db, ticker, through, since=date(2026, 3, 2)):
+    db.merge(PriceFetchState(ticker=ticker, fetched_from=since,
+                             fetched_through=through))
     db.flush()
 
 
@@ -98,6 +104,7 @@ class TestTables:
 
     def test_fetch_state_round_trip(self, db_session):
         db_session.add(PriceFetchState(ticker="EUNL.DE",
+                                       fetched_from=date(2026, 3, 2),
                                        fetched_through=date(2026, 3, 9)))
         db_session.flush()
         assert db_session.get(PriceFetchState, "EUNL.DE") \
@@ -133,6 +140,65 @@ class TestEnsurePriceHistory:
             THROUGH: Decimal("181.000000")}
         assert state(db_session, "EUNL.DE") == THROUGH
         assert state(db_session, "APC.DE") == THROUGH
+        assert state_from(db_session, "EUNL.DE") == date(2026, 3, 2)
+        assert state_from(db_session, "APC.DE") == date(2026, 3, 4)
+
+    def test_earlier_trade_added_later_is_backfilled(self, db_session,
+                                                     add_txn):
+        add_txn("EUNL.DE", date(2026, 3, 2))
+        set_state(db_session, "EUNL.DE", THROUGH)
+        add_txn("EUNL.DE", date(2026, 2, 23))
+        fake = FakeDownload(frame({"EUNL.DE": {date(2026, 2, 23): 95.0,
+                                               date(2026, 2, 27): 97.0}}))
+
+        result = ensure_price_history(db_session, through=THROUGH,
+                                      download=fake)
+
+        tickers, start, end, _ = fake.calls[0]
+        assert (tickers, start) == (["EUNL.DE"], date(2026, 2, 23))
+        assert end == date(2026, 3, 2)
+        assert sorted(stored(db_session, "EUNL.DE")) == [
+            date(2026, 2, 23), date(2026, 2, 27)]
+        assert state_from(db_session, "EUNL.DE") == date(2026, 2, 23)
+        assert state(db_session, "EUNL.DE") == THROUGH
+        assert result == {}
+
+    def test_backfill_without_closes_on_weekdays_is_stale(self, db_session,
+                                                          add_txn):
+        add_txn("EUNL.DE", date(2026, 3, 2))
+        set_state(db_session, "EUNL.DE", THROUGH)
+        add_txn("EUNL.DE", date(2026, 2, 23))
+        fake = FakeDownload(pd.DataFrame())
+
+        result = ensure_price_history(db_session, through=THROUGH,
+                                      download=fake)
+
+        assert result == {"EUNL.DE": THROUGH}
+        assert state_from(db_session, "EUNL.DE") == date(2026, 3, 2)
+
+    def test_sold_out_ticker_is_not_fetched_after_selling(self, db_session,
+                                                          add_txn):
+        add_txn("EUNL.DE", date(2026, 3, 2), fiat="100", shares="1")
+        add_txn("EUNL.DE", date(2026, 3, 4), fiat="-105", shares="-1")
+        set_state(db_session, "EUNL.DE", date(2026, 3, 4))
+        fake = FakeDownload()
+
+        assert ensure_price_history(db_session, through=THROUGH,
+                                    download=fake) == {}
+        assert fake.calls == []
+
+    def test_sold_out_ticker_is_fetched_only_while_held(self, db_session,
+                                                        add_txn):
+        add_txn("EUNL.DE", date(2026, 3, 2), fiat="100", shares="1")
+        add_txn("EUNL.DE", date(2026, 3, 4), fiat="-105", shares="-1")
+        fake = FakeDownload(frame({"EUNL.DE": {date(2026, 3, 2): 100.0,
+                                               date(2026, 3, 4): 105.0}}))
+
+        assert ensure_price_history(db_session, through=THROUGH,
+                                    download=fake) == {}
+        _, start, end, _ = fake.calls[0]
+        assert (start, end) == (date(2026, 3, 2), date(2026, 3, 5))
+        assert state(db_session, "EUNL.DE") == date(2026, 3, 4)
 
     def test_only_missing_days_are_fetched(self, db_session, add_txn):
         add_txn("EUNL.DE", date(2026, 3, 2))

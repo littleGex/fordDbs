@@ -50,6 +50,7 @@ Table `price_fetch_state`:
 | column | type | |
 |---|---|---|
 | `ticker` | `String`, PK | |
+| `fetched_from` | `Date`, not null | first day fetched (earlier trades added later are back-filled) |
 | `fetched_through` | `Date`, not null | last day a successful download covered |
 
 ## Price cache (`app/core/price_history.py`)
@@ -60,16 +61,19 @@ Table `price_fetch_state`:
 - `tickers=None` means every `ticker_symbol` in `etf_transactions` that is
   not a valid ISIN (ISIN-as-ticker rows are never fetched).
 - `through` defaults to yesterday (Europe/Berlin).
-- Per ticker, the missing range is from the day after its
-  `fetched_through` (or from its first trade date if it has no state) to
-  `through`. Tickers with nothing missing are skipped.
+- Per ticker, the needed range is its first trade date to `through`, or
+  only to its last trade date when its net shares are 0 (sold or
+  liquidated funds are not fetched, or reported stale, forever). Missing
+  ranges: before `fetched_from` (earlier trades imported or entered
+  later) and after `fetched_through`; without state, the whole range.
+  Tickers with nothing missing are skipped.
 - One batched download for all tickers that need data, from the earliest
   missing start: `yf.download(tickers, start=..., end=through + 1 day,
   interval="1d", auto_adjust=False, progress=False, timeout=10)`, reading
   the `Close` column per ticker. `download` is injectable (defaults to
   `yf.download` looked up at call time) for tests.
-- Rows before each ticker's own missing start, after `through`, NaN, zero
-  or negative are dropped.
+- Rows outside each ticker's own missing ranges, NaN, zero or negative
+  are dropped.
 - Closes are inserted with Postgres `INSERT ... ON CONFLICT DO NOTHING`.
 - A ticker's `fetched_through` only advances as far as Yahoo really
   returned data: to its last close in the range, or to `through` when
@@ -77,8 +81,10 @@ Table `price_fetch_state`:
   yfinance often returns empty data instead of raising, so an empty answer
   on weekdays leaves `fetched_through` unchanged; those days are fetched
   again on the next call and reported as out of date. The caller commits.
-- Returns `{ticker: fetched_through or None}` for requested tickers whose
-  `fetched_through` is still before `through` (the stale list). A download
+- `fetched_from` moves back to the first trade once the earlier range
+  returned a close (or is all weekend).
+- Returns `{ticker: fetched_through or None}` for tickers whose needed
+  range is still not fully fetched (the stale list). A download
   exception is logged, caught, and leaves every requested ticker stale and
   its state unchanged.
 - A ticker Yahoo doesn't know therefore stays stale and is retried on
@@ -145,7 +151,9 @@ request after the summary:
   skips ISIN-as-ticker rows and tickers already current; a weekend with no
   closes is not fetched again and is not stale; state advances only to the
   last close; an empty answer on weekdays is retried and stale; an unknown
-  ticker stays stale; `auto_adjust=False`
+  ticker stays stale; an earlier trade added later is back-filled (and stale
+  if Yahoo returns nothing for it); a sold-out ticker is fetched only while
+  held and not after; `auto_adjust=False`
   passed; drops NaN, zero and negative closes; repeated insert harmless;
   download failure leaves the cache unchanged and returns the tickers as
   stale.

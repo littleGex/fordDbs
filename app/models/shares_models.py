@@ -102,4 +102,7 @@ class PriceFetchState(Base):
     __tablename__ = "price_fetch_state"
 
     ticker = Column(String, primary_key=True)
+    # Fetched range: earlier trades added later move first trade before
+    # fetched_from, and those days are fetched then.
+    fetched_from = Column(Date, nullable=False)
     fetched_through = Column(Date, nullable=False)
