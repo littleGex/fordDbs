@@ -1,0 +1,12 @@
+[Unit]
+Description=fordDbs: restore the newest NAS backups into throwaway containers (#31)
+Wants=network-online.target
+After=network-online.target docker.service
+
+[Service]
+Type=oneshot
+User=dad
+WorkingDirectory=/home/dad/docker/fordDbs
+ExecStart=/usr/bin/python3 -m ops.backup.restore_test
+TimeoutStartSec=2h
+Nice=10

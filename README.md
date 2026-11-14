@@ -455,3 +455,92 @@ source SVGs are in `icons/`; after changing one, run
 `npm install && npm run generate` there to rewrite the PNGs and `favicon.ico`
 in that app's `public/` folder. Keep the artwork inside the central 80% of the
 square, because Android crops `icon-512.png` to its own shape.
+
+## Backups to the NAS
+
+Every night at 03:30 `fordDbs-backup.timer` copies the databases, the
+photos and the apps' `.env` files from the Pi to the NAS share. On the
+first Sunday of each month at 04:30, `fordDbs-restore-test.timer`
+restores the newest backups from the NAS into throwaway containers and
+checks them. Both report to ntfy: failures straight away, plus an
+"all good" summary on Sundays. **No Sunday message means something is
+wrong.** The code is in `ops/backup/`; the design is in
+`docs/superpowers/specs/2026-11-14-nas-backups-design.md`.
+
+### What is where
+
+Everything is under `BACKUP_ROOT` (`/mnt/nas/alan/fordDbs-backups` on
+the Pi, the same folder on the NAS from the Mac):
+
+| Folder | Contents | Kept |
+|---|---|---|
+| `postgres/forddbs/`, `postgres/chore_tracker/` | daily, weekly, monthly `*.sql.gz` dumps | as on the Pi: 7 / 4 / 6 |
+| `photos/files/` | plain copy of every photo and video | forever, even if deleted in the app |
+| `photos/volume/YYYY-MM.tar.gz` | exact copy of the MinIO volume | newest 6 |
+| `secrets/YYYY-MM-DD.tar.age` | every app's `.env`, encrypted with `age` | 30 days + 1 per month for 6 months |
+| `status/last-success.json` | when the last full backup finished, counts | latest |
+
+### Setup on the Pi
+
+1. On the Mac: `brew install age && age-keygen -o fordDbs-backup.key`.
+   Put the whole key file into the password manager, then delete it.
+   Only the `age1…` public key goes on the Pi.
+2. Create the read-only MinIO user for the photo copy (`readonly` on
+   `family-photos`).
+3. `sudo apt install age`, then copy `ops/backup/env.example` to
+   `~/.config/fordDbs-backup/env`, fill it in and `chmod 600` it.
+4. `ops/backup/install.sh`, then run one backup by hand (below) and check
+   the NAS folder.
+5. Decrypt the newest secrets file once on the Mac (below). Repeat that
+   once a year, so a lost key is noticed before it is needed.
+
+### Running and checking by hand
+
+```bash
+cd ~/docker/fordDbs
+python3 -m ops.backup.backup          # one backup now
+python3 -m ops.backup.restore_test    # one restore test now
+journalctl -u fordDbs-backup -u fordDbs-restore-test --since today
+systemctl list-timers 'fordDbs-*'
+```
+
+### Restoring
+
+**A database.** The dumps are made by `pg_dump` 18 and the servers run
+Postgres 15, so drop the two lines Postgres 15 rejects while loading.
+Restore into an empty database (stop the app first):
+
+```bash
+gunzip -c postgres/forddbs/daily/<file>.sql.gz \
+  | grep -vE '^(\\restrict |\\unrestrict |SET transaction_timeout = )' \
+  | docker exec -i postgres_db psql -U dad -d postgres -v ON_ERROR_STOP=1
+```
+
+For chore_tracker use `chore-tracker-db-1` and the `chore_tracker`
+database.
+
+**All photos (exact).** The volume copy holds the whole MinIO volume,
+including its users and settings:
+
+```bash
+docker compose stop minio
+docker run --rm -v forddbs_minio_data:/data -v "$PWD":/backup:ro \
+  --entrypoint sh forddbs-api -c \
+  'rm -rf /data/* /data/.minio.sys && tar -C /data -xzf /backup/YYYY-MM.tar.gz'
+docker compose start minio
+```
+
+Run it from `photos/volume/`. Photos added after that month's copy are
+then still in `photos/files/` and can be uploaded again.
+
+**A single photo.** Copy it from `photos/files/` (the same path as its
+key; profile photos are under `profiles/` and `avatars/`).
+
+**The secrets.** On the Mac, with the key file from the password manager:
+
+```bash
+age -d -i fordDbs-backup.key secrets/<date>.tar.age | tar -xzf -
+```
+
+Restoring the photo volume needs the old `MINIO_ROOT_USER` and
+`MINIO_ROOT_PASSWORD` from these `.env` files.
