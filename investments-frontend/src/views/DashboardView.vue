@@ -222,8 +222,94 @@ const renderCharts = async () => {
   }
 }
 
+// --- Value over time (#52) ---
+const history = ref({points: [], stale: [], as_of: ''})
+const historyRange = ref('All')
+const RANGES = ['1M', '6M', 'YTD', '1Y', 'All']
+const chartHistory = ref(null)
+let historyChartInstance = null
+
+const fetchHistory = async () => {
+  try {
+    const res = await api.get(`/investments/etf/history`)
+    history.value = res.data
+  } catch (e) {
+    console.error("Error fetching portfolio history:", e)
+  }
+}
+
+const rangeStart = (range, asOf) => {
+  const d = new Date(asOf + 'T00:00:00')
+  if (range === '1M') d.setMonth(d.getMonth() - 1)
+  else if (range === '6M') d.setMonth(d.getMonth() - 6)
+  else if (range === '1Y') d.setFullYear(d.getFullYear() - 1)
+  else if (range === 'YTD') d.setMonth(0, 1)
+  else return ''
+  // Local date parts: toISOString() would shift a local midnight a day back
+  const pad = (n) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+}
+
+const historyPoints = computed(() => {
+  const start = rangeStart(historyRange.value, history.value.as_of)
+  return history.value.points.filter(p => !start || p.date >= start)
+})
+
+const formatDay = (iso) => new Date(iso + 'T00:00:00').toLocaleDateString('de-DE')
+
+const renderHistory = async () => {
+  await nextTick()
+  if (historyChartInstance) historyChartInstance.destroy()
+  historyChartInstance = null
+  const points = historyPoints.value
+  if (!points.length || !chartHistory.value) return
+  historyChartInstance = new Chart(chartHistory.value, {
+    type: 'line',
+    data: {
+      labels: points.map(p => formatDay(p.date)),
+      datasets: [
+        {
+          label: 'Value', data: points.map(p => p.value), borderColor: '#4a90e2',
+          backgroundColor: 'rgba(74, 144, 226, 0.15)', fill: true, pointRadius: 0, tension: 0.1
+        },
+        {
+          label: 'Invested', data: points.map(p => p.invested), borderColor: '#95a5a6',
+          stepped: true, fill: false, pointRadius: 0
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: {mode: 'index', intersect: false},
+      scales: {
+        x: {ticks: {maxTicksLimit: 6, autoSkip: true, maxRotation: 0}},
+        y: {ticks: {callback: (v) => v.toLocaleString('de-DE') + ' €'}}
+      },
+      plugins: {
+        legend: {position: 'bottom'},
+        tooltip: {
+          callbacks: {
+            label: (ctx) => `${ctx.dataset.label}: ${formatCurrency(ctx.parsed.y)}`,
+            footer: (items) => {
+              const p = points[items[0].dataIndex]
+              const gain = p.value - p.invested
+              const pct = p.invested > 0 ? ` (${formatPercentage(gain / p.invested * 100)})` : ''
+              return `Gain: ${formatCurrency(gain)}${pct}`
+            }
+          }
+        }
+      }
+    }
+  })
+}
+
+watch(historyPoints, () => renderHistory())
 watch(() => portfolio.value, () => renderCharts(), {deep: true})
-onMounted(fetchPortfolio)
+onMounted(async () => {
+  await fetchPortfolio()
+  fetchHistory()
+})
 </script>
 
 <template>
@@ -259,6 +345,21 @@ onMounted(fetchPortfolio)
           </div>
         </div>
         <p class="wealth-warning" v-if="unpriced.length">No price for {{ unpriced.join(', ') }}: counted as €0. Set its ticker in Admin → Instruments.</p>
+      </div>
+
+      <div class="section" v-if="history.points.length > 0">
+        <h3>Value over time</h3>
+        <div class="range-buttons">
+          <button v-for="r in RANGES" :key="r" type="button" :class="{active: historyRange === r}"
+                  @click="historyRange = r">{{ r }}
+          </button>
+        </div>
+        <div class="canvas-wrapper timeline">
+          <canvas ref="chartHistory"></canvas>
+        </div>
+        <p class="wealth-warning" v-for="s in history.stale" :key="s.ticker">
+          Prices for {{ s.ticker }} {{ s.through ? 'are up to date only until ' + formatDay(s.through) : 'have not been fetched yet' }}.
+        </p>
       </div>
 
       <div class="section" v-if="heldEtfs.length > 0 || totals.vested > 0">
@@ -467,6 +568,30 @@ onMounted(fetchPortfolio)
 
 .canvas-wrapper.timeline {
   height: 350px;
+}
+
+/* Value over time */
+.range-buttons {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.range-buttons button {
+  border: 1px solid #ddd;
+  background: #fff;
+  color: #555;
+  border-radius: 6px;
+  padding: 4px 12px;
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+
+.range-buttons button.active {
+  background: #4a90e2;
+  border-color: #4a90e2;
+  color: #fff;
 }
 
 /* Total wealth */
