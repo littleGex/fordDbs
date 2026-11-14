@@ -1,4 +1,7 @@
+import mimetypes
 import os
+from typing import Optional
+
 from minio import Minio
 from minio.error import S3Error
 from datetime import datetime, timedelta, timezone
@@ -56,6 +59,25 @@ def init_storage():
                   "already exists.")
     except S3Error as err:
         print(f"❌ MinIO Error initializing bucket: {err}")
+
+
+# Phone formats mimetypes may not know on every platform.
+IMAGE_TYPES = {".heic": "image/heic", ".heif": "image/heif",
+               ".webp": "image/webp", ".jpg": "image/jpeg",
+               ".jpeg": "image/jpeg"}
+
+
+def stored_image_type(filename: str, sent_type: Optional[str]) -> str:
+    """The content type an uploaded image is stored with, so signed links
+    serve it as an image: the type the browser sent when it is an image
+    type, else one guessed from the extension, else image/jpeg."""
+    if sent_type and sent_type.lower().startswith("image/"):
+        return sent_type.lower()
+    ext = os.path.splitext(filename or "")[1].lower()
+    guessed = IMAGE_TYPES.get(ext) or mimetypes.types_map.get(ext)
+    if guessed and guessed.startswith("image/"):
+        return guessed
+    return "image/jpeg"
 
 
 def upload_image_to_storage(file_name: str,
