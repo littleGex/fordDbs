@@ -160,6 +160,7 @@ go through one function:
 | `POST /instruments/{isin}/resolve` | | Run the lookup again. 409 for a manual override. 404 if unknown. |
 | `PUT /instruments/{isin}/ticker` | `{yahoo_ticker, confirm?}` | Manual override. 400 unless Yahoo prices it in EUR. If the instrument has a reference (latest linked transaction's price and date) and the close is more than 5% off, 409 with the numbers unless `confirm` is true. |
 | `POST /instruments/{isin}/link` | `{ticker_symbol}` | Link existing rows. Returns `{transactions, schedules, conflicts}`. 404 if no rows have that ticker. |
+| `POST /instruments/{isin}/unlink` | | Detach all linked transactions and schedules, keeping their tickers, to correct a wrong link (then link that ticker to the right ISIN). Returns `{transactions, schedules}`. 404 if unknown. Added after review, 2026-11-14. |
 | `POST /etf/schedule` | new optional `isin` query param | If given, the instrument must exist and be resolved (400 otherwise); the schedule's ticker comes from it. |
 
 Lookups run inside the request. This is an admin-only screen used rarely.

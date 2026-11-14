@@ -329,6 +329,19 @@ def link_ticker(db: Session, instrument: Instrument,
     return counts
 
 
+def unlink_instrument(db: Session, instrument: Instrument) -> dict:
+    """Detach every transaction and schedule from the instrument, to
+    correct a wrong link. Their ticker_symbol is left as it is; link
+    that ticker to the right ISIN to finish the correction."""
+    counts = {}
+    for model, key in ((EtfTransaction, "transactions"),
+                       (EtfPurchaseSchedule, "schedules")):
+        counts[key] = db.query(model).filter(
+            model.isin == instrument.isin).update(
+            {model.isin: None}, synchronize_session="fetch")
+    return counts
+
+
 def reference_for(db: Session, isin: str) -> Optional[Reference]:
     """(date, EUR price per share) of the latest real fill linked to
     isin, to check a ticker against. Scheduled rows are skipped (they

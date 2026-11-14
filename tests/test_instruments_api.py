@@ -210,6 +210,22 @@ class TestInstrumentsApi:
                                   json={"ticker_symbol": "NOPE"})
         assert resp.status_code == 404
 
+    def test_unlink_returns_counts(self, parent_client, lookups,
+                                   linked_txn, db_session):
+        resp = parent_client.post(f"{BASE}/{ISIN}/unlink")
+
+        assert resp.status_code == 200, resp.text
+        assert resp.json() == {"transactions": 1, "schedules": 0}
+        db_session.expire_all()
+        assert linked_txn.isin is None
+
+    def test_unlink_unknown_isin_404(self, parent_client, lookups):
+        assert parent_client.post(
+            f"{BASE}/{ISIN}/unlink").status_code == 404
+
+    def test_unlink_requires_login(self, client):
+        assert client.post(f"{BASE}/{ISIN}/unlink").status_code == 401
+
     def test_instruments_require_login(self, client):
         assert client.get(BASE).status_code == 401
 
