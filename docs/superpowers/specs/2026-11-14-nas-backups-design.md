@@ -66,13 +66,18 @@ earlier one failed; the run fails if any step failed. Output goes to the
 journal.
 
 1. **Checks.** The backup root's mount point is a CIFS/SMB mount
-   (`findmnt`), never a plain folder on the Pi's disk; free space on it is
-   at least 2 × the bucket size; MinIO answers.
+   (`findmnt` lists `cifs` or `smb3`; on the automount it lists `autofs`
+   first), never a plain folder on the Pi's disk. Only this check stops
+   every later step. A separate `minio` check (MinIO answers, NAS free
+   space at least 2 × the bucket size) gates only the photo and volume
+   steps, so the databases and secrets are still copied when MinIO is
+   down.
 2. **Databases.** For each database folder: fail if the newest
    `*.sql.gz` in `last/` (or `daily/`) is older than 36 h. Guard: if the
    source `daily/` folder holds no dump, skip the copy and fail, so a
    broken source never deletes NAS copies. Otherwise
-   `rsync -a --delete` the folder.
+   `rsync -rt --delete --no-links` the folder (the share holds no
+   symlinks, owners or modes; the `-latest` symlink is skipped).
 3. **Photos.** `mc mirror` without `--remove` or `--overwrite` from the
    bucket to `photos/files/` (an existing file that differs is left alone,
    and the size check below reports it), logged
@@ -82,9 +87,12 @@ journal.
    verify: every object in the bucket exists in `photos/files/` with the
    same size.
 4. **Volume copy.** If `photos/volume/<this month>.tar.gz` is missing:
-   `docker run --rm --entrypoint tar -v forddbs_minio_data:/data:ro
-   forddbs-api -C /data -czf - family-photos`, written to a temporary
-   name; verify the archive lists one `xl.meta` per bucket object; rename.
+   tar the whole volume read-only through `forddbs-api`, leaving out
+   `.minio.sys/tmp`, `.minio.sys/multipart` and `.minio.sys/config`
+   (MinIO's users and their secrets: secrets are only stored encrypted).
+   MinIO is live, so tar's exit 1 ("file changed") is accepted; the copy
+   counts as good when it lists one `xl.meta` per bucket object. Written
+   to a temporary name, then renamed.
 5. **Secrets.** Pack `~/docker/*/.env` (skipping folders whose name
    contains `.bak`) into a tar, pipe it through `age -r <public key>` to a
    temporary name, rename.
@@ -94,7 +102,11 @@ journal.
    {objects, bytes}, volume: name, secrets: name}`.
 
 Every file is written under a temporary name in the target folder and
-renamed when complete.
+renamed when complete. A SIGTERM (systemd timeout or shutdown) or crash
+still sends a failure alert. The restore test waits up to 90 minutes for
+a running backup and reports "skipped" if it can't start, and removes
+leftover `restoretest-*` containers before it starts as well as after.
+A failing command's last stderr lines go to the journal, never to ntfy.
 
 **Notifications.** Failure: `fordDbs backup failed: <steps> (see journalctl
 -u fordDbs-backup)`, priority high. Sunday runs that pass: `fordDbs backup

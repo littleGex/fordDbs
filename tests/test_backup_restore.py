@@ -294,3 +294,47 @@ def test_run_restore_test_reports_pass_and_fail(cfg, monkeypatch):
     assert rt.run_restore_test(cfg, FakeRunner(), sent) == 1
     assert sent == [("fordDbs restore test",
                      "restore test failed: photos", "high")]
+
+
+def test_leftover_containers_removed_before_start(cfg):
+    put_dumps(cfg)
+    put_photo_backup(cfg)
+    fake = db_runner()
+    fake.responses.update(photo_runner().responses)
+
+    rt.restore_databases(cfg, fake, sleep=lambda s: None)
+    rt.restore_photos(cfg, fake, sleep=lambda s: None)
+
+    cmds = [c for c, _ in fake.calls]
+    first_pg = cmds.index(["docker", "rm", "-f", "restoretest-pg-forddbs"])
+    assert first_pg < next(i for i, c in enumerate(cmds)
+                           if c[:2] == ["docker", "run"])
+    created = cmds.index(["docker", "volume", "create", "restoretest-minio"])
+    assert ["docker", "volume", "rm", "restoretest-minio"] in cmds[:created]
+
+
+def env_for(cfg, tmp_path):
+    env = tmp_path / "env"
+    env.write_text(f"BACKUP_ROOT={cfg.backup_root}\nNTFY_URL=https://n/t\n"
+                   "AGE_RECIPIENT=age1\nBACKUP_READER_KEY=r\n"
+                   f"BACKUP_READER_SECRET=s\nLOCK_PATH={cfg.lock_path}\n"
+                   f"DOCKER_ROOT={cfg.docker_root}\n")
+    return env
+
+
+def test_skipped_restore_test_is_reported(cfg, tmp_path, monkeypatch):
+    import signal
+    from ops.backup.common import exclusive_lock
+    previous = signal.getsignal(signal.SIGTERM)
+    sent = []
+    monkeypatch.setattr(rt, "notify", lambda url, title, msg, prio="default":
+                        sent.append((title, msg, prio)) or True)
+    monkeypatch.setattr(rt, "LOCK_WAIT_SECONDS", 0)
+    try:
+        with exclusive_lock(cfg.lock_path):
+            assert rt.main(["--config", str(env_for(cfg, tmp_path))]) == 1
+    finally:
+        signal.signal(signal.SIGTERM, previous)
+
+    assert sent == [("fordDbs restore test",
+                     "restore test skipped: backup still running", "high")]

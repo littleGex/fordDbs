@@ -53,3 +53,23 @@ def test_installer_is_strict():
     lines = (UNITS / "install.sh").read_text().splitlines()
 
     assert "set -euo pipefail" in lines
+
+
+def test_installer_checks_mc_is_the_minio_client():
+    text = (UNITS / "install.sh").read_text()
+
+    assert "mc --version" in text and "grep -qi minio" in text
+
+
+def readme_backups():
+    text = (UNITS.parent.parent / "README.md").read_text()
+    return text[text.index("## Backups to the NAS"):]
+
+
+def test_readme_photo_restore_checks_the_archive_before_deleting():
+    section = readme_backups()
+
+    assert "docker compose stop minio" not in section
+    assert "docker stop family_photos_storage" in section
+    restore = section[section.index("**All photos"):]
+    assert restore.index("tar -tzf") < restore.index("rm -rf")

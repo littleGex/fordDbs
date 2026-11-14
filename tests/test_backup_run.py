@@ -13,8 +13,8 @@ pytestmark = pytest.mark.unit
 
 SATURDAY = datetime(2026, 11, 14, 3, 30, tzinfo=timezone.utc)
 SUNDAY = datetime(2026, 11, 15, 3, 30, tzinfo=timezone.utc)
-STEPS = ("check_target", "copy_databases", "mirror_photos", "volume_copy",
-         "pack_secrets", "apply_retention")
+STEPS = ("check_target", "check_storage", "copy_databases", "mirror_photos",
+         "volume_copy", "pack_secrets", "apply_retention")
 
 
 @pytest.fixture
@@ -28,7 +28,8 @@ def cfg(tmp_path):
 
 
 OK = {
-    "check_target": StepResult("checks", True, data={"bucket_bytes": 5}),
+    "check_target": StepResult("checks", True),
+    "check_storage": StepResult("minio", True, data={"bucket_bytes": 5}),
     "copy_databases": StepResult("databases", True, data={"newest": {
         "forddbs": "f.sql.gz", "chore_tracker": "c.sql.gz"}}),
     "mirror_photos": StepResult("photos", True,
@@ -155,3 +156,47 @@ def test_main_second_instance_exits_quietly(cfg, tmp_path, monkeypatch):
         assert backup.main(["--config", str(env)]) == 0
 
     assert ran == []
+
+
+def test_minio_down_still_copies_databases_and_secrets(cfg, steps):
+    called, results = steps
+    results["check_storage"] = StepResult("minio", False, "MinIO down")
+    sent = Sent()
+
+    assert backup.run_backup(cfg, FakeRunner(), SATURDAY, sent) == 1
+
+    assert called == ["check_target", "check_storage", "copy_databases",
+                      "pack_secrets", "apply_retention"]
+    assert sent == [("fordDbs backup failed",
+                     "minio (see journalctl -u fordDbs-backup)", "high")]
+
+
+def env_file(cfg, tmp_path):
+    env = tmp_path / "env"
+    env.write_text(f"BACKUP_ROOT={cfg.backup_root}\nNTFY_URL=https://n/t\n"
+                   "AGE_RECIPIENT=age1\nBACKUP_READER_KEY=r\n"
+                   f"BACKUP_READER_SECRET=s\nLOCK_PATH={cfg.lock_path}\n")
+    return env
+
+
+def test_main_crash_or_kill_still_alerts(cfg, tmp_path, monkeypatch):
+    import signal
+    previous = signal.getsignal(signal.SIGTERM)
+    sent = []
+    monkeypatch.setattr(backup, "notify",
+                        lambda url, title, msg, prio="default":
+                        sent.append((title, msg, prio)) or True)
+
+    def killed(*a, **k):
+        raise SystemExit(143)
+    monkeypatch.setattr(backup, "run_backup", killed)
+    try:
+        with pytest.raises(SystemExit):
+            backup.main(["--config", str(env_file(cfg, tmp_path))])
+        assert signal.getsignal(signal.SIGTERM) is not previous
+    finally:
+        signal.signal(signal.SIGTERM, previous)
+
+    assert sent == [("fordDbs backup failed",
+                     "interrupted (SystemExit) "
+                     "(see journalctl -u fordDbs-backup)", "high")]
