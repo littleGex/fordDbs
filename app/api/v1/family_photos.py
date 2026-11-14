@@ -93,7 +93,7 @@ def format_photo_list(photos):
     return data
 
 
-@family_photos_router.post("/login")
+@family_photos_router.post("/login", tags=["Auth"])
 def login(data: dict, request: Request, db: Session = Depends(get_db)):
     # bool is a subclass of int, so True would otherwise mean user 1
     user_id = data.get('user_id')
@@ -424,7 +424,7 @@ def update_profile(
     }
 
 
-@family_photos_router.get("/login-options")
+@family_photos_router.get("/login-options", tags=["Auth"])
 def get_login_options(audience: str = None,
                       db: Session = Depends(get_db)):
     """
@@ -450,7 +450,7 @@ def get_login_options(audience: str = None,
     ]
 
 
-@family_photos_router.get("/me")
+@family_photos_router.get("/me", tags=["Auth"])
 def get_me(current_user: User = Depends(get_current_user)):
     """
     Who the token belongs to. Other family backends (the chore tracker)
@@ -570,7 +570,7 @@ def create_user(
     }
 
 
-@family_photos_router.post("/refresh")
+@family_photos_router.post("/refresh", tags=["Auth"])
 def refresh_token(
     current_user: User = Depends(get_current_user_for_refresh),
     db: Session = Depends(get_db)

@@ -3,7 +3,7 @@ import os
 from datetime import datetime, timedelta, timezone
 from dotenv import load_dotenv
 from fastapi import Depends, Header, HTTPException
-from fastapi.security import OAuth2PasswordBearer
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import jwt, JWTError
 from passlib.context import CryptContext
 from sqlalchemy.orm import Session
@@ -20,7 +20,17 @@ if not SECRET_KEY:
     raise RuntimeError("SECRET_KEY is not set; refusing to start")
 ALGORITHM = "HS256"
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login", auto_error=False)
+
+# Login hands back a JWT from a custom JSON endpoint, not an OAuth2
+# password-grant form, so Swagger's Authorize dialog just needs a
+# bearer token field: paste the access_token from /login here.
+_bearer_scheme = HTTPBearer(auto_error=False)
+
+
+def oauth2_scheme(
+        creds: HTTPAuthorizationCredentials = Depends(_bearer_scheme)):
+    return creds.credentials if creds else None
+
 
 # Each role includes the abilities of the ones after it
 ADMIN_ROLE = "admin"
